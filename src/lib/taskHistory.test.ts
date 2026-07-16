@@ -89,6 +89,27 @@ describe('task history categories', () => {
     expect(category.workflow).toBe('amazon-listing')
   })
 
+  it('keeps old tasks without batch try-on metadata readable', () => {
+    const legacyTask = task({
+      prompt: 'A regular creative prompt',
+      category: { workflow: 'gallery' },
+    })
+    expect(getTaskHistoryCategory(legacyTask)).toMatchObject({ workflow: 'gallery', productTitle: '' })
+  })
+
+  it('reads optional batch try-on workflow metadata', () => {
+    const batchTask = task({
+      category: {
+        workflow: 'batch-tryon',
+        batchTryOnBatchId: 'batch-a',
+        batchTryOnGarmentName: 'shirt.jpg',
+        batchTryOnTemplateImageId: 'template-a',
+        batchTryOnIndex: 0,
+      },
+    })
+    expect(getTaskHistoryCategory(batchTask).workflow).toBe('batch-tryon')
+  })
+
   it('keeps tasks without product title under the uncategorized product filter', () => {
     expect(matchesTaskHistoryFilters(task({
       prompt: 'A regular creative prompt',

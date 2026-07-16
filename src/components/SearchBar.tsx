@@ -131,6 +131,7 @@ export default function SearchBar() {
             options={[
               { label: '全部来源', value: 'all' },
               { label: 'Listing 图', value: 'amazon-listing' },
+              { label: '批量套图', value: 'batch-tryon' },
               { label: 'A+ 图', value: 'amazon-aplus' },
               { label: '普通生图', value: 'gallery' },
               { label: 'Agent', value: 'agent' },
