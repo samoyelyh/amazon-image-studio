@@ -17,6 +17,7 @@ import type {
   MaskDraft,
   TaskRecord,
   ExportData,
+  GalleryWorkspace,
   ResponsesApiResponse,
   ResponsesOutputItem,
 } from './types'
@@ -91,6 +92,9 @@ type AgentInputDraft = {
   maskEditorImageId: string | null
   updatedAt?: number
 }
+
+type GalleryWorkspaceDrafts = Record<GalleryWorkspace, AgentInputDraft | null>
+type GalleryWorkspaceParams = Record<GalleryWorkspace, TaskParams>
 
 type PendingTaskCategory =
   | {
@@ -596,6 +600,11 @@ export function getPersistedState(state: AppState) {
     galleryInputDraft: settings.persistInputOnRestart && galleryInputDraft
       ? { ...galleryInputDraft, inputImages: galleryInputDraft.inputImages.map((img) => ({ id: img.id, dataUrl: '' })) }
       : null,
+    activeGalleryWorkspace: state.activeGalleryWorkspace,
+    galleryWorkspaceDrafts: settings.persistInputOnRestart
+      ? getPersistableGalleryWorkspaceDrafts(state)
+      : createGalleryWorkspaceDrafts(),
+    galleryWorkspaceParams: state.galleryWorkspaceParams,
     agentConversations: state.agentConversations,
     activeAgentConversationId: state.activeAgentConversationId,
     agentInputDrafts: getPersistableAgentInputDrafts(state),
@@ -688,6 +697,12 @@ export function mergePersistedState(persistedState: unknown, currentState: AppSt
         maskEditorImageId: null,
       })
     : null
+  const activeGalleryWorkspace: GalleryWorkspace = persisted.activeGalleryWorkspace === 'aplus' ? 'aplus' : 'listing'
+  const galleryWorkspaceDrafts = settings.persistInputOnRestart
+    ? normalizeGalleryWorkspaceDrafts(persisted.galleryWorkspaceDrafts, galleryInputDraft)
+    : createGalleryWorkspaceDrafts()
+  const activeWorkspaceDraft = galleryWorkspaceDrafts[activeGalleryWorkspace]
+  const galleryWorkspaceParams = normalizeGalleryWorkspaceParams(persisted.galleryWorkspaceParams, params)
   let agentInputDrafts = cleanStaleAgentInputDrafts(
     normalizeAgentInputDrafts(persisted.agentInputDrafts, agentConversations),
     activeAgentConversationId,
@@ -696,9 +711,12 @@ export function mergePersistedState(persistedState: unknown, currentState: AppSt
     ...currentState,
     ...persisted,
     settings,
-    params,
+    params: galleryWorkspaceParams[activeGalleryWorkspace],
     appMode,
-    galleryInputDraft: galleryInputDraft && !isEmptyAgentInputDraft(galleryInputDraft) ? galleryInputDraft : null,
+    galleryInputDraft: activeWorkspaceDraft,
+    activeGalleryWorkspace,
+    galleryWorkspaceDrafts,
+    galleryWorkspaceParams,
     agentConversations,
     activeAgentConversationId,
     agentInputDrafts,
@@ -708,10 +726,10 @@ export function mergePersistedState(persistedState: unknown, currentState: AppSt
     supportPromptDismissed: Boolean(persisted.supportPromptDismissed),
     supportPromptOpen: Boolean(persisted.supportPromptOpen),
     supportPromptSkippedForImportedData: Boolean(persisted.supportPromptSkippedForImportedData),
-    prompt: galleryInputDraft?.prompt ?? '',
-    inputImages: galleryInputDraft?.inputImages ?? [],
-    maskDraft: galleryInputDraft?.maskDraft ?? null,
-    maskEditorImageId: galleryInputDraft?.maskEditorImageId ?? null,
+    prompt: activeWorkspaceDraft?.prompt ?? '',
+    inputImages: activeWorkspaceDraft?.inputImages ?? [],
+    maskDraft: activeWorkspaceDraft?.maskDraft ?? null,
+    maskEditorImageId: activeWorkspaceDraft?.maskEditorImageId ?? null,
     batchTryOnBatch: normalizePersistedBatchTryOnBatch(persisted.batchTryOnBatch),
   }
 }
@@ -745,6 +763,10 @@ interface AppState {
   maskEditorImageId: string | null
   setMaskEditorImageId: (id: string | null) => void
   galleryInputDraft: AgentInputDraft | null
+  activeGalleryWorkspace: GalleryWorkspace
+  galleryWorkspaceDrafts: GalleryWorkspaceDrafts
+  galleryWorkspaceParams: GalleryWorkspaceParams
+  activateGalleryWorkspace: (workspace: GalleryWorkspace) => void
 
   // 批量套图
   batchTryOnBatch: BatchTryOnBatch | null
@@ -862,6 +884,7 @@ interface AppState {
 function isImageReferencedByState(state: AppState, imageId: string) {
   if (state.inputImages.some((img) => img.id === imageId)) return true
   if (state.galleryInputDraft?.inputImages.some((img) => img.id === imageId)) return true
+  if (Object.values(state.galleryWorkspaceDrafts).some((draft) => draft?.inputImages.some((img) => img.id === imageId))) return true
   if (Object.values(state.agentInputDrafts).some((draft) => draft.inputImages.some((img) => img.id === imageId))) return true
   if (
     state.batchTryOnBatch?.templateImageId === imageId ||
@@ -1019,6 +1042,24 @@ function getPersistableGalleryInputDraft(state: AppState) {
   return saveGalleryInputDraft(state)
 }
 
+function getCurrentGalleryWorkspaceDrafts(state: AppState): GalleryWorkspaceDrafts {
+  const drafts = { ...state.galleryWorkspaceDrafts }
+  if (state.appMode === 'gallery') drafts[state.activeGalleryWorkspace] = saveGalleryInputDraft(state)
+  return drafts
+}
+
+function getPersistableGalleryWorkspaceDrafts(state: AppState): GalleryWorkspaceDrafts {
+  const drafts = getCurrentGalleryWorkspaceDrafts(state)
+  return {
+    listing: drafts.listing
+      ? { ...copyAgentInputDraft(drafts.listing), inputImages: drafts.listing.inputImages.map((img) => ({ id: img.id, dataUrl: '' })) }
+      : null,
+    aplus: drafts.aplus
+      ? { ...copyAgentInputDraft(drafts.aplus), inputImages: drafts.aplus.inputImages.map((img) => ({ id: img.id, dataUrl: '' })) }
+      : null,
+  }
+}
+
 function restoreGalleryInputDraftState(draft: AgentInputDraft | null): Pick<AgentInputDraft, 'prompt' | 'inputImages' | 'maskDraft' | 'maskEditorImageId'> {
   if (!draft) return clearInputDraftState()
   return {
@@ -1037,7 +1078,11 @@ function restoreAgentInputDraftState(drafts: Record<string, AgentInputDraft>, co
 function syncActiveInputDraft<T extends Partial<AgentInputDraft>>(
   state: AppState,
   patch: T,
-): T & { agentInputDrafts?: Record<string, AgentInputDraft>; galleryInputDraft?: AgentInputDraft | null } {
+): T & {
+  agentInputDrafts?: Record<string, AgentInputDraft>
+  galleryInputDraft?: AgentInputDraft | null
+  galleryWorkspaceDrafts?: GalleryWorkspaceDrafts
+} {
   const draft: AgentInputDraft = {
     prompt: patch.prompt ?? state.prompt,
     inputImages: patch.inputImages ?? state.inputImages,
@@ -1045,9 +1090,14 @@ function syncActiveInputDraft<T extends Partial<AgentInputDraft>>(
     maskEditorImageId: patch.maskEditorImageId !== undefined ? patch.maskEditorImageId : state.maskEditorImageId,
   }
   if (state.appMode === 'gallery') {
+    const nextDraft = isEmptyAgentInputDraft(draft) ? null : copyAgentInputDraft(draft)
     return {
       ...patch,
-      galleryInputDraft: isEmptyAgentInputDraft(draft) ? null : copyAgentInputDraft(draft),
+      galleryInputDraft: nextDraft,
+      galleryWorkspaceDrafts: {
+        ...state.galleryWorkspaceDrafts,
+        [state.activeGalleryWorkspace]: nextDraft,
+      },
     }
   }
   if (!state.activeAgentConversationId) return patch
@@ -1234,6 +1284,29 @@ export const useStore = create<AppState>()(
         set((s) => syncActiveInputDraft(s, { maskEditorImageId }))
       },
       galleryInputDraft: null,
+      activeGalleryWorkspace: 'listing',
+      galleryWorkspaceDrafts: createGalleryWorkspaceDrafts(),
+      galleryWorkspaceParams: {
+        listing: { ...DEFAULT_PARAMS },
+        aplus: { ...DEFAULT_PARAMS },
+      },
+      activateGalleryWorkspace: (workspace) => set((state) => {
+        if (state.activeGalleryWorkspace === workspace) return state
+        const currentDraft = getCurrentAgentInputDraft(state)
+        const savedCurrentDraft = isEmptyAgentInputDraft(currentDraft) ? null : copyAgentInputDraft(currentDraft)
+        const galleryWorkspaceDrafts: GalleryWorkspaceDrafts = {
+          ...state.galleryWorkspaceDrafts,
+          [state.activeGalleryWorkspace]: savedCurrentDraft,
+        }
+        const nextDraft = galleryWorkspaceDrafts[workspace]
+        return {
+          activeGalleryWorkspace: workspace,
+          galleryWorkspaceDrafts,
+          galleryInputDraft: nextDraft,
+          params: { ...state.galleryWorkspaceParams[workspace] },
+          ...restoreGalleryInputDraftState(nextDraft),
+        }
+      }),
 
       // Batch try-on
       batchTryOnBatch: null,
@@ -1243,7 +1316,17 @@ export const useStore = create<AppState>()(
 
       // Params
       params: { ...DEFAULT_PARAMS },
-      setParams: (p) => set((s) => ({ params: { ...s.params, ...p } })),
+      setParams: (p) => set((s) => {
+        const params = { ...s.params, ...p }
+        if (s.appMode !== 'gallery') return { params }
+        return {
+          params,
+          galleryWorkspaceParams: {
+            ...s.galleryWorkspaceParams,
+            [s.activeGalleryWorkspace]: params,
+          },
+        }
+      }),
       reusedTaskApiProfileId: null,
       reusedTaskApiProfileName: null,
       reusedTaskApiProfileMissing: false,
@@ -1855,12 +1938,16 @@ export async function initStore() {
   const state = useStore.getState()
   const persistedInputImages = state.inputImages
   const galleryInputDraft = state.galleryInputDraft
+  const galleryWorkspaceDrafts = state.galleryWorkspaceDrafts
   const agentConversations = state.agentConversations
   const agentInputDrafts = state.agentInputDrafts
   const batchTryOnBatch = state.batchTryOnBatch
   for (const img of persistedInputImages) referencedIds.add(img.id)
   if (galleryInputDraft) {
     for (const img of galleryInputDraft.inputImages) referencedIds.add(img.id)
+  }
+  for (const draft of Object.values(galleryWorkspaceDrafts)) {
+    for (const img of draft?.inputImages ?? []) referencedIds.add(img.id)
   }
   for (const draft of Object.values(agentInputDrafts)) {
     for (const img of draft.inputImages) referencedIds.add(img.id)
@@ -1943,6 +2030,46 @@ export async function initStore() {
           : {}),
       })
     }
+  }
+
+  const restoredGalleryWorkspaceDrafts: GalleryWorkspaceDrafts = createGalleryWorkspaceDrafts()
+  let galleryWorkspaceDraftsChanged = false
+  for (const workspace of ['listing', 'aplus'] as const) {
+    const draft = galleryWorkspaceDrafts[workspace]
+    if (!draft) continue
+    const restoredImages: InputImage[] = []
+    for (const img of draft.inputImages) {
+      if (img.dataUrl) {
+        restoredImages.push(img)
+        cacheImage(img.id, img.dataUrl)
+        continue
+      }
+      const storedImage = await getImage(img.id)
+      if (storedImage?.dataUrl) {
+        restoredImages.push({ ...img, dataUrl: storedImage.dataUrl })
+        cacheImage(img.id, storedImage.dataUrl)
+      }
+    }
+    const shouldClearMask = Boolean(draft.maskDraft) && !restoredImages.some((img) => img.id === draft.maskDraft?.targetImageId)
+    const restoredDraft: AgentInputDraft = {
+      ...draft,
+      inputImages: restoredImages,
+      prompt: remapImageMentionsForOrder(draft.prompt, draft.inputImages, restoredImages),
+      ...(shouldClearMask ? { maskDraft: null, maskEditorImageId: null } : {}),
+    }
+    restoredGalleryWorkspaceDrafts[workspace] = isEmptyAgentInputDraft(restoredDraft) ? null : restoredDraft
+    galleryWorkspaceDraftsChanged ||= restoredImages.length !== draft.inputImages.length ||
+      restoredImages.some((img, index) => img.dataUrl !== draft.inputImages[index]?.dataUrl) ||
+      shouldClearMask
+  }
+  if (galleryWorkspaceDraftsChanged) {
+    const latestState = useStore.getState()
+    const activeDraft = restoredGalleryWorkspaceDrafts[latestState.activeGalleryWorkspace]
+    useStore.setState({
+      galleryWorkspaceDrafts: restoredGalleryWorkspaceDrafts,
+      galleryInputDraft: activeDraft,
+      ...(latestState.appMode === 'gallery' ? restoreGalleryInputDraftState(activeDraft) : {}),
+    })
   }
 
   const restoredAgentInputDrafts: Record<string, AgentInputDraft> = {}
@@ -2388,12 +2515,42 @@ function addInputDraftReferencedImageIds(target: Set<string>, draft: AgentInputD
   for (const img of draft.inputImages) target.add(img.id)
 }
 
+function addGalleryWorkspaceDraftReferencedImageIds(target: Set<string>, drafts: GalleryWorkspaceDrafts) {
+  for (const draft of Object.values(drafts)) addInputDraftReferencedImageIds(target, draft)
+}
+
 function addBatchTryOnReferencedImageIds(target: Set<string>, batch = useStore.getState().batchTryOnBatch) {
   if (!batch) return
   if (batch.templateImageId) target.add(batch.templateImageId)
   for (const item of batch.items) {
     target.add(item.garmentImageId)
     if (item.outputImageId) target.add(item.outputImageId)
+  }
+}
+
+function createGalleryWorkspaceDrafts(listingDraft: AgentInputDraft | null = null): GalleryWorkspaceDrafts {
+  return {
+    listing: listingDraft ? copyAgentInputDraft(listingDraft) : null,
+    aplus: null,
+  }
+}
+
+function normalizeGalleryWorkspaceDrafts(value: unknown, legacyListingDraft: AgentInputDraft | null): GalleryWorkspaceDrafts {
+  const drafts = createGalleryWorkspaceDrafts(legacyListingDraft)
+  if (!isRecord(value)) return drafts
+  for (const workspace of ['listing', 'aplus'] as const) {
+    if (!(workspace in value)) continue
+    const normalized = normalizeAgentInputDraft(value[workspace])
+    drafts[workspace] = isEmptyAgentInputDraft(normalized) ? null : normalized
+  }
+  return drafts
+}
+
+function normalizeGalleryWorkspaceParams(value: unknown, legacyParams: TaskParams): GalleryWorkspaceParams {
+  const record = isRecord(value) ? value : {}
+  return {
+    listing: normalizePersistedParams(record.listing ?? legacyParams),
+    aplus: normalizePersistedParams(record.aplus ?? DEFAULT_PARAMS),
   }
 }
 
@@ -2408,11 +2565,12 @@ async function deleteUnreferencedImageIds(imageIds: Iterable<string>) {
   const candidates = Array.from(new Set(Array.from(imageIds).filter(Boolean)))
   if (candidates.length === 0) return
 
-  const { tasks, inputImages, galleryInputDraft } = useStore.getState()
+  const { tasks, inputImages, galleryInputDraft, galleryWorkspaceDrafts } = useStore.getState()
   const stillUsed = new Set<string>()
   for (const task of tasks) addTaskReferencedImageIds(stillUsed, task)
   addAgentReferencedImageIds(stillUsed)
   addInputDraftReferencedImageIds(stillUsed, galleryInputDraft)
+  addGalleryWorkspaceDraftReferencedImageIds(stillUsed, galleryWorkspaceDrafts)
   addBatchTryOnReferencedImageIds(stillUsed)
   for (const img of inputImages) stillUsed.add(img.id)
 
@@ -4081,7 +4239,7 @@ export async function editOutputs(task: TaskRecord, selectedOutputImageId?: stri
 
 /** 删除多条任务 */
 export async function removeMultipleTasks(taskIds: string[]) {
-  const { tasks, setTasks, inputImages, galleryInputDraft, showToast, clearSelection, selectedTaskIds } = useStore.getState()
+  const { tasks, setTasks, inputImages, galleryInputDraft, galleryWorkspaceDrafts, showToast, clearSelection, selectedTaskIds } = useStore.getState()
   
   if (!taskIds.length) return
 
@@ -4109,6 +4267,7 @@ export async function removeMultipleTasks(taskIds: string[]) {
   }
   addAgentReferencedImageIds(stillUsed)
   addInputDraftReferencedImageIds(stillUsed, galleryInputDraft)
+  addGalleryWorkspaceDraftReferencedImageIds(stillUsed, galleryWorkspaceDrafts)
   addBatchTryOnReferencedImageIds(stillUsed)
   for (const img of inputImages) stillUsed.add(img.id)
 
@@ -4132,7 +4291,7 @@ export async function removeMultipleTasks(taskIds: string[]) {
 
 /** 删除单条任务 */
 export async function removeTask(task: TaskRecord) {
-  const { tasks, setTasks, inputImages, galleryInputDraft, showToast } = useStore.getState()
+  const { tasks, setTasks, inputImages, galleryInputDraft, galleryWorkspaceDrafts, showToast } = useStore.getState()
 
   // 收集此任务关联的图片
   const taskImageIds = new Set([
@@ -4154,6 +4313,7 @@ export async function removeTask(task: TaskRecord) {
   }
   addAgentReferencedImageIds(stillUsed)
   addInputDraftReferencedImageIds(stillUsed, galleryInputDraft)
+  addGalleryWorkspaceDraftReferencedImageIds(stillUsed, galleryWorkspaceDrafts)
   addBatchTryOnReferencedImageIds(stillUsed)
   for (const img of inputImages) stillUsed.add(img.id)
 
@@ -4191,6 +4351,12 @@ export async function clearData(options: ClearOptions = { clearConfig: true, cle
       agentConversations: [],
       activeAgentConversationId: null,
       batchTryOnBatch: null,
+      activeGalleryWorkspace: 'listing',
+      galleryWorkspaceDrafts: createGalleryWorkspaceDrafts(),
+      galleryWorkspaceParams: {
+        listing: { ...DEFAULT_PARAMS },
+        aplus: { ...DEFAULT_PARAMS },
+      },
       supportPromptOpen: false,
       supportPromptSkippedForImportedData: false,
     })

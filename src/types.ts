@@ -5,6 +5,7 @@ import type { AmazonMarketplaceId } from './lib/amazonMarketplaces'
 export type ApiMode = 'images' | 'responses' | 'chat'
 export type ApiSetupMode = 'standard' | 'single-connection'
 export type AppMode = 'gallery' | 'agent'
+export type GalleryWorkspace = 'listing' | 'aplus'
 export type TaskWorkflow = 'amazon-listing' | 'amazon-aplus' | 'batch-tryon' | 'gallery' | 'agent' | 'unknown'
 export type TaskAspect = 'square' | 'landscape' | 'portrait'
 export type HistoryWorkflowFilter = 'all' | TaskWorkflow

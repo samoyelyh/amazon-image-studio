@@ -100,6 +100,59 @@ import { cleanStaleAgentInputDrafts, clearData, editOutputs, exportData, getErro
 const imageA = { id: 'image-a', dataUrl: 'data:image/png;base64,a' }
 const imageB = { id: 'image-b', dataUrl: 'data:image/png;base64,b' }
 
+describe('workspace draft isolation', () => {
+  beforeEach(() => {
+    useStore.setState({
+      appMode: 'gallery',
+      activeGalleryWorkspace: 'listing',
+      galleryWorkspaceDrafts: { listing: null, aplus: null },
+      galleryWorkspaceParams: {
+        listing: { ...DEFAULT_PARAMS },
+        aplus: { ...DEFAULT_PARAMS },
+      },
+      galleryInputDraft: null,
+      prompt: '',
+      inputImages: [],
+      maskDraft: null,
+      maskEditorImageId: null,
+      params: { ...DEFAULT_PARAMS },
+    })
+  })
+
+  it('restores prompt, images and params independently for Listing and A+', () => {
+    useStore.getState().setPrompt('listing prompt')
+    useStore.getState().setInputImages([imageA])
+    useStore.getState().setParams({ quality: 'high' })
+
+    useStore.getState().activateGalleryWorkspace('aplus')
+    expect(useStore.getState()).toMatchObject({
+      activeGalleryWorkspace: 'aplus',
+      prompt: '',
+      inputImages: [],
+      params: { quality: DEFAULT_PARAMS.quality },
+    })
+
+    useStore.getState().setPrompt('aplus prompt')
+    useStore.getState().setInputImages([imageB])
+    useStore.getState().setParams({ quality: 'low' })
+
+    useStore.getState().activateGalleryWorkspace('listing')
+    expect(useStore.getState()).toMatchObject({
+      activeGalleryWorkspace: 'listing',
+      prompt: 'listing prompt',
+      inputImages: [imageA],
+      params: { quality: 'high' },
+    })
+
+    useStore.getState().activateGalleryWorkspace('aplus')
+    expect(useStore.getState()).toMatchObject({
+      prompt: 'aplus prompt',
+      inputImages: [imageB],
+      params: { quality: 'low' },
+    })
+  })
+})
+
 describe('error toast messages', () => {
   it('drops long error detail after the failure title', () => {
     expect(getErrorToastMessage('Agent 请求失败：接口拒绝了很长的提示词内容')).toBe('Agent 请求失败')

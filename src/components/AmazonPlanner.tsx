@@ -66,7 +66,6 @@ import {
 import { DEFAULT_PARAMS } from '../types'
 import type { AmazonPlannerSession, CustomStyleReference, StyleReferenceEditState } from '../types'
 import StyleReferenceEditorModal from './StyleReferenceEditorModal'
-import BatchTryOnWorkspace from './BatchTryOnWorkspace'
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, CopyIcon, EditIcon, EyeIcon, HistoryIcon, PhotoIcon, PlusIcon, RefreshIcon, TrashIcon } from './icons'
 
 const FIELD_CLASS = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100 dark:placeholder:text-gray-500'
@@ -367,7 +366,11 @@ function getAmazonListingPlannerChecks(
   ]
 }
 
-export default function AmazonPlanner() {
+interface AmazonPlannerProps {
+  mode: AmazonPlannerMode
+}
+
+export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
   const prompt = useStore((s) => s.prompt)
   const inputImages = useStore((s) => s.inputImages)
   const settings = useStore((s) => s.settings)
@@ -388,8 +391,7 @@ export default function AmazonPlanner() {
   const [draft, setDraft] = useState<AmazonPromptDraft>(DEFAULT_AMAZON_PROMPT_DRAFT)
   const [resolution, setResolution] = useState<'2k' | '4k'>('2k')
   const [listingImageCount, setListingImageCount] = useState(DEFAULT_LISTING_IMAGE_COUNT)
-  const [plannerMode, setPlannerMode] = useState<AmazonPlannerMode>('listing')
-  const [workspaceMode, setWorkspaceMode] = useState<AmazonPlannerMode | 'batch-tryon'>('listing')
+  const plannerMode = mode
   const [marketplaceId, setMarketplaceId] = useState<AmazonMarketplaceId>(DEFAULT_AMAZON_MARKETPLACE_ID)
   const [aPlusType, setAPlusType] = useState<APlusContentType>('standard-large')
   const [aPlusModuleSpecsByType, setAPlusModuleSpecsByType] = useState<APlusModuleSpecsByType>({})
@@ -1233,15 +1235,6 @@ export default function AmazonPlanner() {
     if (nextIndex !== visiblePlanIndex) selectVisiblePlan(nextIndex)
   }
 
-  const changePlannerMode = (mode: AmazonPlannerMode) => {
-    setWorkspaceMode(mode)
-    if (mode === plannerMode) return
-    setPlannerMode(mode)
-    setStylePreview(null)
-    setStyleError('')
-    setActionProgress({})
-  }
-
   const changeAPlusType = (nextType: APlusContentType) => {
     setAPlusType(nextType)
     if (nextType !== aPlusType) {
@@ -1449,7 +1442,6 @@ export default function AmazonPlanner() {
 
     const restoredAPlusModuleSpecsByType = getSessionAPlusModuleSpecsByType(session)
     const restoredMarketplaceId = getSessionMarketplaceId(session)
-    setPlannerMode(session.mode)
     setMarketplaceId(restoredMarketplaceId)
     setAPlusType(session.aPlusType)
     setResolution(session.resolution)
@@ -1574,32 +1566,18 @@ export default function AmazonPlanner() {
       <div className="border-b border-gray-200 px-4 py-4 dark:border-white/[0.08] sm:px-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-50">亚马逊图片工作台</h2>
+            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-50">
+              {plannerMode === 'aplus' ? 'A+ 图工作台' : 'Listing 图工作台'}
+            </h2>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
               <span>OpenAI gpt-image-2</span>
               <span className="h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600" />
               <span>2K / 4K</span>
               <span className="h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600" />
-              <span>主图、附图、批量套图与 A+ 策划</span>
-            </div>
-            <div className="mt-3 inline-flex rounded-xl border border-gray-200 bg-gray-100 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
-              {([
-                ['listing', 'Listing 图'],
-                ['batch-tryon', '批量套图'],
-                ['aplus', 'A+ 图'],
-              ] as const).map(([mode, label]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => mode === 'batch-tryon' ? setWorkspaceMode(mode) : changePlannerMode(mode)}
-                  className={`h-8 rounded-lg px-3 text-sm font-medium transition ${workspaceMode === mode ? 'bg-white text-gray-900 shadow-sm dark:bg-white/10 dark:text-white' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
-                >
-                  {label}
-                </button>
-              ))}
+              <span>{plannerMode === 'aplus' ? 'A+ 模块策划与生成' : '主图与附图策划生成'}</span>
             </div>
           </div>
-          {workspaceMode !== 'batch-tryon' && <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-600 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-300">
               <span className="text-xs text-gray-400 dark:text-gray-500">目标站点</span>
               <select
@@ -1645,15 +1623,15 @@ export default function AmazonPlanner() {
             >
               <HistoryIcon className="h-4 w-4" />
               策划历史
-              {plannerSessions.length > 0 && (
+              {plannerSessions.filter((session) => session.mode === plannerMode).length > 0 && (
                 <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500 dark:bg-white/[0.08] dark:text-gray-300">
-                  {plannerSessions.length}
+                  {plannerSessions.filter((session) => session.mode === plannerMode).length}
                 </span>
               )}
             </button>
-          </div>}
+          </div>
         </div>
-        {workspaceMode !== 'batch-tryon' && showPlannerHistory && (
+        {showPlannerHistory && (
           <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/[0.08] dark:bg-gray-950">
             <div className="mb-2 flex items-center justify-between gap-2">
               <div>
@@ -1670,9 +1648,9 @@ export default function AmazonPlanner() {
                 收起
               </button>
             </div>
-            {plannerSessions.length > 0 ? (
+            {plannerSessions.filter((session) => session.mode === plannerMode).length > 0 ? (
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {plannerSessions.map((session) => (
+                {plannerSessions.filter((session) => session.mode === plannerMode).map((session) => (
                   <div key={session.id} className="rounded-lg border border-gray-200 bg-white p-3 dark:border-white/[0.08] dark:bg-gray-900">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -1726,7 +1704,6 @@ export default function AmazonPlanner() {
         )}
       </div>
 
-      {workspaceMode === 'batch-tryon' ? <BatchTryOnWorkspace /> : (
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
         <div className="border-b border-gray-200 p-4 dark:border-white/[0.08] sm:p-5 lg:border-b-0 lg:border-r">
           <div className={`rounded-xl border p-3 shadow-sm transition ${getGuidePanelClass(plannerGuideActive)}`}>
@@ -2661,7 +2638,6 @@ export default function AmazonPlanner() {
           )}
         </div>
       </div>
-      )}
     </section>
     </>
   )

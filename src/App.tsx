@@ -1,13 +1,9 @@
 import { useEffect } from 'react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { initStore } from './store'
 import { useStore } from './store'
 import { buildSettingsFromUrlParams, clearUrlSettingParams, hasUrlSettingParams } from './lib/urlSettings'
 import { useDockerApiUrlMigrationNotice } from './hooks/useDockerApiUrlMigrationNotice'
-import Header from './components/Header'
-import AmazonPlanner from './components/AmazonPlanner'
-import SearchBar from './components/SearchBar'
-import TaskGrid from './components/TaskGrid'
-import InputBar from './components/InputBar'
 import DetailModal from './components/DetailModal'
 import Lightbox from './components/Lightbox'
 import SettingsModal from './components/SettingsModal'
@@ -16,6 +12,8 @@ import Toast from './components/Toast'
 import MaskEditorModal from './components/MaskEditorModal'
 import ImageContextMenu from './components/ImageContextMenu'
 import { useGlobalClickSuppression } from './lib/clickSuppression'
+import AppRouter from './app/AppRouter'
+import { queryClient } from './app/queryClient'
 
 export default function App() {
   const setSettings = useStore((s) => s.setSettings)
@@ -52,16 +50,8 @@ export default function App() {
   }, [])
 
   return (
-    <>
-      <Header />
-      <main data-home-main data-drag-select-surface className="home-main-with-dock pb-48 lg:pb-10">
-        <div className="safe-area-x max-w-7xl mx-auto lg:!px-6">
-          <AmazonPlanner />
-          <SearchBar />
-          <TaskGrid />
-        </div>
-      </main>
-      <InputBar />
+    <QueryClientProvider client={queryClient}>
+      <AppRouter />
       <DetailModal />
       <Lightbox />
       <SettingsModal />
@@ -69,6 +59,6 @@ export default function App() {
       <Toast />
       <MaskEditorModal />
       <ImageContextMenu />
-    </>
+    </QueryClientProvider>
   )
 }
