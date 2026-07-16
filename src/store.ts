@@ -9,6 +9,7 @@ import type {
   ApiProfile,
   AppSettings,
   AppMode,
+  BatchTryOnBatch,
   HistoryAspectFilter,
   HistoryWorkflowFilter,
   TaskParams,
@@ -604,6 +605,53 @@ export function getPersistedState(state: AppState) {
     supportPromptDismissed: state.supportPromptDismissed,
     supportPromptOpen: state.supportPromptOpen,
     supportPromptSkippedForImportedData: state.supportPromptSkippedForImportedData,
+    batchTryOnBatch: state.batchTryOnBatch,
+  }
+}
+
+function normalizePersistedBatchTryOnBatch(value: unknown): BatchTryOnBatch | null {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Partial<BatchTryOnBatch>
+  if (typeof record.id !== 'string' || !Array.isArray(record.items)) return null
+  const now = Date.now()
+  const items = record.items.flatMap((item, index) => {
+    if (!item || typeof item !== 'object') return []
+    const current = item as BatchTryOnBatch['items'][number]
+    if (typeof current.id !== 'string' || typeof current.garmentImageId !== 'string') return []
+    const wasRunning = current.status === 'running'
+    const normalizedStatus = current.status === 'pending' || current.status === 'done' || current.status === 'error' || current.status === 'stopped'
+      ? current.status
+      : 'pending'
+    return [{
+      ...current,
+      batchId: record.id!,
+      garmentFileName: typeof current.garmentFileName === 'string' ? current.garmentFileName : `服装-${index + 1}`,
+      index,
+      status: wasRunning ? 'error' as const : normalizedStatus,
+      ...(wasRunning
+        ? {
+            error: '页面刷新时任务仍在生成，普通请求无法自动续接，请重试此任务。',
+            finishedAt: now,
+          }
+        : {}),
+    }]
+  })
+  return {
+    id: record.id,
+    templateImageId: typeof record.templateImageId === 'string' ? record.templateImageId : null,
+    templateFileName: typeof record.templateFileName === 'string' ? record.templateFileName : undefined,
+    templateWidth: typeof record.templateWidth === 'number' ? record.templateWidth : undefined,
+    templateHeight: typeof record.templateHeight === 'number' ? record.templateHeight : undefined,
+    items,
+    extraRequirements: typeof record.extraRequirements === 'string' ? record.extraRequirements : '',
+    aspectRatio: record.aspectRatio === '1:1' || record.aspectRatio === '3:4' || record.aspectRatio === '4:3' || record.aspectRatio === '16:9' || record.aspectRatio === '9:16'
+      ? record.aspectRatio
+      : 'template',
+    concurrency: record.concurrency === 1 || record.concurrency === 3 ? record.concurrency : 2,
+    params: normalizePersistedParams(record.params),
+    queuePaused: true,
+    createdAt: typeof record.createdAt === 'number' ? record.createdAt : now,
+    updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : now,
   }
 }
 
@@ -664,6 +712,7 @@ export function mergePersistedState(persistedState: unknown, currentState: AppSt
     inputImages: galleryInputDraft?.inputImages ?? [],
     maskDraft: galleryInputDraft?.maskDraft ?? null,
     maskEditorImageId: galleryInputDraft?.maskEditorImageId ?? null,
+    batchTryOnBatch: normalizePersistedBatchTryOnBatch(persisted.batchTryOnBatch),
   }
 }
 
@@ -696,6 +745,12 @@ interface AppState {
   maskEditorImageId: string | null
   setMaskEditorImageId: (id: string | null) => void
   galleryInputDraft: AgentInputDraft | null
+
+  // 批量套图
+  batchTryOnBatch: BatchTryOnBatch | null
+  setBatchTryOnBatch: (
+    batch: BatchTryOnBatch | null | ((current: BatchTryOnBatch | null) => BatchTryOnBatch | null),
+  ) => void
 
   // 参数
   params: TaskParams
@@ -808,6 +863,10 @@ function isImageReferencedByState(state: AppState, imageId: string) {
   if (state.inputImages.some((img) => img.id === imageId)) return true
   if (state.galleryInputDraft?.inputImages.some((img) => img.id === imageId)) return true
   if (Object.values(state.agentInputDrafts).some((draft) => draft.inputImages.some((img) => img.id === imageId))) return true
+  if (
+    state.batchTryOnBatch?.templateImageId === imageId ||
+    state.batchTryOnBatch?.items.some((item) => item.garmentImageId === imageId || item.outputImageId === imageId)
+  ) return true
   if (state.tasks.some((task) =>
     task.inputImageIds.includes(imageId) ||
     task.outputImages.includes(imageId) ||
@@ -1175,6 +1234,12 @@ export const useStore = create<AppState>()(
         set((s) => syncActiveInputDraft(s, { maskEditorImageId }))
       },
       galleryInputDraft: null,
+
+      // Batch try-on
+      batchTryOnBatch: null,
+      setBatchTryOnBatch: (batch) => set((state) => ({
+        batchTryOnBatch: typeof batch === 'function' ? batch(state.batchTryOnBatch) : batch,
+      })),
 
       // Params
       params: { ...DEFAULT_PARAMS },
@@ -1792,12 +1857,18 @@ export async function initStore() {
   const galleryInputDraft = state.galleryInputDraft
   const agentConversations = state.agentConversations
   const agentInputDrafts = state.agentInputDrafts
+  const batchTryOnBatch = state.batchTryOnBatch
   for (const img of persistedInputImages) referencedIds.add(img.id)
   if (galleryInputDraft) {
     for (const img of galleryInputDraft.inputImages) referencedIds.add(img.id)
   }
   for (const draft of Object.values(agentInputDrafts)) {
     for (const img of draft.inputImages) referencedIds.add(img.id)
+  }
+  if (batchTryOnBatch?.templateImageId) referencedIds.add(batchTryOnBatch.templateImageId)
+  for (const item of batchTryOnBatch?.items ?? []) {
+    referencedIds.add(item.garmentImageId)
+    if (item.outputImageId) referencedIds.add(item.outputImageId)
   }
   for (const conversation of agentConversations) {
     for (const round of conversation.rounds) {
@@ -2317,6 +2388,15 @@ function addInputDraftReferencedImageIds(target: Set<string>, draft: AgentInputD
   for (const img of draft.inputImages) target.add(img.id)
 }
 
+function addBatchTryOnReferencedImageIds(target: Set<string>, batch = useStore.getState().batchTryOnBatch) {
+  if (!batch) return
+  if (batch.templateImageId) target.add(batch.templateImageId)
+  for (const item of batch.items) {
+    target.add(item.garmentImageId)
+    if (item.outputImageId) target.add(item.outputImageId)
+  }
+}
+
 function addTaskReferencedImageIds(target: Set<string>, task: TaskRecord) {
   for (const id of task.inputImageIds || []) target.add(id)
   if (task.maskImageId) target.add(task.maskImageId)
@@ -2333,6 +2413,7 @@ async function deleteUnreferencedImageIds(imageIds: Iterable<string>) {
   for (const task of tasks) addTaskReferencedImageIds(stillUsed, task)
   addAgentReferencedImageIds(stillUsed)
   addInputDraftReferencedImageIds(stillUsed, galleryInputDraft)
+  addBatchTryOnReferencedImageIds(stillUsed)
   for (const img of inputImages) stillUsed.add(img.id)
 
   for (const imgId of candidates) {
@@ -3537,7 +3618,97 @@ async function executeAgentRound(
   }
 }
 
-async function executeTask(taskId: string) {
+export interface RunBatchTryOnTaskOptions {
+  batchId: string
+  garmentFileName: string
+  index: number
+  templateImageId: string
+  garmentImageId: string
+  prompt: string
+  params: TaskParams
+  onTaskCreated?: (taskId: string) => void
+}
+
+export function getBatchTryOnProfileError(settings: AppSettings): string | null {
+  const profile = getActiveApiProfile(settings)
+  const validation = validateApiProfile(profile)
+  if (validation) return `请先完善生图 API 配置：${validation}`
+
+  const supportsBuiltInReferenceImages =
+    profile.provider === 'fal' ||
+    (profile.provider === 'openai' && (profile.apiMode === 'images' || profile.apiMode === 'responses')) ||
+    canApiProfileGenerateImages(profile)
+  if (supportsBuiltInReferenceImages) return null
+
+  const customProvider = getCustomProviderDefinition(settings, profile.provider)
+  const mapping = customProvider?.editSubmit ?? customProvider?.submit
+  const serializedMapping = mapping ? JSON.stringify(mapping) : ''
+  const supportsCustomReferenceImages = Boolean(
+    mapping?.files?.some((file) => file.source === 'inputImages') ||
+    serializedMapping.includes('$inputImages'),
+  )
+  if (!supportsCustomReferenceImages) {
+    return '当前生图配置不支持参考图套图，请更换支持多图参考或图片编辑的生图模型。'
+  }
+  return null
+}
+
+/** 为批量套图创建标准历史任务，并复用现有任务执行、图片压缩、API 和输出存储链路。 */
+export async function runBatchTryOnTask(options: RunBatchTryOnTaskOptions): Promise<TaskRecord> {
+  const { settings } = useStore.getState()
+  const activeProfile = getActiveApiProfile(settings)
+  const profileError = getBatchTryOnProfileError(settings)
+  if (profileError) throw new Error(profileError)
+
+  const inputImageIds = [options.templateImageId, options.garmentImageId]
+  for (const imageId of inputImageIds) {
+    if (!await ensureImageCached(imageId)) throw new Error('参考图读取失败，请重新上传后再试。')
+  }
+
+  const normalizedParams = normalizeParamsForSettings(
+    { ...options.params, n: 1 },
+    settings,
+    { hasInputImages: true },
+  )
+  const taskId = genId()
+  const createdAt = Date.now()
+  const task: TaskRecord = {
+    id: taskId,
+    prompt: options.prompt.trim(),
+    params: normalizedParams,
+    apiProvider: activeProfile.provider,
+    apiProfileId: activeProfile.id,
+    apiProfileName: activeProfile.name,
+    apiMode: activeProfile.apiMode,
+    apiModel: activeProfile.model,
+    inputImageIds,
+    maskTargetImageId: null,
+    maskImageId: null,
+    outputImages: [],
+    status: 'running',
+    error: null,
+    createdAt,
+    finishedAt: null,
+    elapsed: null,
+    category: {
+      workflow: 'batch-tryon',
+      batchTryOnBatchId: options.batchId,
+      batchTryOnGarmentName: options.garmentFileName,
+      batchTryOnTemplateImageId: options.templateImageId,
+      batchTryOnIndex: options.index,
+    },
+  }
+
+  useStore.getState().setTasks([task, ...useStore.getState().tasks])
+  await putTask(task)
+  options.onTaskCreated?.(taskId)
+  await executeTask(taskId, { quiet: true })
+  const completed = useStore.getState().tasks.find((item) => item.id === taskId)
+  if (!completed) throw new Error('任务记录保存失败，请重试。')
+  return completed
+}
+
+async function executeTask(taskId: string, options: { quiet?: boolean } = {}) {
   const { settings } = useStore.getState()
   const task = useStore.getState().tasks.find((t) => t.id === taskId)
   if (!task) return
@@ -3678,7 +3849,7 @@ async function executeTask(taskId: string) {
     })
     void deleteUnreferencedImageIds(partialImageIdsToClean)
 
-    useStore.getState().showToast(`生成完成，共 ${outputIds.length} 张图片`, 'success')
+    if (!options.quiet) useStore.getState().showToast(`生成完成，共 ${outputIds.length} 张图片`, 'success')
     const currentMask = useStore.getState().maskDraft
     if (
       maskDataUrl &&
@@ -3743,7 +3914,7 @@ async function executeTask(taskId: string) {
         finishedAt: Date.now(),
         elapsed: Date.now() - task.createdAt,
       })
-      useStore.getState().setDetailTaskId(taskId)
+      if (!options.quiet) useStore.getState().setDetailTaskId(taskId)
     }
   } finally {
     // 释放输入图片的内存缓存（已持久化到 IndexedDB，后续按需从 DB 加载）
@@ -3938,6 +4109,7 @@ export async function removeMultipleTasks(taskIds: string[]) {
   }
   addAgentReferencedImageIds(stillUsed)
   addInputDraftReferencedImageIds(stillUsed, galleryInputDraft)
+  addBatchTryOnReferencedImageIds(stillUsed)
   for (const img of inputImages) stillUsed.add(img.id)
 
   // 删除孤立图片
@@ -3982,6 +4154,7 @@ export async function removeTask(task: TaskRecord) {
   }
   addAgentReferencedImageIds(stillUsed)
   addInputDraftReferencedImageIds(stillUsed, galleryInputDraft)
+  addBatchTryOnReferencedImageIds(stillUsed)
   for (const img of inputImages) stillUsed.add(img.id)
 
   // 删除孤立图片
@@ -4017,6 +4190,7 @@ export async function clearData(options: ClearOptions = { clearConfig: true, cle
     useStore.setState({
       agentConversations: [],
       activeAgentConversationId: null,
+      batchTryOnBatch: null,
       supportPromptOpen: false,
       supportPromptSkippedForImportedData: false,
     })

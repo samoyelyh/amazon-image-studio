@@ -5,7 +5,7 @@ import type { AmazonMarketplaceId } from './lib/amazonMarketplaces'
 export type ApiMode = 'images' | 'responses' | 'chat'
 export type ApiSetupMode = 'standard' | 'single-connection'
 export type AppMode = 'gallery' | 'agent'
-export type TaskWorkflow = 'amazon-listing' | 'amazon-aplus' | 'gallery' | 'agent' | 'unknown'
+export type TaskWorkflow = 'amazon-listing' | 'amazon-aplus' | 'batch-tryon' | 'gallery' | 'agent' | 'unknown'
 export type TaskAspect = 'square' | 'landscape' | 'portrait'
 export type HistoryWorkflowFilter = 'all' | TaskWorkflow
 export type HistoryAspectFilter = 'all' | TaskAspect
@@ -222,7 +222,51 @@ export interface TaskRecord {
     aPlusType?: 'standard' | 'standard-large' | 'premium' | 'mobile'
     marketplaceId?: AmazonMarketplaceId
     styleReferenceImageId?: string
+    /** 批量套图批次 ID（旧任务可为空） */
+    batchTryOnBatchId?: string
+    /** 当前服装原文件名（旧任务可为空） */
+    batchTryOnGarmentName?: string
+    /** 模特模板图 ID（旧任务可为空） */
+    batchTryOnTemplateImageId?: string
+    /** 当前服装在批次中的排序序号（旧任务可为空） */
+    batchTryOnIndex?: number
   }
+}
+
+// ===== 批量套图 =====
+
+export type BatchTryOnItemStatus = 'pending' | 'running' | 'done' | 'error' | 'stopped'
+export type BatchTryOnAspectRatio = 'template' | '1:1' | '3:4' | '4:3' | '16:9' | '9:16'
+
+export interface BatchTryOnItem {
+  id: string
+  batchId: string
+  garmentImageId: string
+  garmentFileName: string
+  index: number
+  taskId?: string
+  outputImageId?: string
+  status: BatchTryOnItemStatus
+  error?: string
+  createdAt: number
+  startedAt?: number
+  finishedAt?: number
+}
+
+export interface BatchTryOnBatch {
+  id: string
+  templateImageId: string | null
+  templateFileName?: string
+  templateWidth?: number
+  templateHeight?: number
+  items: BatchTryOnItem[]
+  extraRequirements: string
+  aspectRatio: BatchTryOnAspectRatio
+  concurrency: 1 | 2 | 3
+  params: TaskParams
+  queuePaused: boolean
+  createdAt: number
+  updatedAt: number
 }
 
 export interface AmazonVisualSystem {

@@ -887,6 +887,7 @@ export default function DetailModal() {
                     className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs text-gray-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100"
                   >
                     <option value="amazon-listing">Listing 图</option>
+                    <option value="batch-tryon">批量套图</option>
                     <option value="amazon-aplus">A+ 图</option>
                     <option value="gallery">普通生图</option>
                     <option value="agent">Agent</option>

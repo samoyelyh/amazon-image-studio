@@ -66,6 +66,7 @@ import {
 import { DEFAULT_PARAMS } from '../types'
 import type { AmazonPlannerSession, CustomStyleReference, StyleReferenceEditState } from '../types'
 import StyleReferenceEditorModal from './StyleReferenceEditorModal'
+import BatchTryOnWorkspace from './BatchTryOnWorkspace'
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, CopyIcon, EditIcon, EyeIcon, HistoryIcon, PhotoIcon, PlusIcon, RefreshIcon, TrashIcon } from './icons'
 
 const FIELD_CLASS = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100 dark:placeholder:text-gray-500'
@@ -388,6 +389,7 @@ export default function AmazonPlanner() {
   const [resolution, setResolution] = useState<'2k' | '4k'>('2k')
   const [listingImageCount, setListingImageCount] = useState(DEFAULT_LISTING_IMAGE_COUNT)
   const [plannerMode, setPlannerMode] = useState<AmazonPlannerMode>('listing')
+  const [workspaceMode, setWorkspaceMode] = useState<AmazonPlannerMode | 'batch-tryon'>('listing')
   const [marketplaceId, setMarketplaceId] = useState<AmazonMarketplaceId>(DEFAULT_AMAZON_MARKETPLACE_ID)
   const [aPlusType, setAPlusType] = useState<APlusContentType>('standard-large')
   const [aPlusModuleSpecsByType, setAPlusModuleSpecsByType] = useState<APlusModuleSpecsByType>({})
@@ -1232,6 +1234,7 @@ export default function AmazonPlanner() {
   }
 
   const changePlannerMode = (mode: AmazonPlannerMode) => {
+    setWorkspaceMode(mode)
     if (mode === plannerMode) return
     setPlannerMode(mode)
     setStylePreview(null)
@@ -1577,25 +1580,26 @@ export default function AmazonPlanner() {
               <span className="h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600" />
               <span>2K / 4K</span>
               <span className="h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600" />
-              <span>主图、附图与 A+ 策划</span>
+              <span>主图、附图、批量套图与 A+ 策划</span>
             </div>
             <div className="mt-3 inline-flex rounded-xl border border-gray-200 bg-gray-100 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
               {([
                 ['listing', 'Listing 图'],
+                ['batch-tryon', '批量套图'],
                 ['aplus', 'A+ 图'],
               ] as const).map(([mode, label]) => (
                 <button
                   key={mode}
                   type="button"
-                  onClick={() => changePlannerMode(mode)}
-                  className={`h-8 rounded-lg px-3 text-sm font-medium transition ${plannerMode === mode ? 'bg-white text-gray-900 shadow-sm dark:bg-white/10 dark:text-white' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
+                  onClick={() => mode === 'batch-tryon' ? setWorkspaceMode(mode) : changePlannerMode(mode)}
+                  className={`h-8 rounded-lg px-3 text-sm font-medium transition ${workspaceMode === mode ? 'bg-white text-gray-900 shadow-sm dark:bg-white/10 dark:text-white' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
                 >
                   {label}
                 </button>
               ))}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          {workspaceMode !== 'batch-tryon' && <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-600 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-300">
               <span className="text-xs text-gray-400 dark:text-gray-500">目标站点</span>
               <select
@@ -1647,9 +1651,9 @@ export default function AmazonPlanner() {
                 </span>
               )}
             </button>
-          </div>
+          </div>}
         </div>
-        {showPlannerHistory && (
+        {workspaceMode !== 'batch-tryon' && showPlannerHistory && (
           <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/[0.08] dark:bg-gray-950">
             <div className="mb-2 flex items-center justify-between gap-2">
               <div>
@@ -1722,6 +1726,7 @@ export default function AmazonPlanner() {
         )}
       </div>
 
+      {workspaceMode === 'batch-tryon' ? <BatchTryOnWorkspace /> : (
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
         <div className="border-b border-gray-200 p-4 dark:border-white/[0.08] sm:p-5 lg:border-b-0 lg:border-r">
           <div className={`rounded-xl border p-3 shadow-sm transition ${getGuidePanelClass(plannerGuideActive)}`}>
@@ -2656,6 +2661,7 @@ export default function AmazonPlanner() {
           )}
         </div>
       </div>
+      )}
     </section>
     </>
   )
