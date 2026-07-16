@@ -1,0 +1,195 @@
+name: amazon-image-studio
+
+x-backend-environment: &backend-environment
+  APP_NAME: Amazon Image Studio API
+  APP_VERSION: 0.2.0
+  ENVIRONMENT: development
+  LOG_LEVEL: INFO
+  CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-18080},http://127.0.0.1:${FRONTEND_PORT:-18080}
+  MYSQL_HOST: mysql
+  MYSQL_PORT: 3306
+  MYSQL_DATABASE: ${MYSQL_DATABASE:-amazon_image_studio}
+  MYSQL_USER: ${MYSQL_USER:-amazon}
+  MYSQL_PASSWORD: ${MYSQL_PASSWORD:-local-amazon-password}
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/1
+  CELERY_RESULT_BACKEND: redis://redis:6379/2
+  S3_ENDPOINT_URL: http://minio:9000
+  S3_REGION: us-east-1
+  S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+  S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-local-minio-password}
+  S3_BUCKET: ${S3_BUCKET:-amazon-image-studio}
+  S3_SECURE: "false"
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args:
+        VITE_DEPLOYMENT_MODE: multiuser
+        VITE_API_BASE_URL: /api/v1
+    environment:
+      BACKEND_URL: http://backend:8000
+      HOST: 0.0.0.0
+      PORT: 80
+    ports:
+      - "${FRONTEND_PORT:-18080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [platform]
+
+  backend:
+    build:
+      context: server
+      dockerfile: Dockerfile
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    environment: *backend-environment
+    ports:
+      - "${BACKEND_PORT:-18000}:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+    networks: [platform]
+
+  worker:
+    build:
+      context: server
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=INFO", "--queues=default,maintenance", "--concurrency=2"]
+    environment: *backend-environment
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks: [platform]
+
+  celery-beat:
+    build:
+      context: server
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    environment: *backend-environment
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [platform]
+
+  flower:
+    build:
+      context: server
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "flower", "--port=5555"]
+    environment: *backend-environment
+    ports:
+      - "${FLOWER_PORT:-15555}:5555"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [platform]
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-amazon_image_studio}
+      MYSQL_USER: ${MYSQL_USER:-amazon}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-local-amazon-password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local-root-password}
+    command: ["mysqld", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    ports:
+      - "${MYSQL_PORT:-13306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+    networks: [platform]
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "${REDIS_PORT:-16379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks: [platform]
+
+  minio:
+    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-local-minio-password}
+    ports:
+      - "${MINIO_API_PORT:-19000}:9000"
+      - "${MINIO_CONSOLE_PORT:-19001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks: [platform]
+
+  minio-init:
+    image: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      mc mb --ignore-existing local/$${S3_BUCKET};
+      mc anonymous set none local/$${S3_BUCKET};
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-local-minio-password}
+      S3_BUCKET: ${S3_BUCKET:-amazon-image-studio}
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    networks: [platform]
+
+volumes:
+  mysql-data:
+  redis-data:
+  minio-data:
+
+networks:
+  platform:
+    driver: bridge
