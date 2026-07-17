@@ -11,6 +11,7 @@ from app.models.identity import (
 )
 from app.models.content import Asset, GeneratedOutput, Project, ProjectAsset, ProjectVersion
 from app.models.quota import QuotaAccount, QuotaPackage, QuotaReservation, QuotaRule, QuotaTransaction
+from app.models.tasks import ApiKey, ApiKeyUsageStat, Job, JobAttempt, JobBatch, ModelCapability, Provider, ProviderModel, ResourcePool, ResourcePoolKey
 
 __all__ = [
     "AuditLog",
@@ -32,4 +33,6 @@ __all__ = [
     "QuotaReservation",
     "QuotaRule",
     "QuotaTransaction",
+    "Provider", "ProviderModel", "ModelCapability", "ResourcePool", "ResourcePoolKey",
+    "ApiKey", "ApiKeyUsageStat", "JobBatch", "Job", "JobAttempt",
 ]

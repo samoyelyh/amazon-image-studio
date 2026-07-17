@@ -29,6 +29,11 @@ PERMISSIONS = {
     "quota.read": "Read organization quota and transactions",
     "quota.estimate": "Estimate operation quota costs",
     "quota.manage": "Grant and adjust organization quota",
+    "jobs.read": "Read organization jobs",
+    "jobs.submit": "Submit organization jobs",
+    "jobs.cancel": "Cancel and retry organization jobs",
+    "resource_pools.read": "Read resource pool metadata",
+    "resource_pools.manage": "Manage providers, resource pools, and API keys",
 }
 
 ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
@@ -43,6 +48,7 @@ ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
             "assets.read", "assets.upload", "assets.delete", "projects.read",
             "projects.write", "projects.delete", "generated_outputs.read",
             "quota.read", "quota.estimate",
+            "jobs.read", "jobs.submit", "jobs.cancel", "resource_pools.read",
         },
     ),
     "manager": (
@@ -52,6 +58,7 @@ ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
             "assets.read", "assets.upload", "assets.delete", "projects.read", "projects.write",
             "projects.delete", "generated_outputs.read",
             "quota.read", "quota.estimate",
+            "jobs.read", "jobs.submit", "jobs.cancel", "resource_pools.read",
         },
     ),
     "member": (
@@ -60,11 +67,12 @@ ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
             "organizations.read", "roles.read", "profile.read", "profile.update",
             "assets.read", "assets.upload", "projects.read", "projects.write", "generated_outputs.read",
             "quota.read", "quota.estimate",
+            "jobs.read", "jobs.submit", "jobs.cancel", "resource_pools.read",
         },
     ),
     "viewer": (
         "Viewer", RoleScope.ORGANIZATION.value,
-        {"organizations.read", "profile.read", "assets.read", "projects.read", "generated_outputs.read", "quota.read", "quota.estimate"},
+        {"organizations.read", "profile.read", "assets.read", "projects.read", "generated_outputs.read", "quota.read", "quota.estimate", "jobs.read", "resource_pools.read"},
     ),
 }
 

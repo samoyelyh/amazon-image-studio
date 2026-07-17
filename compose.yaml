@@ -2,7 +2,7 @@ name: amazon-image-studio
 
 x-backend-environment: &backend-environment
   APP_NAME: Amazon Image Studio API
-  APP_VERSION: 0.5.0
+  APP_VERSION: 0.6.0
   ENVIRONMENT: development
   LOG_LEVEL: INFO
   CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-18080},http://127.0.0.1:${FRONTEND_PORT:-18080}
@@ -38,6 +38,14 @@ x-backend-environment: &backend-environment
   BOOTSTRAP_ORGANIZATION_NAME: ${BOOTSTRAP_ORGANIZATION_NAME:-Default Organization}
   BOOTSTRAP_QUOTA_BALANCE: ${BOOTSTRAP_QUOTA_BALANCE:-10000}
   QUOTA_RESERVATION_TTL_MINUTES: ${QUOTA_RESERVATION_TTL_MINUTES:-60}
+  API_KEY_ENCRYPTION_KEY: ${API_KEY_ENCRYPTION_KEY:-bG9jYWwtZGV2ZWxvcG1lbnQta2V5LTMyLWJ5dGVzISE=}
+  RESOURCE_LEASE_TTL_SECONDS: ${RESOURCE_LEASE_TTL_SECONDS:-900}
+  RESOURCE_KEY_COOLDOWN_SECONDS: ${RESOURCE_KEY_COOLDOWN_SECONDS:-60}
+  PROVIDER_REQUEST_TIMEOUT_SECONDS: ${PROVIDER_REQUEST_TIMEOUT_SECONDS:-120}
+  PROVIDER_OUTPUT_MAX_BYTES: ${PROVIDER_OUTPUT_MAX_BYTES:-26214400}
+  JOB_TIMEOUT_SECONDS: ${JOB_TIMEOUT_SECONDS:-600}
+  JOB_HEARTBEAT_TIMEOUT_SECONDS: ${JOB_HEARTBEAT_TIMEOUT_SECONDS:-180}
+  JOB_MAX_ATTEMPTS: ${JOB_MAX_ATTEMPTS:-3}
 
 services:
   frontend:
@@ -92,7 +100,7 @@ services:
     build:
       context: server
       dockerfile: Dockerfile
-    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=INFO", "--queues=default,maintenance", "--concurrency=2"]
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=INFO", "--queues=default,maintenance,planning_queue,listing_queue,batch_tryon_queue,aplus_queue,retry_queue", "--concurrency=2"]
     environment: *backend-environment
     depends_on:
       mysql:

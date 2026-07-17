@@ -42,3 +42,13 @@ def test_production_requires_secure_refresh_cookie() -> None:
             environment="production",
             jwt_secret=SecretStr("a-production-secret-with-more-than-32-characters"),
         )
+
+
+def test_production_rejects_development_api_key_encryption_key() -> None:
+    with pytest.raises(ValueError, match="API_KEY_ENCRYPTION_KEY"):
+        Settings(
+            _env_file=None,
+            environment="production",
+            jwt_secret=SecretStr("a-production-secret-with-more-than-32-characters"),
+            refresh_cookie_secure=True,
+        )

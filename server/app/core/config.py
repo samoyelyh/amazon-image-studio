@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Amazon Image Studio API"
-    app_version: str = "0.5.0"
+    app_version: str = "0.6.0"
     environment: Literal["development", "test", "production"] = "development"
     log_level: str = "INFO"
     api_v1_prefix: str = "/api/v1"
@@ -67,6 +67,14 @@ class Settings(BaseSettings):
     bootstrap_organization_name: str = "Default Organization"
     bootstrap_quota_balance: int = 0
     quota_reservation_ttl_minutes: int = 60
+    api_key_encryption_key: SecretStr = SecretStr("bG9jYWwtZGV2ZWxvcG1lbnQta2V5LTMyLWJ5dGVzISE=")
+    resource_lease_ttl_seconds: int = 900
+    resource_key_cooldown_seconds: int = 60
+    provider_request_timeout_seconds: float = 120.0
+    provider_output_max_bytes: int = 25 * 1024 * 1024
+    job_timeout_seconds: int = 600
+    job_heartbeat_timeout_seconds: int = 180
+    job_max_attempts: int = 3
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -98,6 +106,17 @@ class Settings(BaseSettings):
             raise ValueError("BOOTSTRAP_QUOTA_BALANCE cannot be negative")
         if self.quota_reservation_ttl_minutes < 1:
             raise ValueError("QUOTA_RESERVATION_TTL_MINUTES must be positive")
+        try:
+            from cryptography.fernet import Fernet
+
+            Fernet(self.api_key_encryption_key.get_secret_value().encode("ascii"))
+        except Exception as error:
+            raise ValueError("API_KEY_ENCRYPTION_KEY must be a valid Fernet key") from error
+        if self.environment == "production" and self.api_key_encryption_key.get_secret_value() == "bG9jYWwtZGV2ZWxvcG1lbnQta2V5LTMyLWJ5dGVzISE=":
+            raise ValueError("API_KEY_ENCRYPTION_KEY must be replaced in production")
+        if min(self.resource_lease_ttl_seconds, self.resource_key_cooldown_seconds, self.job_timeout_seconds,
+               self.job_heartbeat_timeout_seconds, self.job_max_attempts, self.provider_output_max_bytes) < 1:
+            raise ValueError("Task and resource-pool limits must be positive")
         return self
 
     @property

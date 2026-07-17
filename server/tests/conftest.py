@@ -16,6 +16,45 @@ from app.security.passwords import hash_password
 from app.security.rbac import sync_rbac
 from app.services.storage_service import StorageObjectMetadata, StorageService, get_storage_service
 from app.services.billing_service import ensure_account
+from app.infrastructure.redis import get_redis_client
+
+
+class FakeRedis:
+    def __init__(self) -> None:
+        self.values: dict[str, int | str] = {}
+
+    async def get(self, key):
+        return self.values.get(key)
+
+    async def set(self, key, value, ex=None):
+        self.values[key] = value
+        return True
+
+    async def eval(self, script, numkeys, *args):
+        keys = list(args[:numkeys])
+        values = list(args[numkeys:])
+        if "DECR" in script:
+            active = int(self.values.get(keys[0], 0))
+            if active <= 1:
+                self.values.pop(keys[0], None)
+                return 0
+            self.values[keys[0]] = active - 1
+            return active - 1
+        if keys[1] in self.values:
+            return -4
+        active = int(self.values.get(keys[0], 0))
+        rpm = int(self.values.get(keys[2], 0))
+        daily = int(self.values.get(keys[3], 0))
+        if active >= int(values[0]):
+            return -1
+        if int(values[1]) > 0 and rpm >= int(values[1]):
+            return -2
+        if int(values[2]) > 0 and daily >= int(values[2]):
+            return -3
+        self.values[keys[0]] = active + 1
+        self.values[keys[2]] = rpm + 1
+        self.values[keys[3]] = daily + 1
+        return active + 1
 
 
 class FakeStorageService(StorageService):
@@ -133,8 +172,10 @@ async def identity_test_context() -> AsyncIterator[dict[str, object]]:
 
     app = create_app()
     storage = FakeStorageService()
+    redis = FakeRedis()
     app.dependency_overrides[get_db_session] = override_db_session
     app.dependency_overrides[get_storage_service] = lambda: storage
+    app.dependency_overrides[get_redis_client] = lambda: redis
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield {"client": client, "app": app, "session_factory": session_factory, "storage": storage, **ids}
+        yield {"client": client, "app": app, "session_factory": session_factory, "engine": engine, "storage": storage, "redis": redis, **ids}
     await engine.dispose()

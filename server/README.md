@@ -1,6 +1,6 @@
-# Phase 2 后端基础框架
+# 多人平台后端（已完成 Phase 6）
 
-本目录提供多人模式的公共后端基础设施。当前 Phase 只包含配置、健康检查、数据库迁移、Redis/Celery 和 S3 兼容对象存储抽象，不包含账号、额度或业务任务接口。
+本目录提供多人模式的账号、团队/RBAC、素材与项目、额度计费、Celery 任务和多 API Key 资源池。三个工作台接入统一任务系统属于 Phase 7。
 
 ## 本地 Python 开发
 
@@ -60,7 +60,7 @@ docker compose exec backend alembic upgrade head
 docker compose exec backend alembic downgrade -1
 ```
 
-当前迁移头为 `0002_identity_and_rbac`。`0001_phase2_baseline` 是空业务基线，第二个迁移创建 Phase 3 的用户、团队、角色、令牌与审计表。
+当前迁移头为 `0005_tasks_resource_pool`。迁移按 Phase 2 基线、身份/RBAC、素材/项目、额度计费、任务/资源池顺序执行。
 
 ## 测试
 
@@ -78,5 +78,7 @@ The backend now runs `alembic upgrade head` and synchronizes the built-in RBAC d
 The Compose values are local development examples. Replace `JWT_SECRET`, `BOOTSTRAP_ADMIN_PASSWORD`, the MySQL passwords, and MinIO credentials before LAN sharing or production use. Production mode also requires `REFRESH_COOKIE_SECURE=true`.
 
 See `docs/architecture/phase-3-auth-rbac.md` for the authentication flows, endpoints, migration, and acceptance tests.
+
+Phase 6 的中转站 Key 必须通过后端 Key 接口加密保存。不要将平台 Key 放入前端环境变量、Provider config、任务 input 或任何浏览器存储。完整配置和恢复机制见 `docs/architecture/phase-6-tasks-resource-pool.md`。
 
 `/api/v1/health/live` 仅判断 API 进程是否运行；`/api/v1/health/ready` 会实际检查 MySQL、Redis 和对象存储桶，任一失败时返回 HTTP 503。
