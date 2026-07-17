@@ -5,6 +5,7 @@ import { appRoutes } from '../app/routes'
 const pageCopy = {
   tasks: ['任务中心', 'Phase 2 起接入统一服务端任务查询；当前 standalone 任务仍显示在各工作台的生成记录中。'],
   assets: ['素材中心', 'Phase 4 接入对象存储、素材归档、标签与项目复用。'],
+  projects: ['项目系统', 'Phase 4 在多人模式下提供三类项目草稿、不可变版本和素材关联。'],
   history: ['生成历史', 'Phase 4 接入统一生成历史；当前 standalone 历史继续保存在浏览器 IndexedDB。'],
   quota: ['额度中心', 'Phase 5 接入额度账户、流水、预占、结算和退款。'],
   profile: ['个人中心', 'Phase 3 接入账号资料、团队与角色权限。'],
@@ -22,7 +23,7 @@ export function DashboardPage() {
       <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-gray-900">
         <div className="text-xs font-semibold text-blue-600 dark:text-blue-300">{runtimeConfig.isStandalone ? 'STANDALONE' : 'MULTIUSER'}</div>
         <h1 className="mt-2 text-2xl font-bold tracking-tight text-gray-950 dark:text-white">电商视觉工作台</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500 dark:text-gray-400">三个业务工作台已拆分为独立路由，多人模式已接入统一账号、团队和角色权限。额度、任务与素材能力将在后续 Phase 接入。</p>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500 dark:text-gray-400">三个业务工作台已拆分为独立路由，多人模式已接入统一账号、团队、角色权限、私有素材与项目版本。额度与异步任务能力将在后续 Phase 接入。</p>
       </section>
       <div className="grid gap-4 md:grid-cols-3">
         {workspaces.map(([title, description, path]) => (

@@ -69,6 +69,17 @@ class S3StorageService(StorageService):
             aws_secret_access_key=settings.s3_secret_key.get_secret_value(),
             use_ssl=settings.s3_secure,
         )
+        public_endpoint = settings.s3_public_endpoint_url
+        self.public_client = self.client
+        if client is None and public_endpoint and public_endpoint.rstrip("/") != settings.s3_endpoint_url.rstrip("/"):
+            self.public_client = boto3.client(
+                "s3",
+                endpoint_url=public_endpoint,
+                region_name=settings.s3_region,
+                aws_access_key_id=settings.s3_access_key.get_secret_value(),
+                aws_secret_access_key=settings.s3_secret_key.get_secret_value(),
+                use_ssl=public_endpoint.lower().startswith("https://"),
+            )
 
     def upload(
         self,
@@ -105,7 +116,7 @@ class S3StorageService(StorageService):
             raise
 
     def create_presigned_url(self, key: str, *, expires_in: int | None = None) -> str:
-        return self.client.generate_presigned_url(
+        return self.public_client.generate_presigned_url(
             "get_object",
             Params={"Bucket": self.bucket, "Key": key},
             ExpiresIn=expires_in or self.settings.s3_presigned_url_ttl_seconds,

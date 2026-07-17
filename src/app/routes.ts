@@ -7,6 +7,7 @@ export const appRoutes = {
   aplus: '/workspaces/aplus',
   tasks: '/tasks',
   assets: '/assets',
+  projects: '/projects',
   history: '/history',
   quota: '/quota',
   profile: '/profile',
@@ -45,6 +46,7 @@ export const navigationSections: NavigationSection[] = [
     items: [
       { label: '任务中心', path: appRoutes.tasks },
       { label: '素材中心', path: appRoutes.assets },
+      { label: '项目系统', path: appRoutes.projects, multiuserOnly: true },
       { label: '生成历史', path: appRoutes.history },
       { label: '额度中心', path: appRoutes.quota, multiuserOnly: true },
     ],

@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Amazon Image Studio API"
-    app_version: str = "0.3.0"
+    app_version: str = "0.4.0"
     environment: Literal["development", "test", "production"] = "development"
     log_level: str = "INFO"
     api_v1_prefix: str = "/api/v1"
@@ -38,12 +38,17 @@ class Settings(BaseSettings):
     celery_result_backend: SecretStr | None = None
 
     s3_endpoint_url: str = "http://127.0.0.1:9000"
+    s3_public_endpoint_url: str | None = None
     s3_region: str = "us-east-1"
     s3_access_key: SecretStr = SecretStr("minioadmin")
     s3_secret_key: SecretStr = SecretStr("change-me-now")
     s3_bucket: str = "amazon-image-studio"
     s3_secure: bool = False
     s3_presigned_url_ttl_seconds: int = 900
+    asset_max_upload_bytes: int = 20 * 1024 * 1024
+    asset_max_image_pixels: int = 40_000_000
+    asset_max_image_dimension: int = 12_000
+    project_max_draft_bytes: int = 1024 * 1024
 
     health_check_timeout_seconds: float = 3.0
 
@@ -81,6 +86,12 @@ class Settings(BaseSettings):
             raise ValueError("BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD must be configured together")
         if self.bootstrap_admin_password and len(self.bootstrap_admin_password.get_secret_value()) < 12:
             raise ValueError("BOOTSTRAP_ADMIN_PASSWORD must contain at least 12 characters")
+        if self.asset_max_upload_bytes < 1:
+            raise ValueError("ASSET_MAX_UPLOAD_BYTES must be positive")
+        if self.asset_max_image_pixels < 1 or self.asset_max_image_dimension < 1:
+            raise ValueError("Asset image limits must be positive")
+        if self.project_max_draft_bytes < 2:
+            raise ValueError("PROJECT_MAX_DRAFT_BYTES must be at least 2")
         return self
 
     @property

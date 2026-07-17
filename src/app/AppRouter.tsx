@@ -6,6 +6,8 @@ import { APlusWorkspacePage, BatchTryOnWorkspacePage, ListingWorkspacePage } fro
 import { DashboardPage, NotFoundPage, PlatformPage } from '../pages/PlatformPage'
 import LoginPage from '../pages/LoginPage'
 import ProfilePage from '../pages/ProfilePage'
+import AssetsPage from '../pages/AssetsPage'
+import ProjectsPage from '../pages/ProjectsPage'
 import { useAuth } from './AuthContext'
 
 function ProtectedRoutes() {
@@ -33,7 +35,8 @@ function AppRoutes() {
           <Route path={appRoutes.batchTryOn} element={<BatchTryOnWorkspacePage />} />
           <Route path={appRoutes.aplus} element={<APlusWorkspacePage />} />
           <Route path={appRoutes.tasks} element={<PlatformPage page="tasks" />} />
-          <Route path={appRoutes.assets} element={<PlatformPage page="assets" />} />
+          <Route path={appRoutes.assets} element={runtimeConfig.isStandalone ? <PlatformPage page="assets" /> : <AssetsPage />} />
+          <Route path={appRoutes.projects} element={runtimeConfig.isStandalone ? <PlatformPage page="projects" /> : <ProjectsPage />} />
           <Route path={appRoutes.history} element={<PlatformPage page="history" />} />
           <Route path={appRoutes.quota} element={<PlatformPage page="quota" />} />
           <Route path={appRoutes.profile} element={runtimeConfig.isStandalone ? <PlatformPage page="profile" /> : <ProfilePage />} />

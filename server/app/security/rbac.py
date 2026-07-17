@@ -19,6 +19,13 @@ PERMISSIONS = {
     "audit.read": "Read audit logs",
     "profile.read": "Read own profile",
     "profile.update": "Update own profile",
+    "assets.read": "Read organization assets",
+    "assets.upload": "Upload organization assets",
+    "assets.delete": "Delete organization assets",
+    "projects.read": "Read organization projects",
+    "projects.write": "Create and update organization projects",
+    "projects.delete": "Archive organization projects",
+    "generated_outputs.read": "Read generated output metadata",
 }
 
 ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
@@ -30,14 +37,29 @@ ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
             "organizations.read", "organizations.write", "organization.members.read",
             "organization.members.write", "roles.read", "roles.assign", "audit.read",
             "profile.read", "profile.update", "users.read", "users.write",
+            "assets.read", "assets.upload", "assets.delete", "projects.read",
+            "projects.write", "projects.delete", "generated_outputs.read",
         },
     ),
     "manager": (
         "Manager", RoleScope.ORGANIZATION.value,
-        {"organizations.read", "organization.members.read", "roles.read", "profile.read", "profile.update"},
+        {
+            "organizations.read", "organization.members.read", "roles.read", "profile.read", "profile.update",
+            "assets.read", "assets.upload", "assets.delete", "projects.read", "projects.write",
+            "projects.delete", "generated_outputs.read",
+        },
     ),
-    "member": ("Member", RoleScope.ORGANIZATION.value, {"organizations.read", "roles.read", "profile.read", "profile.update"}),
-    "viewer": ("Viewer", RoleScope.ORGANIZATION.value, {"organizations.read", "profile.read"}),
+    "member": (
+        "Member", RoleScope.ORGANIZATION.value,
+        {
+            "organizations.read", "roles.read", "profile.read", "profile.update",
+            "assets.read", "assets.upload", "projects.read", "projects.write", "generated_outputs.read",
+        },
+    ),
+    "viewer": (
+        "Viewer", RoleScope.ORGANIZATION.value,
+        {"organizations.read", "profile.read", "assets.read", "projects.read", "generated_outputs.read"},
+    ),
 }
 
 

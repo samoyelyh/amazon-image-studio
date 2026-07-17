@@ -23,4 +23,10 @@ describe('application routes', () => {
     expect(normalizeBrowserBasename('./')).toBe('/')
     expect(normalizeBrowserBasename('/amazon-image-studio/')).toBe('/amazon-image-studio')
   })
+
+  it('registers projects as a shared multiuser center', () => {
+    const projects = navigationSections.flatMap((section) => section.items)
+      .find((item) => item.path === appRoutes.projects)
+    expect(projects?.multiuserOnly).toBe(true)
+  })
 })

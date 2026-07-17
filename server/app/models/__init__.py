@@ -9,6 +9,7 @@ from app.models.identity import (
     RolePermission,
     User,
 )
+from app.models.content import Asset, GeneratedOutput, Project, ProjectAsset, ProjectVersion
 
 __all__ = [
     "AuditLog",
@@ -20,4 +21,9 @@ __all__ = [
     "Role",
     "RolePermission",
     "User",
+    "Asset",
+    "GeneratedOutput",
+    "Project",
+    "ProjectAsset",
+    "ProjectVersion",
 ]

@@ -11,6 +11,36 @@ from app.main import create_app
 from app.models.identity import Organization, OrganizationMember, User
 from app.security.passwords import hash_password
 from app.security.rbac import sync_rbac
+from app.services.storage_service import StorageObjectMetadata, StorageService, get_storage_service
+
+
+class FakeStorageService(StorageService):
+    def __init__(self) -> None:
+        self.objects: dict[str, tuple[bytes, str, dict[str, str]]] = {}
+
+    def upload(self, key, data, *, content_type, metadata=None):
+        value = data if isinstance(data, bytes) else data.read()
+        self.objects[key] = (value, content_type, metadata or {})
+        return StorageObjectMetadata(key, len(value), content_type, "test-etag", metadata or {})
+
+    def download(self, key):
+        return self.objects[key][0]
+
+    def delete(self, key):
+        self.objects.pop(key, None)
+
+    def exists(self, key):
+        return key in self.objects
+
+    def create_presigned_url(self, key, *, expires_in=None):
+        return f"https://storage.test/private/{key}?expires={expires_in}"
+
+    def get_metadata(self, key):
+        data, content_type, metadata = self.objects[key]
+        return StorageObjectMetadata(key, len(data), content_type, "test-etag", metadata)
+
+    def check_health(self):
+        return None
 
 
 @pytest_asyncio.fixture
@@ -69,7 +99,9 @@ async def identity_test_context() -> AsyncIterator[dict[str, object]]:
             yield session
 
     app = create_app()
+    storage = FakeStorageService()
     app.dependency_overrides[get_db_session] = override_db_session
+    app.dependency_overrides[get_storage_service] = lambda: storage
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield {"client": client, "app": app, "session_factory": session_factory, **ids}
+        yield {"client": client, "app": app, "session_factory": session_factory, "storage": storage, **ids}
     await engine.dispose()
