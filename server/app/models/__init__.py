@@ -10,6 +10,7 @@ from app.models.identity import (
     User,
 )
 from app.models.content import Asset, GeneratedOutput, Project, ProjectAsset, ProjectVersion
+from app.models.quota import QuotaAccount, QuotaPackage, QuotaReservation, QuotaRule, QuotaTransaction
 
 __all__ = [
     "AuditLog",
@@ -26,4 +27,9 @@ __all__ = [
     "Project",
     "ProjectAsset",
     "ProjectVersion",
+    "QuotaAccount",
+    "QuotaPackage",
+    "QuotaReservation",
+    "QuotaRule",
+    "QuotaTransaction",
 ]

@@ -26,6 +26,9 @@ PERMISSIONS = {
     "projects.write": "Create and update organization projects",
     "projects.delete": "Archive organization projects",
     "generated_outputs.read": "Read generated output metadata",
+    "quota.read": "Read organization quota and transactions",
+    "quota.estimate": "Estimate operation quota costs",
+    "quota.manage": "Grant and adjust organization quota",
 }
 
 ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
@@ -39,6 +42,7 @@ ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
             "profile.read", "profile.update", "users.read", "users.write",
             "assets.read", "assets.upload", "assets.delete", "projects.read",
             "projects.write", "projects.delete", "generated_outputs.read",
+            "quota.read", "quota.estimate",
         },
     ),
     "manager": (
@@ -47,6 +51,7 @@ ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
             "organizations.read", "organization.members.read", "roles.read", "profile.read", "profile.update",
             "assets.read", "assets.upload", "assets.delete", "projects.read", "projects.write",
             "projects.delete", "generated_outputs.read",
+            "quota.read", "quota.estimate",
         },
     ),
     "member": (
@@ -54,11 +59,12 @@ ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
         {
             "organizations.read", "roles.read", "profile.read", "profile.update",
             "assets.read", "assets.upload", "projects.read", "projects.write", "generated_outputs.read",
+            "quota.read", "quota.estimate",
         },
     ),
     "viewer": (
         "Viewer", RoleScope.ORGANIZATION.value,
-        {"organizations.read", "profile.read", "assets.read", "projects.read", "generated_outputs.read"},
+        {"organizations.read", "profile.read", "assets.read", "projects.read", "generated_outputs.read", "quota.read", "quota.estimate"},
     ),
 }
 

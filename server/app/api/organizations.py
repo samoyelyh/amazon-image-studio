@@ -25,6 +25,7 @@ from app.security.passwords import hash_password
 from app.security.principal import Principal, require_organization, require_permissions
 from app.services.audit_service import add_audit_log
 from app.services.identity_views import membership_response
+from app.services.billing_service import ensure_account
 
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
@@ -95,6 +96,7 @@ async def create_organization(
     )
     session.add(organization)
     await session.flush()
+    await ensure_account(session, organization.id, principal.user.id)
     admin_role = await _organization_role(session, "organization_admin")
     session.add(OrganizationMember(
         organization_id=organization.id,

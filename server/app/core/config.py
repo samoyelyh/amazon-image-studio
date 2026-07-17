@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Amazon Image Studio API"
-    app_version: str = "0.4.0"
+    app_version: str = "0.5.0"
     environment: Literal["development", "test", "production"] = "development"
     log_level: str = "INFO"
     api_v1_prefix: str = "/api/v1"
@@ -65,6 +65,8 @@ class Settings(BaseSettings):
     bootstrap_admin_password: SecretStr | None = None
     bootstrap_admin_name: str = "Platform Administrator"
     bootstrap_organization_name: str = "Default Organization"
+    bootstrap_quota_balance: int = 0
+    quota_reservation_ttl_minutes: int = 60
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -92,6 +94,10 @@ class Settings(BaseSettings):
             raise ValueError("Asset image limits must be positive")
         if self.project_max_draft_bytes < 2:
             raise ValueError("PROJECT_MAX_DRAFT_BYTES must be at least 2")
+        if self.bootstrap_quota_balance < 0:
+            raise ValueError("BOOTSTRAP_QUOTA_BALANCE cannot be negative")
+        if self.quota_reservation_ttl_minutes < 1:
+            raise ValueError("QUOTA_RESERVATION_TTL_MINUTES must be positive")
         return self
 
     @property

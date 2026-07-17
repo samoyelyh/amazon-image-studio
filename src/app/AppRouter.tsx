@@ -8,6 +8,7 @@ import LoginPage from '../pages/LoginPage'
 import ProfilePage from '../pages/ProfilePage'
 import AssetsPage from '../pages/AssetsPage'
 import ProjectsPage from '../pages/ProjectsPage'
+import QuotaPage from '../pages/QuotaPage'
 import { useAuth } from './AuthContext'
 
 function ProtectedRoutes() {
@@ -38,7 +39,7 @@ function AppRoutes() {
           <Route path={appRoutes.assets} element={runtimeConfig.isStandalone ? <PlatformPage page="assets" /> : <AssetsPage />} />
           <Route path={appRoutes.projects} element={runtimeConfig.isStandalone ? <PlatformPage page="projects" /> : <ProjectsPage />} />
           <Route path={appRoutes.history} element={<PlatformPage page="history" />} />
-          <Route path={appRoutes.quota} element={<PlatformPage page="quota" />} />
+          <Route path={appRoutes.quota} element={runtimeConfig.isStandalone ? <PlatformPage page="quota" /> : <QuotaPage />} />
           <Route path={appRoutes.profile} element={runtimeConfig.isStandalone ? <PlatformPage page="profile" /> : <ProfilePage />} />
           <Route path={appRoutes.admin} element={<PlatformPage page="admin" />} />
           <Route path="*" element={<NotFoundPage />} />

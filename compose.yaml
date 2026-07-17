@@ -2,7 +2,7 @@ name: amazon-image-studio
 
 x-backend-environment: &backend-environment
   APP_NAME: Amazon Image Studio API
-  APP_VERSION: 0.4.0
+  APP_VERSION: 0.5.0
   ENVIRONMENT: development
   LOG_LEVEL: INFO
   CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-18080},http://127.0.0.1:${FRONTEND_PORT:-18080}
@@ -36,6 +36,8 @@ x-backend-environment: &backend-environment
   BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-local-admin-password}
   BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Platform Administrator}
   BOOTSTRAP_ORGANIZATION_NAME: ${BOOTSTRAP_ORGANIZATION_NAME:-Default Organization}
+  BOOTSTRAP_QUOTA_BALANCE: ${BOOTSTRAP_QUOTA_BALANCE:-10000}
+  QUOTA_RESERVATION_TTL_MINUTES: ${QUOTA_RESERVATION_TTL_MINUTES:-60}
 
 services:
   frontend:
@@ -66,7 +68,7 @@ services:
     build:
       context: server
       dockerfile: Dockerfile
-    command: ["sh", "-c", "alembic upgrade head && python -m app.cli.bootstrap_identity && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    command: ["sh", "-c", "alembic upgrade head && python -m app.cli.bootstrap_identity && python -m app.cli.bootstrap_billing && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     environment: *backend-environment
     ports:
       - "${BACKEND_PORT:-18000}:8000"
