@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import Header from '../components/Header'
 import { runtimeConfig } from './runtimeConfig'
 import { navigationSections } from './routes'
+import { useAuth } from './AuthContext'
 
 function getNavClassName({ isActive }: { isActive: boolean }) {
   return `flex min-h-10 items-center rounded-xl px-3 text-sm font-medium transition ${isActive
@@ -10,9 +11,13 @@ function getNavClassName({ isActive }: { isActive: boolean }) {
 }
 
 export default function AppShell() {
+  const auth = useAuth()
   const sections = navigationSections.map((section) => ({
     ...section,
-    items: section.items.filter((item) => !item.multiuserOnly || !runtimeConfig.isStandalone),
+    items: section.items.filter((item) =>
+      (!item.multiuserOnly || !runtimeConfig.isStandalone)
+      && (item.path !== '/admin' || auth.hasPermission('platform.admin')),
+    ),
   })).filter((section) => section.items.length > 0)
 
   const mobileItems = sections.flatMap((section) => section.items)

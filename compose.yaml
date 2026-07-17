@@ -2,7 +2,7 @@ name: amazon-image-studio
 
 x-backend-environment: &backend-environment
   APP_NAME: Amazon Image Studio API
-  APP_VERSION: 0.2.0
+  APP_VERSION: 0.3.0
   ENVIRONMENT: development
   LOG_LEVEL: INFO
   CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-18080},http://127.0.0.1:${FRONTEND_PORT:-18080}
@@ -20,6 +20,17 @@ x-backend-environment: &backend-environment
   S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-local-minio-password}
   S3_BUCKET: ${S3_BUCKET:-amazon-image-studio}
   S3_SECURE: "false"
+  JWT_SECRET: ${JWT_SECRET:-local-development-jwt-secret-change-me}
+  JWT_ISSUER: amazon-image-studio
+  JWT_AUDIENCE: amazon-image-studio-web
+  ACCESS_TOKEN_TTL_MINUTES: 15
+  REFRESH_TOKEN_TTL_DAYS: 30
+  REFRESH_COOKIE_SECURE: "false"
+  REFRESH_COOKIE_SAMESITE: lax
+  BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@example.com}
+  BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-local-admin-password}
+  BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Platform Administrator}
+  BOOTSTRAP_ORGANIZATION_NAME: ${BOOTSTRAP_ORGANIZATION_NAME:-Default Organization}
 
 services:
   frontend:
@@ -50,7 +61,7 @@ services:
     build:
       context: server
       dockerfile: Dockerfile
-    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    command: ["sh", "-c", "alembic upgrade head && python -m app.cli.bootstrap_identity && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     environment: *backend-environment
     ports:
       - "${BACKEND_PORT:-18000}:8000"

@@ -2,7 +2,7 @@ from functools import lru_cache
 from typing import Annotated, Literal
 from urllib.parse import quote_plus
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Amazon Image Studio API"
-    app_version: str = "0.2.0"
+    app_version: str = "0.3.0"
     environment: Literal["development", "test", "production"] = "development"
     log_level: str = "INFO"
     api_v1_prefix: str = "/api/v1"
@@ -47,12 +47,41 @@ class Settings(BaseSettings):
 
     health_check_timeout_seconds: float = 3.0
 
+    jwt_secret: SecretStr = SecretStr("local-development-jwt-secret-change-me")
+    jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
+    jwt_issuer: str = "amazon-image-studio"
+    jwt_audience: str = "amazon-image-studio-web"
+    access_token_ttl_minutes: int = 15
+    refresh_token_ttl_days: int = 30
+    refresh_cookie_name: str = "ais_refresh_token"
+    refresh_cookie_secure: bool = False
+    refresh_cookie_samesite: Literal["lax", "strict"] = "lax"
+    bootstrap_admin_email: EmailStr | None = None
+    bootstrap_admin_password: SecretStr | None = None
+    bootstrap_admin_name: str = "Platform Administrator"
+    bootstrap_organization_name: str = "Default Organization"
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, value: object) -> object:
         if isinstance(value, str) and not value.lstrip().startswith("["):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
+
+    @model_validator(mode="after")
+    def validate_auth_security(self) -> "Settings":
+        secret = self.jwt_secret.get_secret_value()
+        if len(secret) < 32:
+            raise ValueError("JWT_SECRET must contain at least 32 characters")
+        if self.environment == "production" and secret == "local-development-jwt-secret-change-me":
+            raise ValueError("JWT_SECRET must be replaced in production")
+        if self.environment == "production" and not self.refresh_cookie_secure:
+            raise ValueError("REFRESH_COOKIE_SECURE must be enabled in production")
+        if bool(self.bootstrap_admin_email) != bool(self.bootstrap_admin_password):
+            raise ValueError("BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD must be configured together")
+        if self.bootstrap_admin_password and len(self.bootstrap_admin_password.get_secret_value()) < 12:
+            raise ValueError("BOOTSTRAP_ADMIN_PASSWORD must contain at least 12 characters")
+        return self
 
     @property
     def database_url(self) -> str:

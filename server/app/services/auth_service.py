@@ -1,0 +1,238 @@
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+
+from fastapi import Request
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import Settings
+from app.core.errors import AppError
+from app.models.identity import (
+    MembershipStatus,
+    OrganizationMember,
+    OrganizationStatus,
+    RefreshToken,
+    User,
+    UserStatus,
+)
+from app.security.identity import IdentityProvider, LocalIdentityProvider
+from app.security.principal import Principal, resolve_principal
+from app.security.tokens import create_access_token, create_refresh_secret, hash_refresh_secret
+from app.services.audit_service import add_login_audit, client_ip, user_agent
+
+
+UTC = timezone.utc
+
+
+@dataclass(frozen=True)
+class AuthSession:
+    access_token: str
+    expires_in: int
+    refresh_secret: str
+    principal: Principal
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+class AuthService:
+    def __init__(self, settings: Settings, identity_provider: IdentityProvider | None = None) -> None:
+        self.settings = settings
+        self.identity_provider = identity_provider or LocalIdentityProvider()
+
+    async def login(
+        self,
+        session: AsyncSession,
+        request: Request,
+        email: str,
+        password: str,
+        organization_id: str | None,
+    ) -> AuthSession:
+        normalized_email = email.strip().lower()
+        user = await self.identity_provider.authenticate(session, normalized_email, password)
+        if user is None or user.status != UserStatus.ACTIVE.value:
+            add_login_audit(
+                session,
+                request=request,
+                event="login",
+                outcome="failure",
+                email=normalized_email,
+                detail="invalid_credentials",
+            )
+            await session.commit()
+            raise AppError("auth.invalid_credentials", "Email or password is incorrect", 401)
+
+        selected_organization_id = await self._select_organization(session, user, organization_id)
+        now = datetime.now(UTC)
+        user.last_login_at = now
+        principal = await resolve_principal(session, user.id, selected_organization_id)
+        auth_session = self._create_session_record(session, request, principal, now=now)
+        add_login_audit(
+            session,
+            request=request,
+            event="login",
+            outcome="success",
+            email=user.email,
+            user_id=user.id,
+            organization_id=selected_organization_id,
+        )
+        await session.commit()
+        return auth_session
+
+    async def refresh(
+        self,
+        session: AsyncSession,
+        request: Request,
+        refresh_secret: str | None,
+        organization_id: str | None = None,
+    ) -> AuthSession:
+        if not refresh_secret:
+            raise AppError("auth.refresh_required", "Refresh token is required", 401)
+        token = await session.scalar(
+            select(RefreshToken)
+            .where(RefreshToken.token_hash == hash_refresh_secret(refresh_secret))
+            .with_for_update()
+        )
+        if token is None:
+            add_login_audit(session, request=request, event="refresh", outcome="failure", detail="unknown_token")
+            await session.commit()
+            raise AppError("auth.invalid_refresh_token", "Refresh token is invalid", 401)
+
+        now = datetime.now(UTC)
+        if token.revoked_at is not None:
+            await session.execute(
+                update(RefreshToken)
+                .where(RefreshToken.family_id == token.family_id, RefreshToken.revoked_at.is_(None))
+                .values(revoked_at=now)
+            )
+            add_login_audit(
+                session,
+                request=request,
+                event="refresh_reuse",
+                outcome="failure",
+                user_id=token.user_id,
+                organization_id=token.organization_id,
+                detail="revoked_token_reused",
+            )
+            await session.commit()
+            raise AppError("auth.refresh_token_reused", "Refresh token reuse detected; session revoked", 401)
+        if _as_utc(token.expires_at) <= now:
+            token.revoked_at = now
+            add_login_audit(
+                session,
+                request=request,
+                event="refresh",
+                outcome="failure",
+                user_id=token.user_id,
+                organization_id=token.organization_id,
+                detail="expired_token",
+            )
+            await session.commit()
+            raise AppError("auth.refresh_expired", "Refresh token has expired", 401)
+
+        selected_organization_id = token.organization_id
+        if organization_id is not None:
+            user = await session.get(User, token.user_id)
+            if user is None:
+                raise AppError("auth.invalid_user", "User no longer exists", 401)
+            selected_organization_id = await self._select_organization(session, user, organization_id)
+
+        principal = await resolve_principal(session, token.user_id, selected_organization_id)
+        rotated = self._create_session_record(
+            session,
+            request,
+            principal,
+            now=now,
+            family_id=token.family_id,
+        )
+        await session.flush()
+        token.revoked_at = now
+        replacement = await session.scalar(
+            select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_secret(rotated.refresh_secret))
+        )
+        token.replaced_by_token_id = replacement.id if replacement else None
+        add_login_audit(
+            session,
+            request=request,
+            event="organization_switch" if organization_id is not None else "refresh",
+            outcome="success",
+            user_id=token.user_id,
+            organization_id=selected_organization_id,
+        )
+        await session.commit()
+        return rotated
+
+    async def logout(
+        self,
+        session: AsyncSession,
+        request: Request,
+        refresh_secret: str | None,
+    ) -> None:
+        if refresh_secret:
+            token = await session.scalar(
+                select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_secret(refresh_secret)).with_for_update()
+            )
+            if token and token.revoked_at is None:
+                token.revoked_at = datetime.now(UTC)
+                add_login_audit(
+                    session,
+                    request=request,
+                    event="logout",
+                    outcome="success",
+                    user_id=token.user_id,
+                    organization_id=token.organization_id,
+                )
+        await session.commit()
+
+    async def _select_organization(
+        self,
+        session: AsyncSession,
+        user: User,
+        requested_id: str | None,
+    ) -> str | None:
+        statement = (
+            select(OrganizationMember)
+            .join(OrganizationMember.organization)
+            .where(
+                OrganizationMember.user_id == user.id,
+                OrganizationMember.status == MembershipStatus.ACTIVE.value,
+                OrganizationMember.organization.has(status=OrganizationStatus.ACTIVE.value),
+            )
+            .order_by(OrganizationMember.created_at)
+        )
+        memberships = list((await session.scalars(statement)).all())
+        if requested_id is not None:
+            if not any(item.organization_id == requested_id for item in memberships):
+                raise AppError("auth.organization_access_denied", "You are not a member of this organization", 403)
+            return requested_id
+        if memberships:
+            return memberships[0].organization_id
+        if user.platform_role and user.platform_role.code == "platform_admin":
+            return None
+        raise AppError("auth.no_organization", "User has no active organization", 403)
+
+    def _create_session_record(
+        self,
+        session: AsyncSession,
+        request: Request,
+        principal: Principal,
+        *,
+        now: datetime,
+        family_id: str | None = None,
+    ) -> AuthSession:
+        organization_id = principal.organization.id if principal.organization else None
+        access_token, expires_in = create_access_token(self.settings, principal.user.id, organization_id)
+        refresh_secret = create_refresh_secret()
+        session.add(RefreshToken(
+            token_hash=hash_refresh_secret(refresh_secret),
+            family_id=family_id or str(uuid4()),
+            user_id=principal.user.id,
+            organization_id=organization_id,
+            expires_at=now + timedelta(days=self.settings.refresh_token_ttl_days),
+            created_at=now,
+            created_ip=client_ip(request),
+            user_agent=user_agent(request),
+        ))
+        return AuthSession(access_token, expires_in, refresh_secret, principal)

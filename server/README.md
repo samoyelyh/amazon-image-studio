@@ -60,7 +60,7 @@ docker compose exec backend alembic upgrade head
 docker compose exec backend alembic downgrade -1
 ```
 
-当前唯一迁移是 `0001_phase2_baseline`。它只建立 Alembic 版本基线，不创建业务表；用户、团队、角色和审计表由 Phase 3 的独立迁移创建。
+当前迁移头为 `0002_identity_and_rbac`。`0001_phase2_baseline` 是空业务基线，第二个迁移创建 Phase 3 的用户、团队、角色、令牌与审计表。
 
 ## 测试
 
@@ -70,5 +70,13 @@ npm test
 npm run build
 docker compose config --quiet
 ```
+
+## Phase 3 identity bootstrap
+
+The backend now runs `alembic upgrade head` and synchronizes the built-in RBAC definitions before Uvicorn starts. Configure `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` to create the first local administrator idempotently. Existing administrator passwords are never reset during startup.
+
+The Compose values are local development examples. Replace `JWT_SECRET`, `BOOTSTRAP_ADMIN_PASSWORD`, the MySQL passwords, and MinIO credentials before LAN sharing or production use. Production mode also requires `REFRESH_COOKIE_SECURE=true`.
+
+See `docs/architecture/phase-3-auth-rbac.md` for the authentication flows, endpoints, migration, and acceptance tests.
 
 `/api/v1/health/live` 仅判断 API 进程是否运行；`/api/v1/health/ready` 会实际检查 MySQL、Redis 和对象存储桶，任一失败时返回 HTTP 503。

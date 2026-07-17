@@ -22,7 +22,7 @@ export function DashboardPage() {
       <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-gray-900">
         <div className="text-xs font-semibold text-blue-600 dark:text-blue-300">{runtimeConfig.isStandalone ? 'STANDALONE' : 'MULTIUSER'}</div>
         <h1 className="mt-2 text-2xl font-bold tracking-tight text-gray-950 dark:text-white">电商视觉工作台</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500 dark:text-gray-400">三个业务工作台已拆分为独立路由。当前阶段保留原有浏览器数据和直连 API 能力，服务端账号、额度、任务与素材基础设施按后续 Phase 接入。</p>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500 dark:text-gray-400">三个业务工作台已拆分为独立路由，多人模式已接入统一账号、团队和角色权限。额度、任务与素材能力将在后续 Phase 接入。</p>
       </section>
       <div className="grid gap-4 md:grid-cols-3">
         {workspaces.map(([title, description, path]) => (

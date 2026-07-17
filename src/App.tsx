@@ -14,6 +14,7 @@ import ImageContextMenu from './components/ImageContextMenu'
 import { useGlobalClickSuppression } from './lib/clickSuppression'
 import AppRouter from './app/AppRouter'
 import { queryClient } from './app/queryClient'
+import { AuthProvider } from './app/AuthContext'
 
 export default function App() {
   const setSettings = useStore((s) => s.setSettings)
@@ -51,7 +52,7 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AppRouter />
+      <AuthProvider><AppRouter /></AuthProvider>
       <DetailModal />
       <Lightbox />
       <SettingsModal />
