@@ -18,9 +18,15 @@ class OpenAICompatibleProvider(BaseImageProvider):
         self, *, base_url: str, api_key: str, upstream_model: str,
         capability: str, payload: dict[str, object], config: dict[str, object],
     ) -> ProviderResult:
-        if capability != "image_generation":
-            raise ProviderError("provider.unsupported_capability", "This adapter currently supports image_generation", http_status=422)
-        request_body = {
+        if capability == "text_generation":
+            return await self._execute_text(
+                base_url=base_url, api_key=api_key, upstream_model=upstream_model,
+                payload=payload, config=config,
+            )
+        supported = {"image_generation", "image_edit", "multi_image_reference", "mask_edit"}
+        if capability not in supported:
+            raise ProviderError("provider.unsupported_capability", "This adapter does not support the requested capability", http_status=422)
+        request_body: dict[str, object] = {
             "model": upstream_model,
             "prompt": payload.get("prompt"),
             "n": payload.get("n", 1),
@@ -28,12 +34,31 @@ class OpenAICompatibleProvider(BaseImageProvider):
             "response_format": payload.get("response_format", "b64_json"),
         }
         request_body.update({key: value for key, value in payload.items() if key not in request_body and key in {"quality", "style", "background"}})
-        endpoint = str(config.get("images_endpoint", "/images/generations"))
+        is_edit = capability != "image_generation"
+        endpoint = str(config.get("edits_endpoint" if is_edit else "images_endpoint", "/images/edits" if is_edit else "/images/generations"))
         url = f"{base_url.rstrip('/')}/{endpoint.lstrip('/')}"
         timeout = httpx.Timeout(self.settings.provider_request_timeout_seconds)
         try:
             async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
-                response = await client.post(url, headers={"Authorization": f"Bearer {api_key}"}, json=request_body)
+                if is_edit:
+                    references = payload.get("reference_images")
+                    if not isinstance(references, list) or not references:
+                        raise ProviderError("provider.missing_reference", "Image editing requires at least one reference image", http_status=422)
+                    files: list[tuple[str, tuple[str, bytes, str]]] = []
+                    for index, image in enumerate(references):
+                        if not isinstance(image, dict) or not isinstance(image.get("content"), bytes):
+                            raise ProviderError("provider.invalid_reference", "Reference image payload is invalid", http_status=422)
+                        files.append(("image", (
+                            str(image.get("filename") or f"reference-{index + 1}.png"),
+                            image["content"], str(image.get("mime_type") or "image/png"),
+                        )))
+                    mask = payload.get("mask_image")
+                    if isinstance(mask, dict) and isinstance(mask.get("content"), bytes):
+                        files.append(("mask", (str(mask.get("filename") or "mask.png"), mask["content"], str(mask.get("mime_type") or "image/png"))))
+                    form = {key: str(value) for key, value in request_body.items() if value is not None}
+                    response = await client.post(url, headers={"Authorization": f"Bearer {api_key}"}, data=form, files=files)
+                else:
+                    response = await client.post(url, headers={"Authorization": f"Bearer {api_key}"}, json=request_body)
         except httpx.TimeoutException as error:
             raise ProviderError("provider.timeout", "Upstream provider timed out", retryable=True) from error
         except httpx.HTTPError as error:
@@ -62,6 +87,59 @@ class OpenAICompatibleProvider(BaseImageProvider):
         if not outputs:
             raise ProviderError("provider.empty_result", "Upstream provider returned no images")
         return ProviderResult(outputs, response.headers.get("x-request-id"), {"created": body.get("created")})
+
+    async def _execute_text(
+        self, *, base_url: str, api_key: str, upstream_model: str,
+        payload: dict[str, object], config: dict[str, object],
+    ) -> ProviderResult:
+        endpoint = str(config.get("chat_endpoint", "/chat/completions"))
+        url = f"{base_url.rstrip('/')}/{endpoint.lstrip('/')}"
+        user_content: object = str(payload.get("user_prompt") or "")
+        references = payload.get("reference_images")
+        if isinstance(references, list) and references:
+            parts: list[dict[str, object]] = [{"type": "text", "text": user_content}]
+            for image in references:
+                if not isinstance(image, dict) or not isinstance(image.get("content"), bytes):
+                    raise ProviderError("provider.invalid_reference", "Reference image payload is invalid", http_status=422)
+                mime = str(image.get("mime_type") or "image/png")
+                encoded = base64.b64encode(image["content"]).decode("ascii")
+                parts.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{encoded}"}})
+            user_content = parts
+        request_body: dict[str, object] = {
+            "model": upstream_model,
+            "messages": [
+                {"role": "system", "content": str(payload.get("system_prompt") or "")},
+                {"role": "user", "content": user_content},
+            ],
+            "stream": False,
+            "response_format": {"type": "json_object"},
+        }
+        if payload.get("temperature") is not None:
+            request_body["temperature"] = payload["temperature"]
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(self.settings.provider_request_timeout_seconds), follow_redirects=False) as client:
+                response = await client.post(url, headers={"Authorization": f"Bearer {api_key}"}, json=request_body)
+        except httpx.TimeoutException as error:
+            raise ProviderError("provider.timeout", "Upstream provider timed out", retryable=True) from error
+        except httpx.HTTPError as error:
+            raise ProviderError("provider.network_error", "Unable to reach upstream provider", retryable=True) from error
+        if response.status_code >= 400:
+            retryable = response.status_code in {408, 409, 429} or response.status_code >= 500
+            raise ProviderError(
+                "provider.rate_limited" if response.status_code == 429 else "provider.upstream_error",
+                _error_message(response), http_status=response.status_code, retryable=retryable,
+            )
+        try:
+            body = response.json()
+            content = body["choices"][0]["message"]["content"]
+            if isinstance(content, list):
+                content = "\n".join(str(item.get("text", "")) for item in content if isinstance(item, dict))
+            text = str(content).strip()
+        except (ValueError, KeyError, IndexError, TypeError) as error:
+            raise ProviderError("provider.invalid_response", "Upstream provider returned an invalid text response") from error
+        if not text:
+            raise ProviderError("provider.empty_result", "Upstream provider returned empty text")
+        return ProviderResult([], response.headers.get("x-request-id"), {"text": text, "created": body.get("created")})
 
     async def _download_image(self, url: str, index: int) -> ProviderOutput:
         parsed = urlparse(url)

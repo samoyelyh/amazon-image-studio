@@ -120,14 +120,19 @@ class GeneratedOutput(UuidPrimaryKeyMixin, Base):
     __tablename__ = "generated_outputs"
     __table_args__ = (
         Index("ix_generated_outputs_organization_project", "organization_id", "project_id", "created_at"),
+        Index("ix_generated_outputs_organization_created", "organization_id", "created_at"),
+        Index("ix_generated_outputs_job", "job_id", "sequence_number"),
     )
 
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
     project_version_id: Mapped[str | None] = mapped_column(
         ForeignKey("project_versions.id", ondelete="SET NULL"), nullable=True
     )
     asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False)
+    job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+    batch_id: Mapped[str | None] = mapped_column(ForeignKey("job_batches.id", ondelete="SET NULL"), nullable=True)
+    sequence_number: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     output_type: Mapped[str] = mapped_column(String(60), nullable=False)
     module_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
     metadata_json: Mapped[dict[str, object] | None] = mapped_column("metadata", JSON, nullable=True)

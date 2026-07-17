@@ -153,6 +153,10 @@ export type TaskStatus = 'running' | 'done' | 'error'
 
 export interface TaskRecord {
   id: string
+  /** 多人模式服务端统一任务 ID；standalone 任务不设置。 */
+  serverJobId?: string
+  /** 多人模式输出在素材中心对应的 Asset ID。 */
+  serverOutputAssetIds?: string[]
   prompt: string
   params: TaskParams
   /** 生成时使用的 Provider 类型 */
@@ -256,6 +260,8 @@ export interface BatchTryOnItem {
 
 export interface BatchTryOnBatch {
   id: string
+  /** 多人模式服务端批次 ID；用于刷新恢复、暂停、取消和重试。 */
+  serverBatchId?: string
   templateImageId: string | null
   templateFileName?: string
   templateWidth?: number

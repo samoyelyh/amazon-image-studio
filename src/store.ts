@@ -58,6 +58,9 @@ import { prepareReferenceImageAndMaskPayload } from './lib/referenceImagePayload
 import { getTaskHistoryCategory } from './lib/taskHistory'
 import { isAmazonListingMainSlot } from './lib/listingPlanner'
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
+import { runtimeConfig } from './app/runtimeConfig'
+import { uploadDataUrlAsset, importServerOutput } from './lib/serverImageAssets'
+import { getServerJob, isServerJobTerminal, resolveModelCode, submitServerJob, type JobCapability, type JobWorkspace } from './lib/jobsApi'
 
 // ===== Image cache =====
 // 内存缓存，id → dataUrl。只保留少量最近使用图片，避免大量 4K data URL 常驻内存。
@@ -78,6 +81,7 @@ const AGENT_INPUT_DRAFT_RETENTION_MS = 3 * 24 * 60 * 60 * 1000
 const falRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const customRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const openAIWatchdogTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const serverJobRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const agentRoundControllers = new Map<string, AbortController>()
 const OPENAI_INTERRUPTED_ERROR = '请求中断'
 const AGENT_STOPPED_MESSAGE = '已停止生成。'
@@ -1578,7 +1582,7 @@ function isAsyncCustomProviderTask(settings: AppSettings, provider: string, hasI
 export function markInterruptedOpenAIRunningTasks(tasks: TaskRecord[], now = Date.now()) {
   const interruptedTasks: TaskRecord[] = []
   const updatedTasks = tasks.map((task) => {
-    if (!isRunningOpenAITask(task) || task.customTaskId) return task
+    if (!isRunningOpenAITask(task) || task.customTaskId || task.serverJobId) return task
 
     const updated: TaskRecord = {
       ...task,
@@ -1917,6 +1921,9 @@ export async function initStore() {
   useStore.getState().setTasks(tasks)
   showSupportPromptForExistingLocalData(tasks)
   for (const task of tasks) {
+    if (!runtimeConfig.isStandalone && task.serverJobId && task.status === 'running') {
+      scheduleServerJobRecovery(task.id, 0)
+    }
     if (
       task.apiProvider === 'fal' &&
       task.falRequestId &&
@@ -2116,8 +2123,203 @@ export async function initStore() {
   }
 }
 
+function clearServerJobRecoveryTimer(taskId: string) {
+  const timer = serverJobRecoveryTimers.get(taskId)
+  if (timer) clearTimeout(timer)
+  serverJobRecoveryTimers.delete(taskId)
+}
+
+function scheduleServerJobRecovery(taskId: string, delayMs = 2_000) {
+  if (serverJobRecoveryTimers.has(taskId)) return
+  const timer = setTimeout(() => {
+    serverJobRecoveryTimers.delete(taskId)
+    void recoverServerJob(taskId)
+  }, delayMs)
+  serverJobRecoveryTimers.set(taskId, timer)
+}
+
+async function recoverServerJob(taskId: string) {
+  const localTask = useStore.getState().tasks.find((task) => task.id === taskId)
+  if (!localTask?.serverJobId || localTask.status !== 'running') {
+    clearServerJobRecoveryTimer(taskId)
+    return
+  }
+
+  try {
+    const job = await getServerJob(localTask.serverJobId)
+    if (!isServerJobTerminal(job.status)) {
+      updateTaskInStore(taskId, { error: null })
+      scheduleServerJobRecovery(taskId)
+      return
+    }
+
+    clearServerJobRecoveryTimer(taskId)
+    if (job.status !== 'succeeded') {
+      const message = job.error_message || (job.status === 'cancelled' ? '任务已取消' : '服务端任务执行失败')
+      updateTaskInStore(taskId, {
+        status: 'error',
+        error: message,
+        finishedAt: job.finished_at ? new Date(job.finished_at).getTime() : Date.now(),
+        elapsed: Date.now() - localTask.createdAt,
+      })
+      return
+    }
+
+    if (!job.outputs.length) {
+      updateTaskInStore(taskId, {
+        status: 'error',
+        error: '服务端任务已完成，但没有返回图片。',
+        finishedAt: Date.now(),
+        elapsed: Date.now() - localTask.createdAt,
+      })
+      return
+    }
+
+    const outputImages: string[] = []
+    for (const output of job.outputs) outputImages.push(await importServerOutput(output))
+    updateTaskInStore(taskId, {
+      outputImages,
+      serverOutputAssetIds: job.outputs.map((output) => output.asset_id),
+      status: 'done',
+      error: null,
+      finishedAt: job.finished_at ? new Date(job.finished_at).getTime() : Date.now(),
+      elapsed: Date.now() - localTask.createdAt,
+    })
+    useStore.getState().showToast(`任务完成，共生成 ${outputImages.length} 张图片`, 'success')
+  } catch (error) {
+    const latest = useStore.getState().tasks.find((task) => task.id === taskId)
+    if (!latest || latest.status !== 'running') return
+    updateTaskInStore(taskId, { error: error instanceof Error ? `状态同步中断：${error.message}` : '状态同步中断，正在重试。' })
+    scheduleServerJobRecovery(taskId, 5_000)
+  }
+}
+
+async function submitServerBackedTask(options: { allowFullMask?: boolean } = {}): Promise<boolean> {
+  const state = useStore.getState()
+  const trimmedPrompt = state.prompt.trim()
+  if (!trimmedPrompt) {
+    state.showToast('请输入提示词', 'error')
+    return false
+  }
+
+  try {
+    const category = resolvePendingTaskCategory(state.pendingTaskCategory, trimmedPrompt)
+    let orderedInputImages = state.inputImages
+    let maskImageId: string | null = null
+    let maskTargetImageId: string | null = null
+    let maskAssetId: string | undefined
+
+    if (state.maskDraft) {
+      orderedInputImages = orderInputImagesForMask(state.inputImages, state.maskDraft.targetImageId)
+      const coverage = await validateMaskMatchesImage(state.maskDraft.maskDataUrl, orderedInputImages[0].dataUrl)
+      if (coverage === 'full' && !options.allowFullMask) {
+        state.setConfirmDialog({
+          title: '确认编辑整张图片？',
+          message: '当前遮罩覆盖了整张图片，提交后可能会重绘全部内容。是否继续？',
+          confirmText: '继续提交',
+          tone: 'warning',
+          action: () => { void submitServerBackedTask({ allowFullMask: true }) },
+        })
+        return false
+      }
+      maskImageId = await storeImage(state.maskDraft.maskDataUrl, 'mask')
+      maskTargetImageId = state.maskDraft.targetImageId
+    }
+
+    const styleReferenceImageId = category.styleReferenceImageId?.trim()
+    if (styleReferenceImageId && !orderedInputImages.some((image) => image.id === styleReferenceImageId)) {
+      if (orderedInputImages.length + 1 > API_MAX_INPUT_IMAGES) throw new Error(`参考图不能超过 ${API_MAX_INPUT_IMAGES} 张`)
+      const dataUrl = await ensureImageCached(styleReferenceImageId)
+      if (!dataUrl) throw new Error('所选风格参考图不存在，请重新选择。')
+      orderedInputImages = [...orderedInputImages, { id: styleReferenceImageId, dataUrl }]
+    }
+
+    for (const image of orderedInputImages) await storeImage(image.dataUrl)
+    const referenceAssets = []
+    for (const [index, image] of orderedInputImages.entries()) {
+      const assetCategory = image.id === styleReferenceImageId ? 'style_reference' : 'product_reference'
+      referenceAssets.push(await uploadDataUrlAsset(image.dataUrl, assetCategory, `reference-${index + 1}`))
+    }
+    if (state.maskDraft) {
+      maskAssetId = (await uploadDataUrlAsset(state.maskDraft.maskDataUrl, 'temporary', 'mask')).id
+    }
+
+    const capability: JobCapability = maskAssetId
+      ? 'mask_edit'
+      : referenceAssets.length > 1
+        ? 'multi_image_reference'
+        : referenceAssets.length === 1
+          ? 'image_edit'
+          : 'image_generation'
+    const workspace: JobWorkspace = category.workflow === 'amazon-aplus' || state.activeGalleryWorkspace === 'aplus' ? 'aplus' : 'listing'
+    const operationCode = workspace === 'aplus' ? 'aplus.generate' : 'listing.generate'
+    const modelCode = await resolveModelCode(capability)
+    const normalizedParams = { ...state.params, n: 1 }
+    const submitted = await submitServerJob({
+      operation_code: operationCode,
+      workspace_type: workspace,
+      queue_name: workspace === 'aplus' ? 'aplus_queue' : 'listing_queue',
+      capability,
+      model_code: modelCode,
+      idempotency_key: `web:${crypto.randomUUID()}`,
+      input: {
+        prompt: trimmedPrompt,
+        reference_asset_ids: referenceAssets.map((asset) => asset.id),
+        ...(maskAssetId ? { mask_asset_id: maskAssetId } : {}),
+        size: normalizedParams.size,
+        quality: normalizedParams.quality,
+        output_format: normalizedParams.output_format,
+        n: 1,
+        metadata: { category },
+      },
+      billing_factors: {
+        quality: normalizedParams.quality,
+        resolution: normalizedParams.size,
+      },
+    })
+
+    const createdAt = new Date(submitted.created_at).getTime()
+    const task: TaskRecord = {
+      id: submitted.id,
+      serverJobId: submitted.id,
+      prompt: trimmedPrompt,
+      params: normalizedParams,
+      apiProvider: 'platform',
+      apiProfileName: '平台统一资源池',
+      apiMode: 'images',
+      apiModel: modelCode,
+      inputImageIds: orderedInputImages.map((image) => image.id),
+      maskTargetImageId,
+      maskImageId,
+      outputImages: [],
+      status: 'running',
+      error: null,
+      createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
+      finishedAt: null,
+      elapsed: null,
+      category,
+    }
+    useStore.getState().setTasks([task, ...useStore.getState().tasks.filter((item) => item.id !== task.id)])
+    await putTask(task)
+    if (state.settings.clearInputAfterSubmit) {
+      useStore.getState().setPrompt('')
+      useStore.getState().clearInputImages()
+    }
+    useStore.getState().setReusedTaskApiProfile(null)
+    useStore.getState().setPendingTaskCategory(null)
+    useStore.getState().showToast('任务已提交到服务端，离开页面后仍会继续执行', 'success')
+    scheduleServerJobRecovery(task.id, 0)
+    return true
+  } catch (error) {
+    state.showToast(error instanceof Error ? error.message : '任务提交失败', 'error')
+    return false
+  }
+}
+
 /** 提交新任务 */
 export async function submitTask(options: { allowFullMask?: boolean; useCurrentApiProfileWhenReusedMissing?: boolean } = {}): Promise<boolean> {
+  if (!runtimeConfig.isStandalone) return submitServerBackedTask(options)
+
   const { settings, prompt, inputImages, maskDraft, params, reusedTaskApiProfileId, reusedTaskApiProfileName, reusedTaskApiProfileMissing, pendingTaskCategory, showToast, setConfirmDialog } =
     useStore.getState()
 

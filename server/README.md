@@ -1,6 +1,6 @@
 # 多人平台后端（已完成 Phase 6）
 
-本目录提供多人模式的账号、团队/RBAC、素材与项目、额度计费、Celery 任务和多 API Key 资源池。三个工作台接入统一任务系统属于 Phase 7。
+本目录提供多人模式的账号、团队/RBAC、素材与项目、额度计费、Celery 任务和多 API Key 资源池。Phase 7 已将 Listing、批量套图、A+、任务中心和生成历史接入统一服务端任务系统，详见 `docs/architecture/phase-7-workbench-integration.md`。
 
 ## 本地 Python 开发
 

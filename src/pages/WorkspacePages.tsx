@@ -37,7 +37,7 @@ export function BatchTryOnWorkspacePage() {
     <section className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/[0.08] dark:bg-gray-900">
       <div className="border-b border-gray-200 px-4 py-4 dark:border-white/[0.08] sm:px-5">
         <h1 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-50">批量套图工作台</h1>
-        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">固定模特模板，批量上传服装并通过本地异步队列生成套图。</p>
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">固定模特模板，批量上传服装；多人模式由服务端任务队列生成并支持刷新恢复。</p>
       </div>
       <BatchTryOnWorkspace />
     </section>

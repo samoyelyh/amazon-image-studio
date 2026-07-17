@@ -140,17 +140,29 @@ class ResourcePoolKey(UuidPrimaryKeyMixin, TimestampMixin, Base):
 
 class JobBatch(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "job_batches"
-    __table_args__ = (Index("ix_job_batches_org_status_created", "organization_id", "status", "created_at"),)
+    __table_args__ = (
+        Index("ix_job_batches_org_status_created", "organization_id", "status", "created_at"),
+        UniqueConstraint("organization_id", "idempotency_key"),
+    )
 
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
     workspace_type: Mapped[str] = mapped_column(String(40), nullable=False)
     operation_code: Mapped[str] = mapped_column(String(120), nullable=False)
+    name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    model_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    capability: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    request_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    concurrency: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     status: Mapped[str] = mapped_column(String(30), default=BatchStatus.DRAFT.value, nullable=False)
     total_jobs: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     succeeded_jobs: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     failed_jobs: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cancelled_jobs: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
 
@@ -161,6 +173,7 @@ class Job(UuidPrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("organization_id", "idempotency_key"),
         Index("ix_jobs_org_status_created", "organization_id", "status", "created_at"),
         Index("ix_jobs_status_retry", "status", "next_retry_at"),
+        Index("ix_jobs_batch_client_item", "batch_id", "client_item_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
@@ -172,6 +185,7 @@ class Job(UuidPrimaryKeyMixin, TimestampMixin, Base):
     queue_name: Mapped[str] = mapped_column(String(60), nullable=False)
     capability: Mapped[str] = mapped_column(String(80), nullable=False)
     model_code: Mapped[str] = mapped_column(String(120), nullable=False)
+    client_item_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     status: Mapped[str] = mapped_column(String(30), default=JobStatus.QUEUED.value, nullable=False)
     progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     input_json: Mapped[dict[str, object]] = mapped_column("input", JSON, nullable=False)

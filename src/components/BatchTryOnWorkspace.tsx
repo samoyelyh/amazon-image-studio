@@ -7,9 +7,13 @@ import { BatchTryOnQueueController, getFailedBatchTryOnItemIds } from '../lib/ba
 import { createBatchTryOnFileNames, downloadBatchTryOnZip } from '../lib/batchTryOnFiles'
 import { downloadImageIds } from '../lib/downloadImages'
 import { getActiveApiProfile } from '../lib/apiProfiles'
+import { runtimeConfig } from '../app/runtimeConfig'
+import { uploadDataUrlAsset, importServerOutput } from '../lib/serverImageAssets'
+import { getServerBatch, pauseServerBatch, resolveModelCode, resumeServerBatch, submitServerBatch } from '../lib/jobsApi'
 import {
   createInputImageFromFile,
   deleteImageIfUnreferenced,
+  ensureImageCached,
   getBatchTryOnProfileError,
   runBatchTryOnTask,
   useStore,
@@ -20,6 +24,7 @@ import BatchTryOnQueue from './BatchTryOnQueue'
 
 export const MAX_BATCH_TRY_ON_ITEMS = 50
 const MAX_BATCH_TRY_ON_FILE_BYTES = 50 * 1024 * 1024
+const MAX_MULTIUSER_FILE_BYTES = 20 * 1024 * 1024
 const ACCEPTED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 const RATIO_OPTIONS: Array<{ value: BatchTryOnAspectRatio; label: string }> = [
   { value: 'template', label: '跟随模板图' },
@@ -41,6 +46,7 @@ export default function BatchTryOnWorkspace() {
   const setShowSettings = useStore((state) => state.setShowSettings)
   const setConfirmDialog = useStore((state) => state.setConfirmDialog)
   const runnerRef = useRef<BatchTryOnQueueController<string> | null>(null)
+  const serverPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (!batch) setBatch(createEmptyBatch(globalParams))
@@ -72,7 +78,7 @@ export default function BatchTryOnWorkspace() {
   }, [batch?.id, tasks, setBatch])
 
   const activeProfile = getActiveApiProfile(settings)
-  const profileError = getBatchTryOnProfileError(settings)
+  const profileError = runtimeConfig.isStandalone ? getBatchTryOnProfileError(settings) : null
   const progress = useMemo(() => summarizeItems(batch?.items ?? []), [batch?.items])
   const outputSize = batch ? resolveOutputSize(batch) : 'auto'
   const isRunning = progress.running > 0 || Boolean(batch && !batch.queuePaused && progress.pending > 0)
@@ -137,6 +143,104 @@ export default function BatchTryOnWorkspace() {
     return runnerRef.current
   }
 
+  const pollServerBatch = async (serverBatchId: string) => {
+    if (serverPollTimerRef.current) clearTimeout(serverPollTimerRef.current)
+    serverPollTimerRef.current = null
+    try {
+      const serverBatch = await getServerBatch(serverBatchId)
+      const current = useStore.getState().batchTryOnBatch
+      if (!current || current.serverBatchId !== serverBatchId) return
+      const jobs = new Map(serverBatch.jobs.map((job) => [job.client_item_id, job]))
+      const nextItems: BatchTryOnItem[] = []
+      for (const item of current.items) {
+        const job = jobs.get(item.id)
+        if (!job) { nextItems.push(item); continue }
+        if (job.status === 'succeeded' && job.outputs[0]) {
+          let outputImageId = item.outputImageId
+          if (!outputImageId) outputImageId = await importServerOutput(job.outputs[0])
+          nextItems.push({ ...item, taskId: job.id, outputImageId, status: 'done', error: undefined, finishedAt: job.finished_at ? new Date(job.finished_at).getTime() : Date.now() })
+        } else if (job.status === 'failed' || job.status === 'cancelled') {
+          nextItems.push({ ...item, taskId: job.id, status: job.status === 'cancelled' ? 'stopped' : 'error', error: job.error_message || (job.status === 'cancelled' ? '任务已取消' : '生成失败'), finishedAt: job.finished_at ? new Date(job.finished_at).getTime() : Date.now() })
+        } else {
+          nextItems.push({ ...item, taskId: job.id, status: serverBatch.status === 'paused' ? 'stopped' : 'running', error: undefined, startedAt: item.startedAt ?? Date.now() })
+        }
+      }
+      const terminal = ['succeeded', 'failed', 'cancelled', 'partially_succeeded'].includes(serverBatch.status)
+      setBatch({ ...current, items: nextItems, queuePaused: serverBatch.status === 'paused' || terminal, updatedAt: Date.now() })
+      if (!terminal && serverBatch.status !== 'paused') {
+        serverPollTimerRef.current = setTimeout(() => { void pollServerBatch(serverBatchId) }, 2_000)
+      }
+    } catch (error) {
+      showToast(`批次状态同步失败，正在重试：${friendlyError(error)}`, 'error')
+      serverPollTimerRef.current = setTimeout(() => { void pollServerBatch(serverBatchId) }, 5_000)
+    }
+  }
+
+  const startServerItems = async (itemIds: string[]) => {
+    const current = useStore.getState().batchTryOnBatch
+    if (!current?.templateImageId) return
+    try {
+      const templateDataUrl = await ensureImageCached(current.templateImageId)
+      if (!templateDataUrl) throw new Error('模特模板图读取失败，请重新上传。')
+      const templateAsset = await uploadDataUrlAsset(templateDataUrl, 'model_template', current.templateFileName?.replace(/\.[^.]+$/, '') || 'model-template')
+      const selectedItems = current.items.filter((item) => itemIds.includes(item.id))
+      const modelCode = await resolveModelCode('multi_image_reference')
+      const size = resolveOutputSize(current)
+      const requestItems = []
+      for (const item of selectedItems) {
+        const garmentDataUrl = await ensureImageCached(item.garmentImageId)
+        if (!garmentDataUrl) throw new Error(`${item.garmentFileName} 读取失败，请重新上传。`)
+        const garmentAsset = await uploadDataUrlAsset(garmentDataUrl, 'garment', item.garmentFileName.replace(/\.[^.]+$/, ''))
+        requestItems.push({
+          client_item_id: item.id,
+          prompt: buildBatchTryOnPrompt({ garmentFileName: item.garmentFileName, outputSize: size, extraRequirements: current.extraRequirements }),
+          reference_asset_ids: [templateAsset.id, garmentAsset.id],
+          size,
+          quality: current.params.quality,
+          output_format: current.params.output_format,
+          metadata: { garment_filename: item.garmentFileName, index: item.index },
+        })
+      }
+      const submitted = await submitServerBatch({
+        name: `批量套图 ${new Date().toLocaleString('zh-CN', { hour12: false })}`,
+        workspace_type: 'batch_tryon',
+        operation_code: 'batch_tryon.generate',
+        capability: 'multi_image_reference',
+        model_code: modelCode,
+        idempotency_key: `batch:${crypto.randomUUID()}`,
+        concurrency: current.concurrency,
+        items: requestItems,
+      })
+      const jobByItem = new Map(submitted.jobs.map((job) => [job.client_item_id, job]))
+      setBatch((latest) => latest?.id === current.id ? {
+        ...latest,
+        serverBatchId: submitted.id,
+        queuePaused: false,
+        items: latest.items.map((item) => itemIds.includes(item.id)
+          ? { ...item, taskId: jobByItem.get(item.id)?.id, status: 'running', error: undefined, outputImageId: undefined, startedAt: Date.now(), finishedAt: undefined }
+          : item),
+        updatedAt: Date.now(),
+      } : latest)
+      showToast(`服务端批次已创建，共 ${submitted.total_jobs} 个任务`, 'success')
+      void pollServerBatch(submitted.id)
+    } catch (error) {
+      setBatch((latest) => latest ? { ...latest, queuePaused: true, items: latest.items.map((item) => itemIds.includes(item.id) ? { ...item, status: 'error', error: friendlyError(error), finishedAt: Date.now() } : item), updatedAt: Date.now() } : latest)
+      showToast(friendlyError(error), 'error')
+    }
+  }
+
+  useEffect(() => {
+    if (!runtimeConfig.isStandalone && batch?.serverBatchId && batch.items.some((item) => item.status === 'running')) {
+      void pollServerBatch(batch.serverBatchId)
+    }
+    return () => {
+      if (serverPollTimerRef.current) clearTimeout(serverPollTimerRef.current)
+      serverPollTimerRef.current = null
+    }
+    // 恢复只跟随服务端批次 ID，避免每次轮询更新 items 后重复启动。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batch?.serverBatchId])
+
   const startItems = (itemIds: string[]) => {
     if (!batch || itemIds.length === 0) return
     updateBatch({ queuePaused: false })
@@ -147,12 +251,25 @@ export default function BatchTryOnWorkspace() {
         : item),
       updatedAt: Date.now(),
     } : current)
+    if (!runtimeConfig.isStandalone) {
+      void startServerItems(itemIds)
+      return
+    }
     void getRunner().start(itemIds).then(() => {
       setBatch((current) => current ? { ...current, queuePaused: false, updatedAt: Date.now() } : current)
     })
   }
 
   const pauseQueue = () => {
+    if (!runtimeConfig.isStandalone && batch?.serverBatchId) {
+      void pauseServerBatch(batch.serverBatchId).then(() => {
+        if (serverPollTimerRef.current) clearTimeout(serverPollTimerRef.current)
+        serverPollTimerRef.current = null
+        setBatch((current) => current ? { ...current, queuePaused: true, items: current.items.map((item) => item.status === 'running' ? { ...item, status: 'stopped' } : item), updatedAt: Date.now() } : current)
+        showToast('服务端批次已暂停；已进入上游请求的任务可能仍会完成', 'info')
+      }).catch((error) => showToast(friendlyError(error), 'error'))
+      return
+    }
     getRunner().pause()
     updateBatch({ queuePaused: true })
     showToast('队列已暂停，正在生成的任务会继续完成', 'info')
@@ -161,6 +278,13 @@ export default function BatchTryOnWorkspace() {
   const resumeQueue = () => {
     const current = useStore.getState().batchTryOnBatch
     if (!current) return
+    if (!runtimeConfig.isStandalone && current.serverBatchId) {
+      void resumeServerBatch(current.serverBatchId).then(() => {
+        setBatch((latest) => latest ? { ...latest, queuePaused: false, items: latest.items.map((item) => item.status === 'stopped' ? { ...item, status: 'running' } : item), updatedAt: Date.now() } : latest)
+        void pollServerBatch(current.serverBatchId!)
+      }).catch((error) => showToast(friendlyError(error), 'error'))
+      return
+    }
     const pendingIds = current.items.filter((item) => item.status === 'pending' || item.status === 'stopped').map((item) => item.id)
     const runner = getRunner()
     runner.enqueue(pendingIds)
@@ -344,7 +468,7 @@ export default function BatchTryOnWorkspace() {
             </div>
             <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-600 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-300">
               <div>输出尺寸：<span className="font-mono font-semibold">{outputSize}</span> · 每件服装 1 张结果</div>
-              <div className="mt-1">生图配置：{activeProfile.name} · {activeProfile.model}</div>
+              <div className="mt-1">生图配置：{runtimeConfig.isStandalone ? `${activeProfile.name} · ${activeProfile.model}` : '平台统一资源池（服务端安全调用）'}</div>
               {profileError && <button type="button" onClick={() => setShowSettings(true, 'api')} className="mt-2 text-left font-semibold text-red-600 underline decoration-red-300 underline-offset-2 dark:text-red-300">{profileError} 点击前往设置</button>}
             </div>
           </div>
@@ -402,7 +526,8 @@ function createId() {
 
 function validateImageFile(file: File) {
   if (!ACCEPTED_IMAGE_TYPES.has(file.type.toLowerCase())) throw new Error('图片格式不支持，请使用 PNG、JPG、JPEG 或 WEBP。')
-  if (file.size > MAX_BATCH_TRY_ON_FILE_BYTES) throw new Error('单张图片不能超过 50 MB。')
+  const maxBytes = runtimeConfig.isStandalone ? MAX_BATCH_TRY_ON_FILE_BYTES : MAX_MULTIUSER_FILE_BYTES
+  if (file.size > maxBytes) throw new Error(`单张图片不能超过 ${maxBytes / 1024 / 1024} MB。`)
 }
 
 function resolveOutputSize(batch: BatchTryOnBatch) {

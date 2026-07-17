@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 
-import asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -10,6 +9,7 @@ from app.models.quota import QuotaReservation, QuotaReservationStatus
 from app.services.billing_service import release_reservation
 from app.services.task_service import dispatch_job, due_jobs, recover_stale_jobs as recover_jobs
 from app.workers.celery_app import celery_app
+from app.workers.runtime import run_worker_coroutine
 
 
 @celery_app.task(name="system.heartbeat", ignore_result=False)
@@ -22,7 +22,7 @@ def heartbeat() -> dict[str, str]:
 
 @celery_app.task(name="system.dispatch_due_jobs", ignore_result=False)
 def dispatch_due_jobs() -> dict[str, int]:
-    return asyncio.run(_dispatch_due_jobs())
+    return run_worker_coroutine(_dispatch_due_jobs)
 
 
 async def _dispatch_due_jobs() -> dict[str, int]:
@@ -41,7 +41,7 @@ async def _dispatch_due_jobs() -> dict[str, int]:
 
 @celery_app.task(name="system.recover_stale_jobs", ignore_result=False)
 def recover_stale_jobs() -> dict[str, int]:
-    return asyncio.run(_recover_stale_jobs())
+    return run_worker_coroutine(_recover_stale_jobs)
 
 
 async def _recover_stale_jobs() -> dict[str, int]:
@@ -54,7 +54,7 @@ async def _recover_stale_jobs() -> dict[str, int]:
 
 @celery_app.task(name="system.release_expired_reservations", ignore_result=False)
 def release_expired_reservations() -> dict[str, int]:
-    return asyncio.run(_release_expired_reservations())
+    return run_worker_coroutine(_release_expired_reservations)
 
 
 async def _release_expired_reservations() -> dict[str, int]:

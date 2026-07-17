@@ -2,7 +2,7 @@ name: amazon-image-studio
 
 x-backend-environment: &backend-environment
   APP_NAME: Amazon Image Studio API
-  APP_VERSION: 0.6.0
+  APP_VERSION: 0.7.0
   ENVIRONMENT: development
   LOG_LEVEL: INFO
   CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-18080},http://127.0.0.1:${FRONTEND_PORT:-18080}

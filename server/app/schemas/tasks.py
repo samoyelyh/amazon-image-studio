@@ -130,6 +130,7 @@ class JobSubmitRequest(BaseModel):
     project_id: str | None = None
     input: dict[str, object]
     billing_factors: dict[str, str] = Field(default_factory=dict)
+    client_item_id: str | None = Field(default=None, max_length=120)
 
     @model_validator(mode="after")
     def validate_queue(self) -> "JobSubmitRequest":
@@ -145,10 +146,22 @@ class JobSubmitRequest(BaseModel):
         }[self.workspace_type]
         if self.operation_code != expected_operation:
             raise ValueError(f"operation_code must be {expected_operation} for this workspace and capability")
-        if self.capability == "image_generation" and not str(self.input.get("prompt", "")).strip():
-            raise ValueError("input.prompt is required for image generation")
-        if self.capability == "image_generation" and self.input.get("n", 1) != 1:
+        image_capabilities = {"image_generation", "image_edit", "multi_image_reference", "mask_edit"}
+        if self.capability in image_capabilities and not str(self.input.get("prompt", "")).strip():
+            raise ValueError("input.prompt is required for image tasks")
+        if self.capability in image_capabilities and self.input.get("n", 1) != 1:
             raise ValueError("one job must generate exactly one image; use a batch for multiple images")
+        references = self.input.get("reference_asset_ids", [])
+        if not isinstance(references, list) or len(references) > 10 or any(not isinstance(item, str) or not item for item in references):
+            raise ValueError("reference_asset_ids must be a list of at most 10 asset IDs")
+        if self.capability in {"image_edit", "multi_image_reference", "mask_edit"} and not references:
+            raise ValueError("reference_asset_ids are required for image editing")
+        if self.capability == "multi_image_reference" and (not isinstance(references, list) or len(references) < 2):
+            raise ValueError("multi_image_reference requires at least two reference assets")
+        if self.capability == "mask_edit" and not self.input.get("mask_asset_id"):
+            raise ValueError("mask_asset_id is required for mask editing")
+        if self.input.get("metadata") is not None and not isinstance(self.input.get("metadata"), dict):
+            raise ValueError("input.metadata must be an object")
         if len(json.dumps(self.input, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > 131072:
             raise ValueError("job input exceeds 128 KiB")
         forbidden = {"api_key", "apikey", "token", "secret", "authorization", "password"}
@@ -177,6 +190,7 @@ class JobResponse(BaseModel):
     queue_name: str
     capability: str
     model_code: str
+    client_item_id: str | None
     status: str
     progress: int
     result_json: dict[str, object] | None
@@ -190,10 +204,89 @@ class JobResponse(BaseModel):
     finished_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    outputs: list["JobOutputResponse"] = Field(default_factory=list)
+
+
+class JobOutputResponse(BaseModel):
+    id: str
+    asset_id: str
+    filename: str
+    mime_type: str
+    width: int
+    height: int
+    size: int
+    sequence_number: int
+    url: str
+    url_expires_at: datetime
 
 
 class JobPage(BaseModel):
     items: list[JobResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class BatchJobItemRequest(BaseModel):
+    client_item_id: str = Field(min_length=1, max_length=120)
+    prompt: str = Field(min_length=1, max_length=30000)
+    reference_asset_ids: list[str] = Field(default_factory=list, max_length=10)
+    mask_asset_id: str | None = None
+    size: str = Field(default="1024x1024", max_length=40)
+    quality: str | None = Field(default=None, max_length=40)
+    output_format: Literal["png", "jpeg", "webp"] = "png"
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class JobBatchSubmitRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    workspace_type: WORKSPACES
+    operation_code: str = Field(pattern=r"^[a-z][a-z0-9_.-]*$", max_length=120)
+    capability: CAPABILITIES
+    model_code: str = Field(min_length=1, max_length=120)
+    idempotency_key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$", min_length=8, max_length=160)
+    project_id: str | None = None
+    concurrency: int = Field(default=2, ge=1, le=10)
+    items: list[BatchJobItemRequest] = Field(min_length=1, max_length=50)
+
+    @model_validator(mode="after")
+    def validate_batch(self) -> "JobBatchSubmitRequest":
+        expected_operation = {
+            "listing": "listing.generate", "batch_tryon": "batch_tryon.generate", "aplus": "aplus.generate",
+        }[self.workspace_type]
+        if self.operation_code != expected_operation:
+            raise ValueError(f"operation_code must be {expected_operation}")
+        ids = [item.client_item_id for item in self.items]
+        if len(ids) != len(set(ids)):
+            raise ValueError("client_item_id values must be unique within a batch")
+        return self
+
+
+class JobBatchResponse(BaseModel):
+    id: str
+    organization_id: str
+    project_id: str | None
+    workspace_type: str
+    operation_code: str
+    name: str | None
+    model_code: str | None
+    capability: str | None
+    status: str
+    concurrency: int
+    total_jobs: int
+    succeeded_jobs: int
+    failed_jobs: int
+    cancelled_jobs: int
+    error_message: str | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    jobs: list[JobResponse] = Field(default_factory=list)
+
+
+class JobBatchPage(BaseModel):
+    items: list[JobBatchResponse]
     total: int
     limit: int
     offset: int

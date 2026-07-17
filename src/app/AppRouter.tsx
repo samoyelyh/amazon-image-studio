@@ -9,6 +9,8 @@ import ProfilePage from '../pages/ProfilePage'
 import AssetsPage from '../pages/AssetsPage'
 import ProjectsPage from '../pages/ProjectsPage'
 import QuotaPage from '../pages/QuotaPage'
+import TasksPage from '../pages/TasksPage'
+import HistoryPage from '../pages/HistoryPage'
 import { useAuth } from './AuthContext'
 
 function ProtectedRoutes() {
@@ -35,10 +37,10 @@ function AppRoutes() {
           <Route path={appRoutes.listing} element={<ListingWorkspacePage />} />
           <Route path={appRoutes.batchTryOn} element={<BatchTryOnWorkspacePage />} />
           <Route path={appRoutes.aplus} element={<APlusWorkspacePage />} />
-          <Route path={appRoutes.tasks} element={<PlatformPage page="tasks" />} />
+          <Route path={appRoutes.tasks} element={runtimeConfig.isStandalone ? <PlatformPage page="tasks" /> : <TasksPage />} />
           <Route path={appRoutes.assets} element={runtimeConfig.isStandalone ? <PlatformPage page="assets" /> : <AssetsPage />} />
           <Route path={appRoutes.projects} element={runtimeConfig.isStandalone ? <PlatformPage page="projects" /> : <ProjectsPage />} />
-          <Route path={appRoutes.history} element={<PlatformPage page="history" />} />
+          <Route path={appRoutes.history} element={runtimeConfig.isStandalone ? <PlatformPage page="history" /> : <HistoryPage />} />
           <Route path={appRoutes.quota} element={runtimeConfig.isStandalone ? <PlatformPage page="quota" /> : <QuotaPage />} />
           <Route path={appRoutes.profile} element={runtimeConfig.isStandalone ? <PlatformPage page="profile" /> : <ProfilePage />} />
           <Route path={appRoutes.admin} element={<PlatformPage page="admin" />} />

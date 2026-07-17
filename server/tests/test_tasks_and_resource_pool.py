@@ -1,3 +1,4 @@
+import base64
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -6,13 +7,14 @@ from sqlalchemy import select
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.models.quota import QuotaAccount, QuotaReservation
-from app.models.tasks import ApiKey, Job, JobStatus, ModelCapability, Provider, ProviderModel, ResourcePool, ResourcePoolKey
+from app.models.tasks import ApiKey, BatchStatus, Job, JobBatch, JobStatus, ModelCapability, Provider, ProviderModel, ResourcePool, ResourcePoolKey
 from app.providers.base import ProviderError, ProviderOutput, ProviderResult
 from app.schemas.tasks import JobSubmitRequest
 from app.services.resource_pool_service import (
     acquire_resource, cool_down_key, create_api_key, release_resource,
 )
-from app.services.task_service import claim_job, recover_stale_jobs, submit_job
+from app.services.billing_service import settle_reservation
+from app.services.task_service import claim_job, recover_stale_jobs, refresh_batch_status, schedule_retry_or_fail, submit_job
 
 
 async def auth_headers(client, email: str, password: str) -> dict[str, str]:
@@ -155,6 +157,61 @@ async def test_job_submission_is_idempotent_tenant_scoped_and_cancel_refunds(ide
         assert reservations[0].factors_json["resource_pool"] == "platform"
 
 
+async def test_batch_split_concurrency_partial_settlement_and_refresh_recovery(identity_test_context, monkeypatch) -> None:
+    client = identity_test_context["client"]
+    monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
+    headers = await auth_headers(client, "first-admin@example.com", "correct-password")
+    payload = {
+        "name": "Listing batch", "workspace_type": "listing", "operation_code": "listing.generate",
+        "capability": "image_generation", "model_code": "standard", "idempotency_key": "listing-batch-001",
+        "concurrency": 1,
+        "items": [
+            {"client_item_id": "slot-1", "prompt": "First image", "reference_asset_ids": [], "size": "1024x1024", "output_format": "png"},
+            {"client_item_id": "slot-2", "prompt": "Second image", "reference_asset_ids": [], "size": "1024x1024", "output_format": "png"},
+        ],
+    }
+    created = await client.post("/api/v1/job-batches", headers=headers, json=payload)
+    assert created.status_code == 202, created.text
+    repeated = await client.post("/api/v1/job-batches", headers=headers, json=payload)
+    assert repeated.status_code == 200 and repeated.json()["id"] == created.json()["id"]
+    batch_id = created.json()["id"]
+    job_ids = [item["id"] for item in created.json()["jobs"]]
+
+    settings = Settings(_env_file=None)
+    async with identity_test_context["session_factory"]() as session:
+        first = await claim_job(session, settings, job_ids[0])
+        assert first is not None
+        await session.commit()
+    async with identity_test_context["session_factory"]() as session:
+        assert await claim_job(session, settings, job_ids[1]) is None
+        deferred = await session.get(Job, job_ids[1])
+        assert deferred.status == JobStatus.QUEUED.value and deferred.dispatched_at is None
+        await session.commit()
+
+    async with identity_test_context["session_factory"]() as session:
+        first = await session.get(Job, job_ids[0], with_for_update=True)
+        first.status = JobStatus.SUCCEEDED.value
+        first.progress = 100
+        await settle_reservation(
+            session, organization_id=first.organization_id, reservation_id=first.quota_reservation_id,
+            user_id=first.updated_by, actual_quantity=1, idempotency_key=f"test-success:{first.id}",
+        )
+        second = await session.get(Job, job_ids[1], with_for_update=True)
+        second.attempts = second.max_attempts
+        await schedule_retry_or_fail(session, second, code="provider.failed", message="upstream failed")
+        batch = await refresh_batch_status(session, batch_id)
+        await session.commit()
+        assert batch.status == BatchStatus.PARTIALLY_SUCCEEDED.value
+
+    detail = await client.get(f"/api/v1/job-batches/{batch_id}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["status"] == "partially_succeeded"
+    assert detail.json()["succeeded_jobs"] == 1 and detail.json()["failed_jobs"] == 1
+    async with identity_test_context["session_factory"]() as session:
+        account = await session.scalar(select(QuotaAccount).where(QuotaAccount.organization_id == identity_test_context["first_org"]))
+        assert account.balance == 990 and account.reserved_balance == 0
+
+
 async def test_duplicate_worker_claim_and_stale_recovery_are_idempotent(identity_test_context) -> None:
     settings = Settings(_env_file=None, job_heartbeat_timeout_seconds=10)
     from app.models.identity import User
@@ -202,7 +259,10 @@ async def test_429_cools_key_and_fails_over_to_next_key(identity_test_context, m
         async def execute(self, **kwargs):
             if kwargs["api_key"] == "relay-key-first":
                 raise ProviderError("provider.rate_limited", "rate limited", http_status=429, retryable=True)
-            return ProviderResult([ProviderOutput(b"image-bytes", "image/png", "result.png")], "req-2")
+            image_bytes = base64.b64decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+            )
+            return ProviderResult([ProviderOutput(image_bytes, "image/png", "result.png")], "req-2")
 
     monkeypatch.setattr("app.workers.tasks.jobs.get_engine", lambda: identity_test_context["engine"])
     monkeypatch.setattr("app.workers.tasks.jobs.get_redis_client", lambda: identity_test_context["redis"])

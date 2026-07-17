@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Amazon Image Studio API"
-    app_version: str = "0.6.0"
+    app_version: str = "0.7.0"
     environment: Literal["development", "test", "production"] = "development"
     log_level: str = "INFO"
     api_v1_prefix: str = "/api/v1"
