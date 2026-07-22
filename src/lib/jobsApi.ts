@@ -13,7 +13,7 @@ export interface JobOutput {
   size: number
   sequence_number: number
   url: string
-  url_expires_at: string
+  url_expires_at: string | null
 }
 
 export interface ServerJob {
@@ -39,6 +39,22 @@ export interface ServerJob {
   started_at: string | null
   heartbeat_at: string | null
   finished_at: string | null
+  generation_duration_ms: number | null
+  requested_aspect_ratio: string | null
+  requested_width: number | null
+  requested_height: number | null
+  resolved_provider_size: string | null
+  actual_width: number | null
+  actual_height: number | null
+  size_mismatch: boolean
+  review_item_id: string | null
+  review_status: string | null
+  current_version_id: string | null
+  approved_version_id: string | null
+  regeneration_count: number
+  review_version_id: string | null
+  review_version_number: number | null
+  is_current_review_version: boolean
   created_at: string
   updated_at: string
   outputs: JobOutput[]
@@ -77,6 +93,7 @@ export interface ResourcePoolSummary {
   code: string
   name: string
   capabilities: string[]
+  operation_bindings: Record<string, string[]>
   key_count: number
 }
 
@@ -108,8 +125,12 @@ export interface JobBatchSubmitInput {
     reference_asset_ids: string[]
     mask_asset_id?: string
     size: string
+    aspect_ratio?: string
+    requested_width?: number
+    requested_height?: number
     quality?: string
     output_format: 'png' | 'jpeg' | 'webp'
+    output_compression?: number | null
     metadata?: Record<string, unknown>
   }>
 }
@@ -125,10 +146,12 @@ export function listResourcePools() {
   return authenticatedFetch<ResourcePoolSummary[]>('/resource-pools')
 }
 
-export async function resolveModelCode(capability: JobCapability): Promise<string> {
+export async function resolveModelCode(capability: JobCapability, operationCode?: string): Promise<string> {
   const pools = await listResourcePools()
-  const pool = pools.find((item) => item.key_count > 0 && item.capabilities.includes(capability))
-    ?? pools.find((item) => item.capabilities.includes(capability))
+  const matches = (item: ResourcePoolSummary) => item.capabilities.includes(capability)
+    && (!operationCode || item.operation_bindings?.[operationCode]?.includes(capability))
+  const pool = pools.find((item) => item.key_count > 0 && matches(item))
+    ?? pools.find(matches)
   if (!pool) throw new Error(`平台暂未配置支持 ${capability} 的模型资源池，请联系管理员。`)
   if (pool.key_count < 1) throw new Error(`模型资源池「${pool.name}」尚未绑定可用 API Key，请联系管理员。`)
   return pool.model_code

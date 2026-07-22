@@ -1,6 +1,7 @@
 export const appRoutes = {
   root: '/',
   login: '/login',
+  changePassword: '/change-password',
   dashboard: '/dashboard',
   listing: '/workspaces/listing',
   batchTryOn: '/workspaces/batch-tryon',

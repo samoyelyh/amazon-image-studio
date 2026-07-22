@@ -11,6 +11,8 @@ import ProjectsPage from '../pages/ProjectsPage'
 import QuotaPage from '../pages/QuotaPage'
 import TasksPage from '../pages/TasksPage'
 import HistoryPage from '../pages/HistoryPage'
+import AdminPage from '../pages/AdminPage'
+import ChangePasswordPage from '../pages/ChangePasswordPage'
 import { useAuth } from './AuthContext'
 
 function ProtectedRoutes() {
@@ -23,6 +25,9 @@ function ProtectedRoutes() {
   if (auth.status === 'anonymous') {
     return <Navigate to={appRoutes.login} replace state={{ from: location.pathname }} />
   }
+  if (auth.identity?.user.must_change_password && location.pathname !== appRoutes.changePassword) {
+    return <Navigate to={appRoutes.changePassword} replace />
+  }
   return <Outlet />
 }
 
@@ -31,6 +36,7 @@ function AppRoutes() {
     <Routes>
       <Route path={appRoutes.login} element={runtimeConfig.isStandalone ? <Navigate to={appRoutes.listing} replace /> : <LoginPage />} />
       <Route element={<ProtectedRoutes />}>
+        <Route path={appRoutes.changePassword} element={<ChangePasswordPage />} />
         <Route element={<AppShell />}>
           <Route index element={<Navigate to={appRoutes.listing} replace />} />
           <Route path={appRoutes.dashboard} element={<DashboardPage />} />
@@ -43,7 +49,7 @@ function AppRoutes() {
           <Route path={appRoutes.history} element={runtimeConfig.isStandalone ? <PlatformPage page="history" /> : <HistoryPage />} />
           <Route path={appRoutes.quota} element={runtimeConfig.isStandalone ? <PlatformPage page="quota" /> : <QuotaPage />} />
           <Route path={appRoutes.profile} element={runtimeConfig.isStandalone ? <PlatformPage page="profile" /> : <ProfilePage />} />
-          <Route path={appRoutes.admin} element={<PlatformPage page="admin" />} />
+          <Route path={appRoutes.admin} element={runtimeConfig.isStandalone ? <PlatformPage page="admin" /> : <AdminPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>

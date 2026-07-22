@@ -1,6 +1,8 @@
-import { authenticatedFetch } from './authApi'
+import { authenticatedFetch, authenticatedFetchResponse } from './authApi'
 
-export type AssetCategory = 'product_reference' | 'model_template' | 'garment' | 'style_reference' | 'listing_output' | 'batch_tryon_output' | 'aplus_output' | 'temporary'
+export type UploadAssetCategory = 'product_reference' | 'model_template' | 'garment' | 'style_reference' | 'temporary'
+export type GeneratedAssetCategory = 'listing_output' | 'batch_tryon_output' | 'aplus_output'
+export type AssetCategory = UploadAssetCategory | GeneratedAssetCategory
 export type ProjectType = 'listing' | 'batch_tryon' | 'aplus'
 
 export interface Asset {
@@ -44,11 +46,11 @@ function params(values: Record<string, string | undefined>) {
   return encoded ? `?${encoded}` : ''
 }
 
-export function listAssets(category?: AssetCategory, search?: string) {
+export function listAssets(category?: GeneratedAssetCategory, search?: string) {
   return authenticatedFetch<AssetPage>(`/assets${params({ category, search })}`)
 }
 
-export function uploadAsset(file: File, category: AssetCategory) {
+export function uploadAsset(file: File, category: UploadAssetCategory) {
   const body = new FormData()
   body.append('file', file)
   body.append('category', category)
@@ -57,6 +59,10 @@ export function uploadAsset(file: File, category: AssetCategory) {
 
 export function removeAsset(assetId: string) {
   return authenticatedFetch<void>(`/assets/${assetId}`, { method: 'DELETE' })
+}
+
+export async function fetchAssetBlob(url: string): Promise<Blob> {
+  return (await authenticatedFetchResponse(url)).blob()
 }
 
 export function listProjects(projectType?: ProjectType, search?: string) {

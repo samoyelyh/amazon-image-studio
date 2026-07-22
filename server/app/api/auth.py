@@ -5,6 +5,7 @@ from app.core.config import Settings, get_settings
 from app.db.session import get_db_session
 from app.schemas.identity import (
     AccessTokenResponse,
+    ChangePasswordRequest,
     CurrentIdentityResponse,
     LoginRequest,
     SwitchOrganizationRequest,
@@ -101,6 +102,26 @@ async def logout(
     refresh_secret = request.cookies.get(settings.refresh_cookie_name)
     await AuthService(settings).logout(session, request, refresh_secret)
     _clear_refresh_cookie(response, settings)
+
+
+@router.post("/change-password", response_model=AccessTokenResponse)
+async def change_password(
+    payload: ChangePasswordRequest,
+    request: Request,
+    response: Response,
+    session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(get_current_principal),
+) -> AccessTokenResponse:
+    auth_session = await AuthService(settings).change_password(
+        session,
+        request,
+        principal,
+        payload.current_password,
+        payload.new_password,
+    )
+    _set_refresh_cookie(response, settings, auth_session.refresh_secret)
+    return _token_response(auth_session)
 
 
 @router.get("/me", response_model=CurrentIdentityResponse)

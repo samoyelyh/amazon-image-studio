@@ -17,9 +17,11 @@ from app.models.identity import (
     UserStatus,
 )
 from app.security.identity import IdentityProvider, LocalIdentityProvider
+from app.security.passwords import hash_password, verify_password
 from app.security.principal import Principal, resolve_principal
 from app.security.tokens import create_access_token, create_refresh_secret, hash_refresh_secret
-from app.services.audit_service import add_login_audit, client_ip, user_agent
+from app.services.audit_service import add_audit_log, add_login_audit, client_ip, user_agent
+from app.services.password_service import validate_password
 
 
 UTC = timezone.utc
@@ -137,6 +139,8 @@ class AuthService:
             user = await session.get(User, token.user_id)
             if user is None:
                 raise AppError("auth.invalid_user", "User no longer exists", 401)
+            if user.must_change_password:
+                raise AppError("auth.password_change_required", "首次登录或密码已重置，请先修改密码。", 403)
             selected_organization_id = await self._select_organization(session, user, organization_id)
 
         principal = await resolve_principal(session, token.user_id, selected_organization_id)
@@ -186,6 +190,86 @@ class AuthService:
                 )
         await session.commit()
 
+    async def change_password(
+        self,
+        session: AsyncSession,
+        request: Request,
+        principal: Principal,
+        current_password: str,
+        new_password: str,
+    ) -> AuthSession:
+        user = principal.user
+        if not verify_password(current_password, user.password_hash):
+            add_audit_log(
+                session, request=request, actor_user_id=user.id,
+                organization_id=principal.organization.id if principal.organization else None,
+                action="password.change", resource_type="user", resource_id=user.id,
+                metadata={"outcome": "failure", "reason": "auth.current_password_incorrect"},
+            )
+            await session.commit()
+            raise AppError("auth.current_password_incorrect", "当前密码不正确", 422)
+        if verify_password(new_password, user.password_hash):
+            add_audit_log(
+                session, request=request, actor_user_id=user.id,
+                organization_id=principal.organization.id if principal.organization else None,
+                action="password.change", resource_type="user", resource_id=user.id,
+                metadata={"outcome": "failure", "reason": "auth.password_unchanged"},
+            )
+            await session.commit()
+            raise AppError("auth.password_unchanged", "新密码不能与当前密码相同", 422)
+        try:
+            validate_password(new_password, email=user.email, display_name=user.display_name)
+        except AppError as error:
+            add_audit_log(
+                session, request=request, actor_user_id=user.id,
+                organization_id=principal.organization.id if principal.organization else None,
+                action="password.change", resource_type="user", resource_id=user.id,
+                metadata={"outcome": "failure", "reason": error.code},
+            )
+            await session.commit()
+            raise
+
+        now = datetime.now(UTC)
+        was_forced = user.must_change_password
+        user.password_hash = hash_password(new_password)
+        user.must_change_password = False
+        user.password_changed_at = now
+        user.temporary_password_created_at = None
+        user.token_version += 1
+        await session.execute(
+            update(RefreshToken)
+            .where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
+            .values(revoked_at=now)
+        )
+        await session.flush()
+        refreshed_principal = await resolve_principal(
+            session,
+            user.id,
+            principal.organization.id if principal.organization else None,
+        )
+        auth_session = self._create_session_record(session, request, refreshed_principal, now=now)
+        add_audit_log(
+            session,
+            request=request,
+            actor_user_id=user.id,
+            organization_id=principal.organization.id if principal.organization else None,
+            action="password.change",
+            resource_type="user",
+            resource_id=user.id,
+            metadata={"forced_change_completed": was_forced, "outcome": "success"},
+        )
+        add_login_audit(
+            session,
+            request=request,
+            event="password_change",
+            outcome="success",
+            email=user.email,
+            user_id=user.id,
+            organization_id=principal.organization.id if principal.organization else None,
+        )
+        await session.commit()
+        return auth_session
+
     async def _select_organization(
         self,
         session: AsyncSession,
@@ -223,7 +307,9 @@ class AuthService:
         family_id: str | None = None,
     ) -> AuthSession:
         organization_id = principal.organization.id if principal.organization else None
-        access_token, expires_in = create_access_token(self.settings, principal.user.id, organization_id)
+        access_token, expires_in = create_access_token(
+            self.settings, principal.user.id, organization_id, principal.user.token_version,
+        )
         refresh_secret = create_refresh_secret()
         session.add(RefreshToken(
             token_hash=hash_refresh_secret(refresh_secret),

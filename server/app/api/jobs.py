@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query, Request, Response, status
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
@@ -18,6 +19,7 @@ from sqlalchemy import func, select
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 batch_router = APIRouter(prefix="/job-batches", tags=["job-batches"])
+logger = logging.getLogger(__name__)
 
 
 def organization_id(principal: Principal) -> str:
@@ -43,8 +45,16 @@ async def add_job(
         try:
             dispatch_job(job)
             await session.commit()
-        except Exception:
+        except Exception as error:
             await session.rollback()
+            job = await get_job(session, org_id, job.id, lock=True)
+            job.status = "queued"
+            job.error_code = "job.dispatch_failed"
+            job.error_message = "任务队列暂时不可用，系统将自动重试"
+            job.dispatched_at = None
+            job.celery_task_id = None
+            await session.commit()
+            logger.error("job_dispatch_failed job_id=%s queue_name=%s error_type=%s", job.id, job.queue_name, type(error).__name__)
     else:
         response.status_code = status.HTTP_200_OK
     return await job_response(session, storage, settings, await get_job(session, org_id, job.id))
@@ -91,6 +101,11 @@ async def request_job_cancel(
 async def _batch_response(
     session: AsyncSession, storage: StorageService, settings: Settings, batch: JobBatch,
 ) -> JobBatchResponse:
+    if batch.workspace_type == "batch_tryon":
+        from app.services.batch_tryon_review_service import ensure_batch_try_on_review_records
+
+        await ensure_batch_try_on_review_records(session, batch)
+        await session.commit()
     jobs = list((await session.scalars(select(Job).where(Job.batch_id == batch.id).order_by(Job.created_at))).all())
     return JobBatchResponse(
         id=batch.id, organization_id=batch.organization_id, project_id=batch.project_id,
@@ -123,7 +138,13 @@ async def add_job_batch(
         for job in jobs:
             try:
                 dispatch_job(job)
-            except Exception:
+            except Exception as error:
+                job.status = "queued"
+                job.error_code = "job.dispatch_failed"
+                job.error_message = "任务队列暂时不可用，系统将自动重试"
+                job.dispatched_at = None
+                job.celery_task_id = None
+                logger.error("job_dispatch_failed job_id=%s queue_name=%s error_type=%s", job.id, job.queue_name, type(error).__name__)
                 continue
         await session.commit()
     else:

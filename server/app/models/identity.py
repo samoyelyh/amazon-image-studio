@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, JSON, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UuidPrimaryKeyMixin
@@ -40,6 +40,11 @@ class User(UuidPrimaryKeyMixin, TimestampMixin, Base):
     external_subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
     platform_role_id: Mapped[str | None] = mapped_column(ForeignKey("roles.id", ondelete="SET NULL"), nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    temporary_password_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     platform_role: Mapped[Role | None] = relationship(foreign_keys=[platform_role_id], lazy="selectin")
     memberships: Mapped[list[OrganizationMember]] = relationship(back_populates="user", lazy="selectin")
@@ -90,13 +95,17 @@ class RolePermission(Base):
 
 class OrganizationMember(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "organization_members"
-    __table_args__ = (UniqueConstraint("organization_id", "user_id"),)
+    __table_args__ = (
+        UniqueConstraint("organization_id", "user_id"),
+        UniqueConstraint("organization_id", "creation_idempotency_key", name="uq_org_member_creation_idempotency"),
+    )
 
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     role_id: Mapped[str] = mapped_column(ForeignKey("roles.id", ondelete="RESTRICT"), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default=MembershipStatus.ACTIVE.value, nullable=False)
     invited_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    creation_idempotency_key: Mapped[str | None] = mapped_column(String(160), nullable=True)
 
     organization: Mapped[Organization] = relationship(back_populates="members")
     user: Mapped[User] = relationship(back_populates="memberships")

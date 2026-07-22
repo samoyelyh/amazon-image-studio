@@ -28,7 +28,6 @@ celery_app.conf.update(
     task_default_queue="default",
     task_routes={
         "system.*": {"queue": "maintenance"},
-        "jobs.execute": {"queue": "listing_queue"},
     },
     beat_schedule={
         "system-heartbeat": {

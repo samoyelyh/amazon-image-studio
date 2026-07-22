@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+from collections import defaultdict
 
 from redis.asyncio import Redis
 from sqlalchemy import func, or_, select
@@ -10,7 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.models.tasks import ApiKey, ApiKeyStatus, ModelCapability, Provider, ProviderModel, ResourcePool, ResourcePoolKey
+from app.models.tasks import (
+    ApiKey, ApiKeyStatus, ModelCapability, OperationResourcePool, Provider, ProviderModel,
+    ResourcePool, ResourcePoolKey,
+)
+from app.providers.urls import normalize_base_url
 from app.security.api_keys import api_key_fingerprint, decrypt_api_key, encrypt_api_key
 
 
@@ -40,6 +45,7 @@ class ResourceLease:
     pool_id: str
     key_id: str
     provider_id: str
+    model_id: str
     provider_type: str
     base_url: str
     provider_config: dict[str, object]
@@ -55,32 +61,47 @@ def _redis_keys(key_id: str, now: datetime) -> tuple[str, str, str, str]:
 
 async def acquire_resource(
     session: AsyncSession, redis: Redis, settings: Settings, *, organization_id: str,
-    model_code: str, capability: str, excluded_key_ids: set[str] | None = None,
+    operation_code: str, model_code: str, capability: str,
+    additional_capabilities: set[str] | None = None,
+    excluded_key_ids: set[str] | None = None,
 ) -> ResourceLease:
     now = datetime.now(UTC)
     excluded_key_ids = excluded_key_ids or set()
     rows = (await session.execute(
         select(ResourcePool, ProviderModel, Provider, ResourcePoolKey, ApiKey)
+        .join(OperationResourcePool, OperationResourcePool.resource_pool_id == ResourcePool.id)
         .join(ProviderModel, ResourcePool.model_id == ProviderModel.id)
         .join(Provider, ProviderModel.provider_id == Provider.id)
         .join(ResourcePoolKey, ResourcePoolKey.resource_pool_id == ResourcePool.id)
         .join(ApiKey, ResourcePoolKey.api_key_id == ApiKey.id)
         .where(
             ResourcePool.enabled.is_(True), ProviderModel.enabled.is_(True), Provider.enabled.is_(True),
+            OperationResourcePool.enabled.is_(True),
+            OperationResourcePool.operation_code == operation_code,
+            OperationResourcePool.required_capability == capability,
             ResourcePoolKey.enabled.is_(True), ApiKey.enabled.is_(True),
             ProviderModel.code == model_code,
             or_(ResourcePool.organization_id == organization_id, ResourcePool.organization_id.is_(None)),
+            or_(OperationResourcePool.organization_id == organization_id, OperationResourcePool.organization_id.is_(None)),
             or_(ApiKey.organization_id == organization_id, ApiKey.organization_id.is_(None)),
             ApiKey.status != ApiKeyStatus.DISABLED.value,
         )
         .order_by(
+            OperationResourcePool.organization_id.desc(), OperationResourcePool.priority.asc(),
             ResourcePool.organization_id.desc(), ResourcePool.priority.asc(), ResourcePoolKey.priority.asc(),
             ApiKey.consecutive_failures.asc(), ResourcePoolKey.weight.desc(), ApiKey.last_used_at.asc(), ApiKey.id.asc(),
         )
     )).all()
-    capable_models = set((await session.scalars(select(ModelCapability.model_id).where(ModelCapability.capability == capability))).all())
+    required_capabilities = {capability, *(additional_capabilities or set())}
+    capabilities_by_model: dict[str, set[str]] = defaultdict(set)
+    model_ids = {model.id for _, model, _, _, _ in rows}
+    if model_ids:
+        for model_id, model_capability in (await session.execute(select(
+            ModelCapability.model_id, ModelCapability.capability,
+        ).where(ModelCapability.model_id.in_(model_ids)))).all():
+            capabilities_by_model[model_id].add(model_capability)
     for pool, model, provider, link, key in rows:
-        if model.id not in capable_models or key.id in excluded_key_ids:
+        if not required_capabilities.issubset(capabilities_by_model[model.id]) or key.id in excluded_key_ids:
             continue
         cooldown_until = _aware(key.cooldown_until)
         if cooldown_until and cooldown_until > now:
@@ -100,13 +121,49 @@ async def acquire_resource(
         key.last_used_at = now
         await session.flush()
         return ResourceLease(
-            pool.id, key.id, provider.id, provider.provider_type, provider.base_url,
+            pool.id, key.id, provider.id, model.id, provider.provider_type, normalize_base_url(provider.base_url),
             provider.config_json, model.upstream_model, model.config_json,
             decrypt_api_key(settings, key.secret_ciphertext),
         )
-    raise AppError("resource_pool.no_available_key", "No API key is currently available for this model and capability", 503, {
-        "model_code": model_code, "capability": capability,
+    raise AppError("resource_pool.no_available_key", "当前业务操作没有可用的模型资源池或 API Key", 503, {
+        "operation_code": operation_code, "model_code": model_code, "capability": capability,
     })
+
+
+async def validate_operation_binding(
+    session: AsyncSession, *, organization_id: str, operation_code: str,
+    model_code: str, capability: str, additional_capabilities: set[str] | None = None,
+) -> ProviderModel:
+    model = await session.scalar(
+        select(ProviderModel)
+        .select_from(OperationResourcePool)
+        .join(ResourcePool, OperationResourcePool.resource_pool_id == ResourcePool.id)
+        .join(ProviderModel, ResourcePool.model_id == ProviderModel.id)
+        .where(
+            OperationResourcePool.operation_code == operation_code,
+            OperationResourcePool.required_capability == capability,
+            OperationResourcePool.enabled.is_(True), ResourcePool.enabled.is_(True),
+            ProviderModel.enabled.is_(True), ProviderModel.code == model_code,
+            or_(OperationResourcePool.organization_id == organization_id, OperationResourcePool.organization_id.is_(None)),
+            or_(ResourcePool.organization_id == organization_id, ResourcePool.organization_id.is_(None)),
+        )
+        .limit(1)
+    )
+    required_capabilities = {capability, *(additional_capabilities or set())}
+    model_id = model.id if model else None
+    available_capabilities = set((await session.scalars(select(ModelCapability.capability).where(
+        ModelCapability.model_id == model_id,
+    ))).all()) if model_id else set()
+    missing_capabilities = sorted(required_capabilities - available_capabilities)
+    if model_id is None or missing_capabilities:
+        raise AppError(
+            "resource_pool.operation_not_bound",
+            "当前功能未绑定支持该能力的模型资源池，请联系管理员检查业务操作绑定",
+            422,
+            {"operation_code": operation_code, "model_code": model_code, "capability": capability,
+             "missing_capabilities": missing_capabilities},
+        )
+    return model
 
 
 async def release_resource(redis: Redis, lease: ResourceLease) -> None:

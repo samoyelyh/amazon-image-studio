@@ -15,7 +15,7 @@ export default function LoginPage() {
 
   useEffect(() => { document.title = '登录 · Amazon Image Studio' }, [])
 
-  if (auth.status === 'authenticated') return <Navigate to={appRoutes.dashboard} replace />
+  if (auth.status === 'authenticated') return <Navigate to={auth.identity?.user.must_change_password ? appRoutes.changePassword : appRoutes.dashboard} replace />
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()

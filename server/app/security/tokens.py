@@ -17,13 +17,14 @@ class AccessTokenClaims:
     user_id: str
     organization_id: str | None
     token_id: str
+    token_version: int
 
 
 class TokenError(ValueError):
     pass
 
 
-def create_access_token(settings: Settings, user_id: str, organization_id: str | None) -> tuple[str, int]:
+def create_access_token(settings: Settings, user_id: str, organization_id: str | None, token_version: int = 0) -> tuple[str, int]:
     now = datetime.now(UTC)
     expires_in = settings.access_token_ttl_minutes * 60
     payload = {
@@ -31,6 +32,7 @@ def create_access_token(settings: Settings, user_id: str, organization_id: str |
         "org": organization_id,
         "type": "access",
         "jti": str(uuid4()),
+        "ver": token_version,
         "iat": now,
         "nbf": now,
         "exp": now + timedelta(seconds=expires_in),
@@ -59,6 +61,7 @@ def decode_access_token(settings: Settings, encoded: str) -> AccessTokenClaims:
         user_id=str(payload["sub"]),
         organization_id=str(payload["org"]) if payload.get("org") else None,
         token_id=str(payload["jti"]),
+        token_version=int(payload.get("ver", 0)),
     )
 
 

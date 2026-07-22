@@ -1,14 +1,22 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile, status
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, File, Form, Query, Request, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError
 from app.db.session import get_db_session
-from app.schemas.content import AssetCategoryValue, AssetPage, AssetResponse, AssetUrlResponse
+from app.schemas.content import (
+    AssetCategoryValue,
+    AssetPage,
+    AssetResponse,
+    AssetUrlResponse,
+    GeneratedAssetCategoryValue,
+)
 from app.security.principal import Principal, require_permissions
-from app.services.asset_service import asset_url, create_asset, delete_asset, get_asset, list_assets, signed_asset_response
+from app.services.asset_service import asset_url, create_asset, delete_asset, get_asset, list_assets, read_asset_content, signed_asset_response
 from app.services.audit_service import add_audit_log
 from app.services.storage_service import StorageService, get_storage_service
 
@@ -62,7 +70,7 @@ async def upload_asset(
 
 @router.get("", response_model=AssetPage)
 async def get_assets(
-    category: AssetCategoryValue | None = None,
+    category: GeneratedAssetCategoryValue | None = None,
     search: str | None = Query(default=None, max_length=255),
     limit: int = Query(default=30, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -99,6 +107,26 @@ async def get_asset_url(
 ) -> AssetUrlResponse:
     asset = await get_asset(session, organization_id(principal), asset_id)
     return await asset_url(asset, storage, settings)
+
+
+@router.get("/{asset_id}/content")
+async def get_asset_content(
+    asset_id: str,
+    session: AsyncSession = Depends(get_db_session),
+    storage: StorageService = Depends(get_storage_service),
+    principal: Principal = Depends(require_permissions("assets.read")),
+) -> Response:
+    asset = await get_asset(session, organization_id(principal), asset_id)
+    content = await read_asset_content(asset, storage)
+    return Response(
+        content=content,
+        media_type=asset.mime_type,
+        headers={
+            "Cache-Control": "private, max-age=300",
+            "Content-Disposition": f"inline; filename*=UTF-8''{quote(asset.filename)}",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)

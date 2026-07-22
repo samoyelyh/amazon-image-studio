@@ -8,6 +8,8 @@ import httpx
 
 from app.core.config import Settings
 from app.providers.base import BaseImageProvider, ProviderError, ProviderOutput, ProviderResult
+from app.providers.urls import provider_url
+from app.services.image_size_service import ImageSizeError, provider_dimension_fields
 
 
 class OpenAICompatibleProvider(BaseImageProvider):
@@ -26,17 +28,32 @@ class OpenAICompatibleProvider(BaseImageProvider):
         supported = {"image_generation", "image_edit", "multi_image_reference", "mask_edit"}
         if capability not in supported:
             raise ProviderError("provider.unsupported_capability", "This adapter does not support the requested capability", http_status=422)
+        is_edit = capability != "image_generation"
+        try:
+            dimension_fields, dimension_field, dimension_value = provider_dimension_fields(payload, config, is_edit=is_edit)
+        except ImageSizeError as error:
+            raise ProviderError(error.code, error.message, http_status=error.http_status) from error
         request_body: dict[str, object] = {
             "model": upstream_model,
             "prompt": payload.get("prompt"),
             "n": payload.get("n", 1),
-            "size": payload.get("size", "1024x1024"),
             "response_format": payload.get("response_format", "b64_json"),
         }
+        request_body.update(dimension_fields)
         request_body.update({key: value for key, value in payload.items() if key not in request_body and key in {"quality", "style", "background"}})
-        is_edit = capability != "image_generation"
+        if is_edit:
+            configured_fields = config.get("edit_body_fields")
+            if isinstance(configured_fields, list):
+                allowed_fields = {str(field) for field in configured_fields}
+                if dimension_field not in allowed_fields:
+                    raise ProviderError(
+                        "provider.unsupported_size",
+                        f"当前图片编辑模型配置未启用 {dimension_field} 字段，无法保证所选尺寸。",
+                        http_status=422,
+                    )
+                request_body = {key: value for key, value in request_body.items() if key in allowed_fields}
         endpoint = str(config.get("edits_endpoint" if is_edit else "images_endpoint", "/images/edits" if is_edit else "/images/generations"))
-        url = f"{base_url.rstrip('/')}/{endpoint.lstrip('/')}"
+        url = provider_url(base_url, endpoint)
         timeout = httpx.Timeout(self.settings.provider_request_timeout_seconds)
         try:
             async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
@@ -86,14 +103,18 @@ class OpenAICompatibleProvider(BaseImageProvider):
                 outputs.append(await self._download_image(str(item["url"]), index))
         if not outputs:
             raise ProviderError("provider.empty_result", "Upstream provider returned no images")
-        return ProviderResult(outputs, response.headers.get("x-request-id"), {"created": body.get("created")})
+        return ProviderResult(outputs, response.headers.get("x-request-id"), {
+            "created": body.get("created"),
+            "submitted_dimension_field": dimension_field,
+            "submitted_dimension_value": dimension_value,
+        })
 
     async def _execute_text(
         self, *, base_url: str, api_key: str, upstream_model: str,
         payload: dict[str, object], config: dict[str, object],
     ) -> ProviderResult:
         endpoint = str(config.get("chat_endpoint", "/chat/completions"))
-        url = f"{base_url.rstrip('/')}/{endpoint.lstrip('/')}"
+        url = provider_url(base_url, endpoint)
         user_content: object = str(payload.get("user_prompt") or "")
         references = payload.get("reference_images")
         if isinstance(references, list) and references:

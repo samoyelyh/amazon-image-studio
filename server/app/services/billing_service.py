@@ -288,7 +288,7 @@ async def reserve_quota(
         return existing
     available = account.balance - account.reserved_balance
     if available < estimate.total_cost:
-        raise AppError("quota.insufficient", "Available quota is insufficient", 402, {
+        raise AppError("quota.insufficient", "可用额度不足，请充值或联系管理员调整额度", 402, {
             "required": estimate.total_cost, "available": available,
         })
     now = datetime.now(UTC)

@@ -114,6 +114,8 @@ export interface AppSettings {
 
 export interface TaskParams {
   size: string
+  /** 用户选择的宽高比；与提交给 Provider 的具体尺寸分开保存。 */
+  aspect_ratio: string
   quality: 'auto' | 'low' | 'medium' | 'high'
   output_format: 'png' | 'jpeg' | 'webp'
   output_compression: number | null
@@ -125,6 +127,7 @@ export const DEFAULT_OUTPUT_COMPRESSION = 70
 
 export const DEFAULT_PARAMS: TaskParams = {
   size: 'auto',
+  aspect_ratio: 'auto',
   quality: 'auto',
   output_format: 'jpeg',
   output_compression: DEFAULT_OUTPUT_COMPRESSION,
@@ -200,9 +203,21 @@ export interface TaskRecord {
   status: TaskStatus
   error: string | null
   createdAt: number
+  /** 真正开始调用 Provider 的时间；服务端任务排队期间为空。 */
+  startedAt?: number | null
   finishedAt: number | null
-  /** 总耗时毫秒 */
+  /** 旧版任务总耗时毫秒；新服务端任务使用 generationDurationMs。 */
   elapsed: number | null
+  /** 服务端持久化的纯生成耗时，不包含排队和重试等待。 */
+  generationDurationMs?: number | null
+  serverJobStatus?: string
+  requestedAspectRatio?: string | null
+  requestedWidth?: number | null
+  requestedHeight?: number | null
+  resolvedProviderSize?: string | null
+  actualWidth?: number | null
+  actualHeight?: number | null
+  sizeMismatch?: boolean
   /** 是否收藏 */
   isFavorite?: boolean
   /** 来源模式：画廊 / Agent */
@@ -241,7 +256,9 @@ export interface TaskRecord {
 // ===== 批量套图 =====
 
 export type BatchTryOnItemStatus = 'pending' | 'running' | 'done' | 'error' | 'stopped'
-export type BatchTryOnAspectRatio = 'template' | '1:1' | '3:4' | '4:3' | '16:9' | '9:16'
+export type BatchTryOnReviewStatus = 'pending' | 'approved' | 'rejected' | 'regenerating' | 'generation_failed'
+/** `template` or any positive width:height ratio selected by the user. */
+export type BatchTryOnAspectRatio = string
 
 export interface BatchTryOnItem {
   id: string
@@ -251,6 +268,13 @@ export interface BatchTryOnItem {
   index: number
   taskId?: string
   outputImageId?: string
+  /** 本地缓存的结果对应哪个服务端 Job，防止新版本完成后继续显示旧图。 */
+  outputTaskId?: string
+  serverReviewItemId?: string
+  serverReviewStatus?: BatchTryOnReviewStatus
+  serverCurrentVersionId?: string
+  serverApprovedVersionId?: string
+  regenerationCount?: number
   status: BatchTryOnItemStatus
   error?: string
   createdAt: number

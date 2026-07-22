@@ -1,13 +1,18 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_serializer, field_validator, model_validator
+from app.services.image_size_service import normalize_image_job_input
 
 
 CAPABILITIES = Literal[
     "text_generation", "image_generation", "image_edit", "multi_image_reference",
     "mask_edit", "custom_aspect_ratio", "transparent_background",
+]
+MODEL_CAPABILITIES = Literal[
+    "text_generation", "vision_input", "image_generation", "image_edit",
+    "multi_image_reference", "mask_edit", "custom_aspect_ratio", "transparent_background",
 ]
 QUEUES = Literal["planning_queue", "listing_queue", "batch_tryon_queue", "aplus_queue"]
 WORKSPACES = Literal["listing", "batch_tryon", "aplus"]
@@ -44,7 +49,7 @@ class ProviderModelCreateRequest(BaseModel):
     code: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$", max_length=120)
     upstream_model: str = Field(min_length=1, max_length=200)
     name: str = Field(min_length=1, max_length=160)
-    capabilities: list[CAPABILITIES] = Field(min_length=1)
+    capabilities: list[MODEL_CAPABILITIES] = Field(min_length=1)
     config: dict[str, object] = Field(default_factory=dict)
 
     @field_validator("capabilities")
@@ -106,6 +111,13 @@ class PoolKeyAttachRequest(BaseModel):
     weight: int = Field(default=100, ge=1, le=10000)
 
 
+class OperationPoolAttachRequest(BaseModel):
+    operation_code: str = Field(pattern=r"^[a-z][a-z0-9_.-]*$", max_length=120)
+    required_capability: CAPABILITIES
+    organization_id: str | None = None
+    priority: int = Field(default=100, ge=0, le=10000)
+
+
 class ResourcePoolResponse(BaseModel):
     id: str
     organization_id: str | None
@@ -117,6 +129,7 @@ class ResourcePoolResponse(BaseModel):
     priority: int
     weight: int
     capabilities: list[str]
+    operation_bindings: dict[str, list[str]] = Field(default_factory=dict)
     key_count: int = 0
 
 
@@ -151,6 +164,8 @@ class JobSubmitRequest(BaseModel):
             raise ValueError("input.prompt is required for image tasks")
         if self.capability in image_capabilities and self.input.get("n", 1) != 1:
             raise ValueError("one job must generate exactly one image; use a batch for multiple images")
+        if self.capability in image_capabilities:
+            self.input = normalize_image_job_input(self.input)
         references = self.input.get("reference_asset_ids", [])
         if not isinstance(references, list) or len(references) > 10 or any(not isinstance(item, str) or not item for item in references):
             raise ValueError("reference_asset_ids must be a list of at most 10 asset IDs")
@@ -202,9 +217,35 @@ class JobResponse(BaseModel):
     started_at: datetime | None
     heartbeat_at: datetime | None
     finished_at: datetime | None
+    generation_duration_ms: int | None = None
+    requested_aspect_ratio: str | None = None
+    requested_width: int | None = None
+    requested_height: int | None = None
+    resolved_provider_size: str | None = None
+    actual_width: int | None = None
+    actual_height: int | None = None
+    size_mismatch: bool = False
+    review_item_id: str | None = None
+    review_status: str | None = None
+    current_version_id: str | None = None
+    approved_version_id: str | None = None
+    regeneration_count: int = 0
+    review_version_id: str | None = None
+    review_version_number: int | None = None
+    is_current_review_version: bool = False
     created_at: datetime
     updated_at: datetime
     outputs: list["JobOutputResponse"] = Field(default_factory=list)
+
+    @field_serializer(
+        "cancel_requested_at", "started_at", "heartbeat_at", "finished_at", "created_at", "updated_at",
+        when_used="json",
+    )
+    def serialize_utc_datetime(self, value: datetime | None) -> str | None:
+        if value is None:
+            return None
+        aware = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+        return aware.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 class JobOutputResponse(BaseModel):
@@ -217,7 +258,7 @@ class JobOutputResponse(BaseModel):
     size: int
     sequence_number: int
     url: str
-    url_expires_at: datetime
+    url_expires_at: datetime | None = None
 
 
 class JobPage(BaseModel):
@@ -233,8 +274,12 @@ class BatchJobItemRequest(BaseModel):
     reference_asset_ids: list[str] = Field(default_factory=list, max_length=10)
     mask_asset_id: str | None = None
     size: str = Field(default="1024x1024", max_length=40)
+    aspect_ratio: str = Field(default="auto", max_length=40)
+    requested_width: int | None = Field(default=None, ge=1, le=16384)
+    requested_height: int | None = Field(default=None, ge=1, le=16384)
     quality: str | None = Field(default=None, max_length=40)
     output_format: Literal["png", "jpeg", "webp"] = "png"
+    output_compression: int | None = Field(default=None, ge=1, le=100)
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
@@ -256,6 +301,8 @@ class JobBatchSubmitRequest(BaseModel):
         }[self.workspace_type]
         if self.operation_code != expected_operation:
             raise ValueError(f"operation_code must be {expected_operation}")
+        if self.workspace_type in {"listing", "aplus"} and len(self.items) > 10:
+            raise ValueError("listing and aplus batches support at most 10 images")
         ids = [item.client_item_id for item in self.items]
         if len(ids) != len(set(ids)):
             raise ValueError("client_item_id values must be unique within a batch")
@@ -283,6 +330,13 @@ class JobBatchResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     jobs: list[JobResponse] = Field(default_factory=list)
+
+    @field_serializer("started_at", "finished_at", "created_at", "updated_at", when_used="json")
+    def serialize_utc_datetime(self, value: datetime | None) -> str | None:
+        if value is None:
+            return None
+        aware = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+        return aware.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 class JobBatchPage(BaseModel):

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useAuth } from '../app/AuthContext'
 import { adjustQuota, estimateQuota, getQuotaAccount, getQuotaPackages, getQuotaReservations, getQuotaRules, getQuotaTransactions, type CostEstimate } from '../lib/quotaApi'
+import { randomUuid } from '../lib/randomUuid'
 
 const transactionNames: Record<string, string> = { grant: '赠送', recharge: '充值', reserve: '预占', consume: '消费', release: '释放', refund: '退款', adjust: '调整', expire: '过期' }
 const statusNames: Record<string, string> = { reserved: '已冻结', consumed: '已消费', partially_consumed: '部分消费', released: '已释放', refunded: '已退款', partially_refunded: '部分退款', expired: '已过期' }
@@ -32,7 +33,7 @@ export default function QuotaPage() {
     onError: (error) => setMessage(error instanceof Error ? error.message : '费用预估失败'),
   })
   const adjustMutation = useMutation({
-    mutationFn: () => adjustQuota({ transaction_type: 'adjust', amount: adjustAmount, reason: adjustReason, idempotency_key: `manual:${crypto.randomUUID()}` }),
+    mutationFn: () => adjustQuota({ transaction_type: 'adjust', amount: adjustAmount, reason: adjustReason, idempotency_key: `manual:${randomUuid()}` }),
     onSuccess: () => { setMessage('额度调整成功'); queryClient.invalidateQueries({ queryKey: ['quota'] }) },
     onError: (error) => setMessage(error instanceof Error ? error.message : '额度调整失败'),
   })

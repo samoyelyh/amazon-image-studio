@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     s3_secure: bool = False
     s3_presigned_url_ttl_seconds: int = 900
     asset_max_upload_bytes: int = 20 * 1024 * 1024
+    generated_asset_max_bytes: int = 100 * 1024 * 1024
     asset_max_image_pixels: int = 40_000_000
     asset_max_image_dimension: int = 12_000
     project_max_draft_bytes: int = 1024 * 1024
@@ -98,6 +99,8 @@ class Settings(BaseSettings):
             raise ValueError("BOOTSTRAP_ADMIN_PASSWORD must contain at least 12 characters")
         if self.asset_max_upload_bytes < 1:
             raise ValueError("ASSET_MAX_UPLOAD_BYTES must be positive")
+        if self.asset_max_upload_bytes < 1 or self.generated_asset_max_bytes < 1:
+            raise ValueError("Asset byte limits must be positive")
         if self.asset_max_image_pixels < 1 or self.asset_max_image_dimension < 1:
             raise ValueError("Asset image limits must be positive")
         if self.project_max_draft_bytes < 2:

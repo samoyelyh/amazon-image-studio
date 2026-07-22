@@ -150,6 +150,19 @@ async def identity_test_context() -> AsyncIterator[dict[str, object]]:
             created_by=platform_admin.id,
             updated_by=platform_admin.id,
         ))
+        session.add(QuotaRule(
+            organization_id=None,
+            operation_code="batch_tryon.generate",
+            name="Batch try-on generation",
+            base_cost=10,
+            model_multipliers={},
+            quality_multipliers={},
+            resolution_multipliers={},
+            resource_pool_multipliers={"personal": "0", "platform": "1"},
+            effective_from=datetime(2020, 1, 1, tzinfo=timezone.utc),
+            created_by=platform_admin.id,
+            updated_by=platform_admin.id,
+        ))
         session.add(QuotaPackage(
             code="test-1000", name="Test package", quota_amount=1000,
             price=Decimal("99.00"), created_by=platform_admin.id, updated_by=platform_admin.id,

@@ -6,6 +6,11 @@ export interface AuthUser {
   display_name: string
   status: string
   auth_provider: string
+  must_change_password: boolean
+  password_changed_at: string | null
+  temporary_password_created_at: string | null
+  created_by: string | null
+  last_login_at: string | null
   created_at: string
   updated_at: string
 }
@@ -15,6 +20,7 @@ export interface AuthOrganization {
   name: string
   slug: string
   status: string
+  invited_by: string | null
   created_at: string
   updated_at: string
 }
@@ -76,6 +82,21 @@ async function parseResponse<T>(response: Response): Promise<T> {
   )
 }
 
+function resolveApiRequestUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path
+  if (path.startsWith(apiBaseUrl)) return path
+  return `${apiBaseUrl}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+async function parseErrorResponse(response: Response): Promise<never> {
+  const payload = await response.json().catch(() => ({})) as ApiErrorPayload
+  throw new AuthApiError(
+    response.status,
+    payload.error?.code || 'request.failed',
+    payload.error?.message || payload.detail?.[0]?.msg || '请求失败，请稍后重试',
+  )
+}
+
 async function sessionRequest(path: string, body?: unknown): Promise<AuthSessionResponse> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     method: 'POST',
@@ -103,6 +124,24 @@ export async function switchOrganization(organizationId: string): Promise<AuthSe
   return sessionRequest('/auth/switch-organization', { organization_id: organizationId })
 }
 
+export async function changePassword(currentPassword: string, newPassword: string, retry = true): Promise<AuthSessionResponse> {
+  const headers = new Headers({ 'Content-Type': 'application/json' })
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
+  const response = await fetch(`${apiBaseUrl}/auth/change-password`, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  })
+  if (response.status === 401 && retry) {
+    await refreshSession()
+    return changePassword(currentPassword, newPassword, false)
+  }
+  const session = await parseResponse<AuthSessionResponse>(response)
+  accessToken = session.access_token
+  return session
+}
+
 export async function logout(): Promise<void> {
   try {
     await parseResponse(await fetch(`${apiBaseUrl}/auth/logout`, {
@@ -115,15 +154,25 @@ export async function logout(): Promise<void> {
 }
 
 export async function authenticatedFetch<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+  const response = await authenticatedFetchResponse(path, init, retry)
+  return response.status === 204 ? undefined as T : response.json() as Promise<T>
+}
+
+export async function authenticatedFetchResponse(path: string, init: RequestInit = {}, retry = true): Promise<Response> {
   const headers = new Headers(init.headers)
-  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
+  const requestUrl = resolveApiRequestUrl(path)
+  const isExternal = /^https?:\/\//i.test(requestUrl)
+    && typeof window !== 'undefined'
+    && new URL(requestUrl, window.location.href).origin !== window.location.origin
+  if (accessToken && !isExternal) headers.set('Authorization', `Bearer ${accessToken}`)
   if (init.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
-  const response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers, credentials: 'include' })
+  const response = await fetch(requestUrl, { ...init, headers, credentials: isExternal ? 'omit' : 'include' })
   if (response.status === 401 && retry) {
     await refreshSession()
-    return authenticatedFetch<T>(path, init, false)
+    return authenticatedFetchResponse(path, init, false)
   }
-  return parseResponse<T>(response)
+  if (!response.ok) return parseErrorResponse(response)
+  return response
 }
 
 export function clearAccessToken() {

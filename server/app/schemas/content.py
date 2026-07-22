@@ -4,16 +4,19 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-AssetCategoryValue = Literal[
+UploadAssetCategoryValue = Literal[
     "product_reference",
     "model_template",
     "garment",
     "style_reference",
+    "temporary",
+]
+GeneratedAssetCategoryValue = Literal[
     "listing_output",
     "batch_tryon_output",
     "aplus_output",
-    "temporary",
 ]
+AssetCategoryValue = UploadAssetCategoryValue | GeneratedAssetCategoryValue
 ProjectTypeValue = Literal["listing", "batch_tryon", "aplus"]
 ProjectStatusValue = Literal["draft", "archived"]
 
@@ -46,7 +49,7 @@ class AssetPage(BaseModel):
 class AssetUrlResponse(BaseModel):
     asset_id: str
     url: str
-    expires_at: datetime
+    expires_at: datetime | None = None
 
 
 class ProjectVersionResponse(BaseModel):

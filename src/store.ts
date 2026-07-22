@@ -53,14 +53,17 @@ import { getFalErrorMessage, getFalQueuedImageResult } from './lib/falAiImageApi
 import { getCustomQueuedImageResult } from './lib/openaiCompatibleImageApi'
 import { validateMaskMatchesImage } from './lib/canvasImage'
 import { orderInputImagesForMask } from './lib/mask'
-import { getChangedParams, normalizeParamsForSettings } from './lib/paramCompatibility'
+import { getChangedParams, MAX_OPENAI_OUTPUT_IMAGES, normalizeParamsForSettings } from './lib/paramCompatibility'
 import { prepareReferenceImageAndMaskPayload } from './lib/referenceImagePayload'
 import { getTaskHistoryCategory } from './lib/taskHistory'
 import { isAmazonListingMainSlot } from './lib/listingPlanner'
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
 import { runtimeConfig } from './app/runtimeConfig'
 import { uploadDataUrlAsset, importServerOutput } from './lib/serverImageAssets'
-import { getServerJob, isServerJobTerminal, resolveModelCode, submitServerJob, type JobCapability, type JobWorkspace } from './lib/jobsApi'
+import { getServerJob, isServerJobTerminal, resolveModelCode, submitServerBatch, submitServerJob, type JobCapability, type JobWorkspace } from './lib/jobsApi'
+import { randomUuid } from './lib/randomUuid'
+import { resolveImageSize } from './lib/imageSizeResolver'
+import { parseApiDateTime } from './lib/taskDuration'
 
 // ===== Image cache =====
 // 内存缓存，id → dataUrl。只保留少量最近使用图片，避免大量 4K data URL 常驻内存。
@@ -186,7 +189,7 @@ function isErrorToastTitle(title: string): boolean {
   return /(?:失败|错误|异常|报错|无法|不能|超时|中断|断开|请先|请输入|已达上限|不存在|已丢失)$/.test(title)
 }
 
-export type SettingsTab = 'general' | 'agent' | 'api' | 'data' | 'about'
+export type SettingsTab = 'general' | 'agent' | 'api' | 'data'
 
 type TimeoutStreamingHintProfile = Pick<ApiProfile, 'provider' | 'streamImages' | 'streamPartialImages'>
 
@@ -640,8 +643,8 @@ function normalizePersistedBatchTryOnBatch(value: unknown): BatchTryOnBatch | nu
       batchId: record.id!,
       garmentFileName: typeof current.garmentFileName === 'string' ? current.garmentFileName : `服装-${index + 1}`,
       index,
-      status: wasRunning ? 'error' as const : normalizedStatus,
-      ...(wasRunning
+      status: wasRunning && runtimeConfig.isStandalone ? 'error' as const : wasRunning ? 'running' as const : normalizedStatus,
+      ...(wasRunning && runtimeConfig.isStandalone
         ? {
             error: '页面刷新时任务仍在生成，普通请求无法自动续接，请重试此任务。',
             finishedAt: now,
@@ -651,18 +654,19 @@ function normalizePersistedBatchTryOnBatch(value: unknown): BatchTryOnBatch | nu
   })
   return {
     id: record.id,
+    serverBatchId: typeof record.serverBatchId === 'string' ? record.serverBatchId : undefined,
     templateImageId: typeof record.templateImageId === 'string' ? record.templateImageId : null,
     templateFileName: typeof record.templateFileName === 'string' ? record.templateFileName : undefined,
     templateWidth: typeof record.templateWidth === 'number' ? record.templateWidth : undefined,
     templateHeight: typeof record.templateHeight === 'number' ? record.templateHeight : undefined,
     items,
     extraRequirements: typeof record.extraRequirements === 'string' ? record.extraRequirements : '',
-    aspectRatio: record.aspectRatio === '1:1' || record.aspectRatio === '3:4' || record.aspectRatio === '4:3' || record.aspectRatio === '16:9' || record.aspectRatio === '9:16'
-      ? record.aspectRatio
-      : 'template',
+    aspectRatio: typeof record.aspectRatio === 'string' && (
+      record.aspectRatio === 'template' || /^\d+(?:\.\d+)?:\d+(?:\.\d+)?$/.test(record.aspectRatio)
+    ) ? record.aspectRatio : 'template',
     concurrency: record.concurrency === 1 || record.concurrency === 3 ? record.concurrency : 2,
     params: normalizePersistedParams(record.params),
-    queuePaused: true,
+    queuePaused: runtimeConfig.isStandalone ? true : Boolean(record.queuePaused),
     createdAt: typeof record.createdAt === 'number' ? record.createdAt : now,
     updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : now,
   }
@@ -2148,19 +2152,35 @@ async function recoverServerJob(taskId: string) {
   try {
     const job = await getServerJob(localTask.serverJobId)
     if (!isServerJobTerminal(job.status)) {
-      updateTaskInStore(taskId, { error: null })
+      updateTaskInStore(taskId, {
+        error: null,
+        serverJobStatus: job.status,
+        startedAt: parseApiDateTime(job.started_at),
+        generationDurationMs: job.generation_duration_ms,
+        requestedAspectRatio: job.requested_aspect_ratio,
+        requestedWidth: job.requested_width,
+        requestedHeight: job.requested_height,
+        resolvedProviderSize: job.resolved_provider_size,
+      })
       scheduleServerJobRecovery(taskId)
       return
     }
 
     clearServerJobRecoveryTimer(taskId)
+    const finishedAt = parseApiDateTime(job.finished_at) ?? Date.now()
+    const startedAt = parseApiDateTime(job.started_at)
+    const generationDurationMs = job.generation_duration_ms
+      ?? (startedAt == null ? null : Math.max(0, finishedAt - startedAt))
     if (job.status !== 'succeeded') {
       const message = job.error_message || (job.status === 'cancelled' ? '任务已取消' : '服务端任务执行失败')
       updateTaskInStore(taskId, {
         status: 'error',
         error: message,
-        finishedAt: job.finished_at ? new Date(job.finished_at).getTime() : Date.now(),
-        elapsed: Date.now() - localTask.createdAt,
+        serverJobStatus: job.status,
+        startedAt,
+        finishedAt,
+        generationDurationMs,
+        elapsed: generationDurationMs,
       })
       return
     }
@@ -2169,21 +2189,40 @@ async function recoverServerJob(taskId: string) {
       updateTaskInStore(taskId, {
         status: 'error',
         error: '服务端任务已完成，但没有返回图片。',
-        finishedAt: Date.now(),
-        elapsed: Date.now() - localTask.createdAt,
+        serverJobStatus: job.status,
+        startedAt,
+        finishedAt,
+        generationDurationMs,
+        elapsed: generationDurationMs,
       })
       return
     }
 
     const outputImages: string[] = []
     for (const output of job.outputs) outputImages.push(await importServerOutput(output))
+    const actualParamsByImage = Object.fromEntries(job.outputs.map((output, index) => [
+      outputImages[index],
+      { size: `${output.width}x${output.height}` },
+    ]))
     updateTaskInStore(taskId, {
       outputImages,
       serverOutputAssetIds: job.outputs.map((output) => output.asset_id),
       status: 'done',
       error: null,
-      finishedAt: job.finished_at ? new Date(job.finished_at).getTime() : Date.now(),
-      elapsed: Date.now() - localTask.createdAt,
+      serverJobStatus: job.status,
+      startedAt,
+      finishedAt,
+      generationDurationMs,
+      elapsed: generationDurationMs,
+      actualParams: job.actual_width && job.actual_height ? { size: `${job.actual_width}x${job.actual_height}` } : undefined,
+      actualParamsByImage,
+      requestedAspectRatio: job.requested_aspect_ratio,
+      requestedWidth: job.requested_width,
+      requestedHeight: job.requested_height,
+      resolvedProviderSize: job.resolved_provider_size,
+      actualWidth: job.actual_width,
+      actualHeight: job.actual_height,
+      sizeMismatch: job.size_mismatch,
     })
     useStore.getState().showToast(`任务完成，共生成 ${outputImages.length} 张图片`, 'success')
   } catch (error) {
@@ -2246,44 +2285,73 @@ async function submitServerBackedTask(options: { allowFullMask?: boolean } = {})
 
     const capability: JobCapability = maskAssetId
       ? 'mask_edit'
-      : referenceAssets.length > 1
-        ? 'multi_image_reference'
-        : referenceAssets.length === 1
+      : referenceAssets.length >= 1
           ? 'image_edit'
           : 'image_generation'
     const workspace: JobWorkspace = category.workflow === 'amazon-aplus' || state.activeGalleryWorkspace === 'aplus' ? 'aplus' : 'listing'
     const operationCode = workspace === 'aplus' ? 'aplus.generate' : 'listing.generate'
-    const modelCode = await resolveModelCode(capability)
-    const normalizedParams = { ...state.params, n: 1 }
-    const submitted = await submitServerJob({
-      operation_code: operationCode,
-      workspace_type: workspace,
-      queue_name: workspace === 'aplus' ? 'aplus_queue' : 'listing_queue',
-      capability,
-      model_code: modelCode,
-      idempotency_key: `web:${crypto.randomUUID()}`,
-      input: {
-        prompt: trimmedPrompt,
-        reference_asset_ids: referenceAssets.map((asset) => asset.id),
-        ...(maskAssetId ? { mask_asset_id: maskAssetId } : {}),
-        size: normalizedParams.size,
-        quality: normalizedParams.quality,
-        output_format: normalizedParams.output_format,
-        n: 1,
-        metadata: { category },
-      },
-      billing_factors: {
-        quality: normalizedParams.quality,
-        resolution: normalizedParams.size,
-      },
-    })
+    const modelCode = await resolveModelCode(capability, operationCode)
+    const requestedCount = Math.min(MAX_OPENAI_OUTPUT_IMAGES, Math.max(1, Math.trunc(state.params.n || 1)))
+    const normalizedParams = { ...state.params, n: requestedCount }
+    const sizeSnapshot = resolveImageSize(normalizedParams.size, normalizedParams.aspect_ratio)
+    const referenceAssetIds = referenceAssets.map((asset) => asset.id)
+    const submittedJobs = requestedCount === 1
+      ? [await submitServerJob({
+          operation_code: operationCode,
+          workspace_type: workspace,
+          queue_name: workspace === 'aplus' ? 'aplus_queue' : 'listing_queue',
+          capability,
+          model_code: modelCode,
+          idempotency_key: `web:${randomUuid()}`,
+          input: {
+            prompt: trimmedPrompt,
+            reference_asset_ids: referenceAssetIds,
+            ...(maskAssetId ? { mask_asset_id: maskAssetId } : {}),
+            size: sizeSnapshot.providerSize,
+            aspect_ratio: sizeSnapshot.aspectRatio,
+            ...(sizeSnapshot.width ? { requested_width: sizeSnapshot.width } : {}),
+            ...(sizeSnapshot.height ? { requested_height: sizeSnapshot.height } : {}),
+            quality: normalizedParams.quality,
+            output_format: normalizedParams.output_format,
+            output_compression: normalizedParams.output_compression,
+            n: 1,
+            metadata: { category },
+          },
+          billing_factors: {
+            quality: normalizedParams.quality,
+            resolution: normalizedParams.size,
+          },
+        })]
+      : (await submitServerBatch({
+          name: `${workspace === 'aplus' ? 'A+图' : 'Listing图'}批量生成 ${new Date().toLocaleString('zh-CN', { hour12: false })}`,
+          workspace_type: workspace,
+          operation_code: operationCode,
+          capability,
+          model_code: modelCode,
+          idempotency_key: `batch:${randomUuid()}`,
+          concurrency: requestedCount,
+          items: Array.from({ length: requestedCount }, (_, index) => ({
+            client_item_id: `image-${index + 1}-${randomUuid()}`,
+            prompt: trimmedPrompt,
+            reference_asset_ids: referenceAssetIds,
+            ...(maskAssetId ? { mask_asset_id: maskAssetId } : {}),
+            size: sizeSnapshot.providerSize,
+            aspect_ratio: sizeSnapshot.aspectRatio,
+            ...(sizeSnapshot.width ? { requested_width: sizeSnapshot.width } : {}),
+            ...(sizeSnapshot.height ? { requested_height: sizeSnapshot.height } : {}),
+            quality: normalizedParams.quality,
+            output_format: normalizedParams.output_format,
+            output_compression: normalizedParams.output_compression,
+            metadata: { category, output_index: index + 1, output_count: requestedCount },
+          })),
+        })).jobs
 
-    const createdAt = new Date(submitted.created_at).getTime()
-    const task: TaskRecord = {
+    const taskParams = { ...normalizedParams, n: 1 }
+    const tasks: TaskRecord[] = submittedJobs.map((submitted) => ({
       id: submitted.id,
       serverJobId: submitted.id,
       prompt: trimmedPrompt,
-      params: normalizedParams,
+      params: taskParams,
       apiProvider: 'platform',
       apiProfileName: '平台统一资源池',
       apiMode: 'images',
@@ -2294,21 +2362,32 @@ async function submitServerBackedTask(options: { allowFullMask?: boolean } = {})
       outputImages: [],
       status: 'running',
       error: null,
-      createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
+      createdAt: parseApiDateTime(submitted.created_at) ?? Date.now(),
+      startedAt: parseApiDateTime(submitted.started_at),
       finishedAt: null,
       elapsed: null,
+      generationDurationMs: submitted.generation_duration_ms,
+      serverJobStatus: submitted.status,
+      requestedAspectRatio: submitted.requested_aspect_ratio ?? sizeSnapshot.aspectRatio,
+      requestedWidth: submitted.requested_width ?? sizeSnapshot.width,
+      requestedHeight: submitted.requested_height ?? sizeSnapshot.height,
+      resolvedProviderSize: submitted.resolved_provider_size ?? sizeSnapshot.providerSize,
       category,
-    }
-    useStore.getState().setTasks([task, ...useStore.getState().tasks.filter((item) => item.id !== task.id)])
-    await putTask(task)
+    }))
+    const submittedIds = new Set(tasks.map((task) => task.id))
+    useStore.getState().setTasks([...tasks, ...useStore.getState().tasks.filter((item) => !submittedIds.has(item.id))])
+    await Promise.all(tasks.map((task) => putTask(task)))
     if (state.settings.clearInputAfterSubmit) {
       useStore.getState().setPrompt('')
       useStore.getState().clearInputImages()
     }
     useStore.getState().setReusedTaskApiProfile(null)
     useStore.getState().setPendingTaskCategory(null)
-    useStore.getState().showToast('任务已提交到服务端，离开页面后仍会继续执行', 'success')
-    scheduleServerJobRecovery(task.id, 0)
+    useStore.getState().showToast(
+      requestedCount === 1 ? '任务已提交到服务端，离开页面后仍会继续执行' : `已提交 ${requestedCount} 张图片，系统将通过统一资源池并发生成`,
+      'success',
+    )
+    tasks.forEach((task) => scheduleServerJobRecovery(task.id, 0))
     return true
   } catch (error) {
     state.showToast(error instanceof Error ? error.message : '任务提交失败', 'error')

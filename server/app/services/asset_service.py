@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
@@ -19,6 +19,8 @@ from app.services.storage_service import StorageService
 
 
 UTC = timezone.utc
+ASSET_CONTENT_PREFIX = "/api/v1/assets"
+GENERATED_ASSET_CATEGORIES = ("listing_output", "batch_tryon_output", "aplus_output")
 FORMAT_DETAILS = {
     "JPEG": ("image/jpeg", "jpg"),
     "PNG": ("image/png", "png"),
@@ -31,15 +33,18 @@ def safe_filename(value: str | None) -> str:
     return (name or "image")[:255]
 
 
-def validate_image(data: bytes, declared_mime: str | None, settings: Settings) -> tuple[str, str, int, int, str]:
+def validate_image(
+    data: bytes, declared_mime: str | None, settings: Settings, *, max_bytes: int | None = None,
+) -> tuple[str, str, int, int, str]:
     if not data:
         raise AppError("asset.empty_file", "Uploaded file is empty", 422)
-    if len(data) > settings.asset_max_upload_bytes:
+    byte_limit = max_bytes or settings.asset_max_upload_bytes
+    if len(data) > byte_limit:
         raise AppError(
             "asset.file_too_large",
             "Uploaded image exceeds the configured size limit",
             413,
-            {"max_bytes": settings.asset_max_upload_bytes},
+            {"max_bytes": byte_limit},
         )
     try:
         with warnings.catch_warnings():
@@ -95,10 +100,20 @@ async def create_asset(
     filename: str | None,
     declared_mime: str | None,
     data: bytes,
+    max_bytes: int | None = None,
 ) -> Asset:
-    mime_type, extension, width, height, digest = validate_image(data, declared_mime, settings)
+    mime_type, extension, width, height, digest = validate_image(
+        data, declared_mime, settings, max_bytes=max_bytes,
+    )
     asset_id = str(uuid4())
-    storage_key = f"organizations/{organization_id}/assets/{asset_id}/{uuid4().hex}.{extension}"
+    category_segment = category if category in {
+        "product_reference", "model_template", "garment", "style_reference",
+        "listing_output", "batch_tryon_output", "aplus_output", "temporary",
+    } else "uncategorized"
+    storage_key = (
+        f"organizations/{organization_id}/assets/{category_segment}/"
+        f"{asset_id}/{uuid4().hex}.{extension}"
+    )
     try:
         metadata = await run_in_threadpool(
             storage.upload,
@@ -151,22 +166,35 @@ async def get_asset(session: AsyncSession, organization_id: str, asset_id: str, 
     return asset
 
 
+def asset_content_url(asset_id: str) -> str:
+    """Return a same-origin path; never expose MinIO or an internal host to browsers."""
+    return f"{ASSET_CONTENT_PREFIX}/{asset_id}/content"
+
+
 async def signed_asset_response(asset: Asset, storage: StorageService, settings: Settings) -> AssetResponse:
-    try:
-        url = await run_in_threadpool(
-            storage.create_presigned_url,
-            asset.storage_key,
-            expires_in=settings.s3_presigned_url_ttl_seconds,
-        )
-    except Exception as error:
-        raise AppError("asset.url_signing_failed", "Could not create a private asset URL", 502) from error
-    expires_at = datetime.now(UTC) + timedelta(seconds=settings.s3_presigned_url_ttl_seconds)
-    return AssetResponse.model_validate(asset).model_copy(update={"url": url, "url_expires_at": expires_at})
+    # Keep the function name for API compatibility. Browser access is now
+    # authenticated and streamed through FastAPI instead of a public S3 URL.
+    return AssetResponse.model_validate(asset).model_copy(update={
+        "url": asset_content_url(asset.id),
+        "url_expires_at": None,
+    })
 
 
 async def asset_url(asset: Asset, storage: StorageService, settings: Settings) -> AssetUrlResponse:
     response = await signed_asset_response(asset, storage, settings)
-    return AssetUrlResponse(asset_id=asset.id, url=response.url or "", expires_at=response.url_expires_at or datetime.now(UTC))
+    return AssetUrlResponse(asset_id=asset.id, url=response.url or "", expires_at=response.url_expires_at)
+
+
+async def read_asset_content(asset: Asset, storage: StorageService) -> bytes:
+    try:
+        return await run_in_threadpool(storage.download, asset.storage_key)
+    except (KeyError, FileNotFoundError) as error:
+        raise AppError("asset.content_missing", "图片文件在对象存储中不存在", 404) from error
+    except Exception as error:
+        status = getattr(error, "response", {}).get("ResponseMetadata", {}).get("HTTPStatusCode")
+        if status == 404:
+            raise AppError("asset.content_missing", "图片文件在对象存储中不存在", 404) from error
+        raise AppError("asset.storage_read_failed", "暂时无法读取图片文件，请稍后重试", 502) from error
 
 
 async def list_assets(
@@ -180,7 +208,16 @@ async def list_assets(
     limit: int,
     offset: int,
 ) -> AssetPage:
-    filters = [Asset.organization_id == organization_id, Asset.deleted_at.is_(None)]
+    generated_output_exists = select(GeneratedOutput.id).where(
+        GeneratedOutput.organization_id == organization_id,
+        GeneratedOutput.asset_id == Asset.id,
+    ).exists()
+    filters = [
+        Asset.organization_id == organization_id,
+        Asset.deleted_at.is_(None),
+        Asset.category.in_(GENERATED_ASSET_CATEGORIES),
+        generated_output_exists,
+    ]
     if category:
         filters.append(Asset.category == category)
     if search:

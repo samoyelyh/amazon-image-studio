@@ -1,6 +1,6 @@
 import { dataUrlToBlob } from './canvasImage'
 import { storeImage } from './db'
-import { uploadAsset, type Asset, type AssetCategory } from './contentApi'
+import { fetchAssetBlob, uploadAsset, type Asset, type UploadAssetCategory } from './contentApi'
 import type { JobOutput } from './jobsApi'
 
 function extensionForMime(mime: string) {
@@ -11,7 +11,7 @@ function extensionForMime(mime: string) {
 
 export async function uploadDataUrlAsset(
   dataUrl: string,
-  category: AssetCategory,
+  category: UploadAssetCategory,
   basename = 'reference',
 ): Promise<Asset> {
   const blob = await dataUrlToBlob(dataUrl)
@@ -21,9 +21,7 @@ export async function uploadDataUrlAsset(
 }
 
 export async function importServerOutput(output: JobOutput): Promise<string> {
-  const response = await fetch(output.url)
-  if (!response.ok) throw new Error(`生成结果下载失败（HTTP ${response.status}）`)
-  const blob = await response.blob()
+  const blob = await fetchAssetBlob(output.url)
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result))

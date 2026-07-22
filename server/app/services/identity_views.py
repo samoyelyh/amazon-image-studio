@@ -27,6 +27,7 @@ def membership_response(membership: OrganizationMember) -> MembershipResponse:
         organization=OrganizationResponse.model_validate(membership.organization),
         role=role_response(membership.role),
         status=membership.status,
+        invited_by=membership.invited_by,
         created_at=membership.created_at,
     )
 

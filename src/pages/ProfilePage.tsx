@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../app/AuthContext'
 import { authenticatedFetch, type CurrentIdentity } from '../lib/authApi'
+import PasswordChangeForm from '../components/account/PasswordChangeForm'
 
 export default function ProfilePage() {
   const auth = useAuth()
@@ -29,7 +30,7 @@ export default function ProfilePage() {
 
   return (
     <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-white/[0.08] dark:bg-gray-900">
+      <div className="space-y-5"><section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-white/[0.08] dark:bg-gray-900">
         <h1 className="text-xl font-bold text-gray-950 dark:text-white">个人中心</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">账号身份由服务端统一管理。</p>
         <form onSubmit={save} className="mt-6 max-w-lg space-y-4">
@@ -37,7 +38,7 @@ export default function ProfilePage() {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">显示名称<input required maxLength={100} value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-gray-950 outline-none focus:border-blue-500 dark:border-white/[0.1] dark:bg-gray-950 dark:text-white" /></label>
           <div className="flex items-center gap-3"><button disabled={saving} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{saving ? '保存中…' : '保存资料'}</button>{message && <span className="text-sm text-gray-500 dark:text-gray-400">{message}</span>}</div>
         </form>
-      </section>
+      </section><section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-white/[0.08] dark:bg-gray-900"><h2 className="text-lg font-bold text-gray-950 dark:text-white">修改密码</h2><p className="mt-1 text-sm text-gray-500">修改后，其他设备上的旧登录会话会立即失效。</p><div className="mt-5 max-w-lg"><PasswordChangeForm /></div></section></div>
       <aside className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-gray-900">
         <h2 className="font-bold text-gray-950 dark:text-white">当前团队</h2>
         <select value={identity.organization?.id || ''} onChange={(event) => auth.switchOrganization(event.target.value)} className="mt-3 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm dark:border-white/[0.1] dark:bg-gray-950 dark:text-white">

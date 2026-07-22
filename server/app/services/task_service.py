@@ -11,11 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.models.content import Asset, GeneratedOutput, Project
-from app.models.tasks import BatchStatus, Job, JobAttempt, JobBatch, JobStatus
+from app.models.tasks import BatchStatus, BatchTryOnReviewItem, BatchTryOnVersion, Job, JobAttempt, JobBatch, JobStatus
 from app.schemas.tasks import JobBatchSubmitRequest, JobOutputResponse, JobPage, JobResponse, JobSubmitRequest
 from app.services.billing_service import release_reservation, reserve_quota
 from app.services.asset_service import signed_asset_response
 from app.services.storage_service import StorageService
+from app.services.resource_pool_service import validate_operation_binding
+from app.services.image_size_service import validate_submission_dimensions
 
 
 UTC = timezone.utc
@@ -39,6 +41,21 @@ async def submit_job(
         if existing.request_hash != fingerprint:
             raise AppError("job.idempotency_conflict", "Idempotency key was already used with different job input", 409)
         return existing, False
+    bound_model = await validate_operation_binding(
+        session, organization_id=organization_id, operation_code=payload.operation_code,
+        model_code=payload.model_code, capability=payload.capability,
+        additional_capabilities={"vision_input"} if payload.operation_code.endswith(".plan")
+        and bool(payload.input.get("reference_asset_ids")) else set(),
+    )
+    if payload.capability in {"image_generation", "image_edit", "multi_image_reference", "mask_edit"}:
+        try:
+            validate_submission_dimensions(payload.input, bound_model.config_json or {}, capability=payload.capability)
+        except Exception as error:
+            if isinstance(error, AppError):
+                raise
+            code = getattr(error, "code", "provider.unsupported_size")
+            message = getattr(error, "message", str(error))
+            raise AppError(code, message, 422) from error
     if payload.project_id:
         project = await session.scalar(select(Project.id).where(
             Project.id == payload.project_id, Project.organization_id == organization_id, Project.deleted_at.is_(None),
@@ -95,9 +112,51 @@ async def job_response(
             id=generated.id, asset_id=asset.id, filename=asset.filename, mime_type=asset.mime_type,
             width=asset.width, height=asset.height, size=asset.size,
             sequence_number=generated.sequence_number, url=signed.url or "",
-            url_expires_at=signed.url_expires_at or datetime.now(UTC),
+            url_expires_at=signed.url_expires_at,
         ))
-    return JobResponse.model_validate(job).model_copy(update={"outputs": outputs})
+    snapshot = job.input_json
+    review_item = None
+    review_version = None
+    if job.workspace_type == "batch_tryon" and job.batch_id and job.client_item_id:
+        review_item = await session.scalar(select(BatchTryOnReviewItem).where(
+            BatchTryOnReviewItem.organization_id == job.organization_id,
+            BatchTryOnReviewItem.batch_id == job.batch_id,
+            BatchTryOnReviewItem.client_item_id == job.client_item_id,
+        ))
+        if review_item:
+            review_version = await session.scalar(select(BatchTryOnVersion).where(
+                BatchTryOnVersion.organization_id == job.organization_id,
+                BatchTryOnVersion.item_id == review_item.id,
+                BatchTryOnVersion.task_id == job.id,
+            ))
+    actual_width = outputs[0].width if outputs else None
+    actual_height = outputs[0].height if outputs else None
+    requested_width = snapshot.get("requested_width")
+    requested_height = snapshot.get("requested_height")
+    return JobResponse.model_validate(job).model_copy(update={
+        "outputs": outputs,
+        "generation_duration_ms": job.generation_duration_ms,
+        "requested_aspect_ratio": snapshot.get("aspect_ratio"),
+        "requested_width": requested_width,
+        "requested_height": requested_height,
+        "resolved_provider_size": snapshot.get("provider_size") or snapshot.get("size"),
+        "actual_width": actual_width,
+        "actual_height": actual_height,
+        "size_mismatch": bool(
+            requested_width and requested_height and actual_width and actual_height
+            and (requested_width != actual_width or requested_height != actual_height)
+        ),
+        "review_item_id": review_item.id if review_item else None,
+        "review_status": review_item.review_status if review_item else None,
+        "current_version_id": review_item.current_version_id if review_item else None,
+        "approved_version_id": review_item.approved_version_id if review_item else None,
+        "regeneration_count": review_item.regeneration_count if review_item else 0,
+        "review_version_id": review_version.id if review_version else None,
+        "review_version_number": review_version.version_number if review_version else None,
+        "is_current_review_version": bool(
+            review_item and review_version and review_item.current_version_id == review_version.id
+        ),
+    })
 
 
 def _batch_hash(payload: JobBatchSubmitRequest) -> str:
@@ -139,8 +198,10 @@ async def submit_batch(
             idempotency_key=f"batch:{batch.id}:{index + 1}",
             project_id=payload.project_id, client_item_id=item.client_item_id,
             input={
-                "prompt": item.prompt, "n": 1, "size": item.size, "quality": item.quality,
-                "output_format": item.output_format, "reference_asset_ids": item.reference_asset_ids,
+                "prompt": item.prompt, "n": 1, "size": item.size, "aspect_ratio": item.aspect_ratio,
+                "requested_width": item.requested_width, "requested_height": item.requested_height,
+                "quality": item.quality, "output_format": item.output_format,
+                "output_compression": item.output_compression, "reference_asset_ids": item.reference_asset_ids,
                 "mask_asset_id": item.mask_asset_id, "metadata": item.metadata,
             },
         )
@@ -149,6 +210,10 @@ async def submit_batch(
             payload=job_payload, batch_id=batch.id,
         )
         jobs.append(job)
+    if payload.workspace_type == "batch_tryon":
+        from app.services.batch_tryon_review_service import ensure_batch_try_on_review_records
+
+        await ensure_batch_try_on_review_records(session, batch)
     await session.flush()
     return batch, jobs, True
 
@@ -251,6 +316,9 @@ async def finalize_cancelled_job(session: AsyncSession, job: Job) -> None:
         session, organization_id=job.organization_id, reservation_id=job.quota_reservation_id,
         user_id=job.updated_by, idempotency_key=f"job-cancel:{job.id}",
     )
+    from app.services.batch_tryon_review_service import sync_batch_try_on_version_for_job
+
+    await sync_batch_try_on_version_for_job(session, job)
 
 
 async def claim_job(session: AsyncSession, settings: Settings, job_id: str) -> Job | None:
@@ -286,7 +354,6 @@ async def claim_job(session: AsyncSession, settings: Settings, job_id: str) -> J
         return None
     job.status = JobStatus.RUNNING.value
     job.progress = max(job.progress, 1)
-    job.started_at = job.started_at or now
     job.heartbeat_at = now
     job.error_code = None
     job.error_message = None

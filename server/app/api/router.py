@@ -11,6 +11,8 @@ from app.api.projects import router as projects_router
 from app.api.quota import router as quota_router
 from app.api.jobs import batch_router as job_batches_router, router as jobs_router
 from app.api.resource_pools import router as resource_pools_router
+from app.api.admin import router as admin_router
+from app.api.batch_tryon_review import router as batch_tryon_review_router
 from app.core.config import get_settings
 
 
@@ -26,7 +28,9 @@ api_router.include_router(projects_router)
 api_router.include_router(quota_router)
 api_router.include_router(jobs_router)
 api_router.include_router(job_batches_router)
+api_router.include_router(batch_tryon_review_router)
 api_router.include_router(resource_pools_router)
+api_router.include_router(admin_router)
 
 
 @api_router.get("", tags=["system"])

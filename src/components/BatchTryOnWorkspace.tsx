@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { BatchTryOnAspectRatio, BatchTryOnBatch, BatchTryOnItem, TaskParams } from '../types'
 import { getImage } from '../lib/db'
-import { calculateImageSize } from '../lib/size'
+import { calculateDeliverySize, resolveImageSize } from '../lib/imageSizeResolver'
 import { buildBatchTryOnPrompt } from '../lib/batchTryOnPrompt'
 import { BatchTryOnQueueController, getFailedBatchTryOnItemIds } from '../lib/batchTryOnQueue'
 import { createBatchTryOnFileNames, downloadBatchTryOnZip } from '../lib/batchTryOnFiles'
@@ -10,6 +10,7 @@ import { getActiveApiProfile } from '../lib/apiProfiles'
 import { runtimeConfig } from '../app/runtimeConfig'
 import { uploadDataUrlAsset, importServerOutput } from '../lib/serverImageAssets'
 import { getServerBatch, pauseServerBatch, resolveModelCode, resumeServerBatch, submitServerBatch } from '../lib/jobsApi'
+import { randomUuid } from '../lib/randomUuid'
 import {
   createInputImageFromFile,
   deleteImageIfUnreferenced,
@@ -21,21 +22,18 @@ import {
 import BatchTryOnTemplateUploader from './BatchTryOnTemplateUploader'
 import BatchTryOnGarmentList from './BatchTryOnGarmentList'
 import BatchTryOnQueue from './BatchTryOnQueue'
+import SizePickerModal from './SizePickerModal'
+import BatchTryOnReviewDialog from './BatchTryOnReviewDialog'
+import { useAuth } from '../app/AuthContext'
+import type { BatchTryOnReviewDetail } from '../lib/batchTryOnReviewApi'
+import { findNextPendingReviewItem } from '../lib/batchTryOnReviewQueue'
 
 export const MAX_BATCH_TRY_ON_ITEMS = 50
 const MAX_BATCH_TRY_ON_FILE_BYTES = 50 * 1024 * 1024
 const MAX_MULTIUSER_FILE_BYTES = 20 * 1024 * 1024
 const ACCEPTED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
-const RATIO_OPTIONS: Array<{ value: BatchTryOnAspectRatio; label: string }> = [
-  { value: 'template', label: '跟随模板图' },
-  { value: '1:1', label: '1:1' },
-  { value: '3:4', label: '3:4' },
-  { value: '4:3', label: '4:3' },
-  { value: '16:9', label: '16:9' },
-  { value: '9:16', label: '9:16' },
-]
-
 export default function BatchTryOnWorkspace() {
+  const auth = useAuth()
   const batch = useStore((state) => state.batchTryOnBatch)
   const setBatch = useStore((state) => state.setBatchTryOnBatch)
   const settings = useStore((state) => state.settings)
@@ -47,6 +45,8 @@ export default function BatchTryOnWorkspace() {
   const setConfirmDialog = useStore((state) => state.setConfirmDialog)
   const runnerRef = useRef<BatchTryOnQueueController<string> | null>(null)
   const serverPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [showSizePicker, setShowSizePicker] = useState(false)
+  const [reviewItemId, setReviewItemId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!batch) setBatch(createEmptyBatch(globalParams))
@@ -109,6 +109,7 @@ export default function BatchTryOnWorkspace() {
     const batchId = current.id
     const startedAt = Date.now()
     const size = resolveOutputSize(current)
+    const aspectRatio = resolveOutputAspectRatio(current)
     updateItem(batchId, itemId, { status: 'running', error: undefined, outputImageId: undefined, startedAt, finishedAt: undefined })
 
     try {
@@ -123,7 +124,7 @@ export default function BatchTryOnWorkspace() {
           outputSize: size,
           extraRequirements: current.extraRequirements,
         }),
-        params: { ...current.params, size, n: 1 },
+        params: { ...current.params, size, aspect_ratio: aspectRatio, n: 1 },
         onTaskCreated: (taskId) => updateItem(batchId, itemId, { taskId }),
       })
       if (task.status === 'done' && task.outputImages[0]) {
@@ -150,19 +151,38 @@ export default function BatchTryOnWorkspace() {
       const serverBatch = await getServerBatch(serverBatchId)
       const current = useStore.getState().batchTryOnBatch
       if (!current || current.serverBatchId !== serverBatchId) return
-      const jobs = new Map(serverBatch.jobs.map((job) => [job.client_item_id, job]))
+      const jobs = new Map<string | null, (typeof serverBatch.jobs)[number]>()
+      for (const job of serverBatch.jobs) {
+        const existing = jobs.get(job.client_item_id)
+        if (!existing || job.is_current_review_version || (!existing.is_current_review_version && job.created_at > existing.created_at)) {
+          jobs.set(job.client_item_id, job)
+        }
+      }
       const nextItems: BatchTryOnItem[] = []
       for (const item of current.items) {
         const job = jobs.get(item.id)
         if (!job) { nextItems.push(item); continue }
         if (job.status === 'succeeded' && job.outputs[0]) {
           let outputImageId = item.outputImageId
-          if (!outputImageId) outputImageId = await importServerOutput(job.outputs[0])
-          nextItems.push({ ...item, taskId: job.id, outputImageId, status: 'done', error: undefined, finishedAt: job.finished_at ? new Date(job.finished_at).getTime() : Date.now() })
+          if (!outputImageId || item.outputTaskId !== job.id) outputImageId = await importServerOutput(job.outputs[0])
+          nextItems.push({
+            ...item,
+            taskId: job.id,
+            outputTaskId: job.id,
+            outputImageId,
+            status: 'done',
+            error: undefined,
+            finishedAt: job.finished_at ? new Date(job.finished_at).getTime() : Date.now(),
+            serverReviewItemId: job.review_item_id ?? item.serverReviewItemId,
+            serverReviewStatus: (job.review_status as BatchTryOnItem['serverReviewStatus']) ?? item.serverReviewStatus,
+            serverCurrentVersionId: job.current_version_id ?? item.serverCurrentVersionId,
+            serverApprovedVersionId: job.approved_version_id ?? item.serverApprovedVersionId,
+            regenerationCount: job.regeneration_count,
+          })
         } else if (job.status === 'failed' || job.status === 'cancelled') {
-          nextItems.push({ ...item, taskId: job.id, status: job.status === 'cancelled' ? 'stopped' : 'error', error: job.error_message || (job.status === 'cancelled' ? '任务已取消' : '生成失败'), finishedAt: job.finished_at ? new Date(job.finished_at).getTime() : Date.now() })
+          nextItems.push({ ...item, taskId: job.id, status: job.status === 'cancelled' ? 'stopped' : 'error', error: job.error_message || (job.status === 'cancelled' ? '任务已取消' : '生成失败'), finishedAt: job.finished_at ? new Date(job.finished_at).getTime() : Date.now(), serverReviewItemId: job.review_item_id ?? item.serverReviewItemId, serverReviewStatus: (job.review_status as BatchTryOnItem['serverReviewStatus']) ?? 'generation_failed', serverCurrentVersionId: job.current_version_id ?? item.serverCurrentVersionId, serverApprovedVersionId: job.approved_version_id ?? item.serverApprovedVersionId, regenerationCount: job.regeneration_count })
         } else {
-          nextItems.push({ ...item, taskId: job.id, status: serverBatch.status === 'paused' ? 'stopped' : 'running', error: undefined, startedAt: item.startedAt ?? Date.now() })
+          nextItems.push({ ...item, taskId: job.id, status: serverBatch.status === 'paused' ? 'stopped' : 'running', error: undefined, startedAt: item.startedAt ?? Date.now(), serverReviewItemId: job.review_item_id ?? item.serverReviewItemId, serverReviewStatus: (job.review_status as BatchTryOnItem['serverReviewStatus']) ?? item.serverReviewStatus, serverCurrentVersionId: job.current_version_id ?? item.serverCurrentVersionId, serverApprovedVersionId: job.approved_version_id ?? item.serverApprovedVersionId, regenerationCount: job.regeneration_count })
         }
       }
       const terminal = ['succeeded', 'failed', 'cancelled', 'partially_succeeded'].includes(serverBatch.status)
@@ -184,8 +204,11 @@ export default function BatchTryOnWorkspace() {
       if (!templateDataUrl) throw new Error('模特模板图读取失败，请重新上传。')
       const templateAsset = await uploadDataUrlAsset(templateDataUrl, 'model_template', current.templateFileName?.replace(/\.[^.]+$/, '') || 'model-template')
       const selectedItems = current.items.filter((item) => itemIds.includes(item.id))
-      const modelCode = await resolveModelCode('multi_image_reference')
+      // The configured relay accepts multiple repeated `image` parts on /images/edits.
+      // Keep the capability truthful: multi-image input is transported by image_edit.
+      const modelCode = await resolveModelCode('image_edit', 'batch_tryon.generate')
       const size = resolveOutputSize(current)
+      const aspectRatio = resolveOutputAspectRatio(current)
       const requestItems = []
       for (const item of selectedItems) {
         const garmentDataUrl = await ensureImageCached(item.garmentImageId)
@@ -196,8 +219,10 @@ export default function BatchTryOnWorkspace() {
           prompt: buildBatchTryOnPrompt({ garmentFileName: item.garmentFileName, outputSize: size, extraRequirements: current.extraRequirements }),
           reference_asset_ids: [templateAsset.id, garmentAsset.id],
           size,
+          aspect_ratio: aspectRatio,
           quality: current.params.quality,
           output_format: current.params.output_format,
+          output_compression: current.params.output_compression,
           metadata: { garment_filename: item.garmentFileName, index: item.index },
         })
       }
@@ -205,9 +230,9 @@ export default function BatchTryOnWorkspace() {
         name: `批量套图 ${new Date().toLocaleString('zh-CN', { hour12: false })}`,
         workspace_type: 'batch_tryon',
         operation_code: 'batch_tryon.generate',
-        capability: 'multi_image_reference',
+        capability: 'image_edit',
         model_code: modelCode,
-        idempotency_key: `batch:${crypto.randomUUID()}`,
+        idempotency_key: `batch:${randomUuid()}`,
         concurrency: current.concurrency,
         items: requestItems,
       })
@@ -217,7 +242,7 @@ export default function BatchTryOnWorkspace() {
         serverBatchId: submitted.id,
         queuePaused: false,
         items: latest.items.map((item) => itemIds.includes(item.id)
-          ? { ...item, taskId: jobByItem.get(item.id)?.id, status: 'running', error: undefined, outputImageId: undefined, startedAt: Date.now(), finishedAt: undefined }
+          ? { ...item, taskId: jobByItem.get(item.id)?.id, status: 'running', error: undefined, outputImageId: undefined, outputTaskId: undefined, startedAt: Date.now(), finishedAt: undefined, serverReviewItemId: jobByItem.get(item.id)?.review_item_id ?? undefined, serverReviewStatus: (jobByItem.get(item.id)?.review_status as BatchTryOnItem['serverReviewStatus']) ?? 'pending', serverCurrentVersionId: jobByItem.get(item.id)?.current_version_id ?? undefined, serverApprovedVersionId: jobByItem.get(item.id)?.approved_version_id ?? undefined, regenerationCount: jobByItem.get(item.id)?.regeneration_count ?? 0 }
           : item),
         updatedAt: Date.now(),
       } : latest)
@@ -230,7 +255,7 @@ export default function BatchTryOnWorkspace() {
   }
 
   useEffect(() => {
-    if (!runtimeConfig.isStandalone && batch?.serverBatchId && batch.items.some((item) => item.status === 'running')) {
+    if (!runtimeConfig.isStandalone && batch?.serverBatchId) {
       void pollServerBatch(batch.serverBatchId)
     }
     return () => {
@@ -425,6 +450,34 @@ export default function BatchTryOnWorkspace() {
     }
   }
 
+  const applyReviewChange = (detail: BatchTryOnReviewDetail, taskId?: string) => {
+    const current = useStore.getState().batchTryOnBatch
+    if (!current) return
+    const version = detail.current_version
+    updateItem(current.id, detail.client_item_id, {
+      taskId: taskId ?? version?.task_id ?? undefined,
+      status: detail.review_status === 'regenerating' ? 'running' : detail.review_status === 'generation_failed' ? 'error' : version?.generation_status === 'succeeded' ? 'done' : 'running',
+      serverReviewItemId: detail.item_id,
+      serverReviewStatus: detail.review_status,
+      serverCurrentVersionId: detail.current_version_id ?? undefined,
+      serverApprovedVersionId: detail.approved_version_id ?? undefined,
+      regenerationCount: detail.regeneration_count,
+      error: detail.review_status === 'generation_failed' ? '重新生成失败，请查看详情。' : undefined,
+      startedAt: detail.review_status === 'regenerating' ? Date.now() : undefined,
+      finishedAt: version?.completed_at ? new Date(version.completed_at).getTime() : undefined,
+    })
+    if (taskId && current.serverBatchId) void pollServerBatch(current.serverBatchId)
+  }
+
+  const advanceReview = (currentReviewItemId: string) => {
+    const current = useStore.getState().batchTryOnBatch
+    if (!current) return false
+    const next = findNextPendingReviewItem(current.items, currentReviewItemId)
+    if (!next?.serverReviewItemId) return false
+    setReviewItemId(next.serverReviewItemId)
+    return true
+  }
+
   if (!batch) return <div className="p-6 text-sm text-gray-400">正在恢复批量套图批次...</div>
 
   return (
@@ -461,13 +514,14 @@ export default function BatchTryOnWorkspace() {
           <div>
             <div className="text-sm font-bold text-gray-900 dark:text-gray-100">输出设置</div>
             <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2">
-              <FieldSelect label="输出比例" value={batch.aspectRatio} disabled={isRunning} onChange={(value) => updateBatch({ aspectRatio: value as BatchTryOnAspectRatio })} options={RATIO_OPTIONS} />
+              <label className="min-w-0"><span className="mb-1 block text-xs text-gray-500 dark:text-gray-400">比例与交付尺寸</span><button type="button" disabled={isRunning} onClick={() => setShowSizePicker(true)} className="h-9 w-full rounded-lg border border-gray-200 bg-gray-50 px-2 text-left text-xs font-semibold text-gray-800 outline-none transition hover:border-blue-300 disabled:opacity-60 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-100">{batch.aspectRatio === 'template' ? '跟随模板' : batch.aspectRatio} · {outputSize}</button></label>
               <FieldSelect label="输出质量" value={batch.params.quality} disabled={isRunning} onChange={(value) => updateBatch({ params: { ...batch.params, quality: value as TaskParams['quality'] } })} options={['high', 'medium', 'low', 'auto'].map((value) => ({ value, label: value }))} />
               <FieldSelect label="输出格式" value={batch.params.output_format} disabled={isRunning} onChange={(value) => updateBatch({ params: { ...batch.params, output_format: value as TaskParams['output_format'] } })} options={[{ value: 'jpeg', label: 'JPEG' }, { value: 'png', label: 'PNG' }, { value: 'webp', label: 'WEBP' }]} />
               <FieldSelect label="并发数" value={String(batch.concurrency)} disabled={isRunning} onChange={(value) => updateBatch({ concurrency: Number(value) as 1 | 2 | 3 })} options={[1, 2, 3].map((value) => ({ value: String(value), label: `${value}` }))} />
             </div>
             <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-600 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-300">
               <div>输出尺寸：<span className="font-mono font-semibold">{outputSize}</span> · 每件服装 1 张结果</div>
+              {batch.aspectRatio !== 'template' && <button type="button" disabled={isRunning} onClick={() => updateBatch({ aspectRatio: 'template', params: { ...batch.params, size: 'auto', aspect_ratio: 'auto' } })} className="mt-1 font-semibold text-blue-600 hover:underline disabled:opacity-50 dark:text-blue-300">恢复跟随模板图（默认 2K）</button>}
               <div className="mt-1">生图配置：{runtimeConfig.isStandalone ? `${activeProfile.name} · ${activeProfile.model}` : '平台统一资源池（服务端安全调用）'}</div>
               {profileError && <button type="button" onClick={() => setShowSettings(true, 'api')} className="mt-2 text-left font-semibold text-red-600 underline decoration-red-300 underline-offset-2 dark:text-red-300">{profileError} 点击前往设置</button>}
             </div>
@@ -493,9 +547,11 @@ export default function BatchTryOnWorkspace() {
         {startDisabledReason && !isRunning && (batch.items.length === 0 || progress.pending > 0) && <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">暂时无法开始：{startDisabledReason}</div>}
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]"><div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${batch.items.length ? ((progress.done + progress.error) / batch.items.length) * 100 : 0}%` }} /></div>
         <div className="mt-4">
-          <BatchTryOnQueue items={batch.items} onView={(imageId) => setLightboxImageId(imageId, batch.items.flatMap((item) => item.outputImageId ? [item.outputImageId] : []))} onDownload={(item) => void downloadOne(item)} onRetry={(item) => startItems([item.id])} />
+          <BatchTryOnQueue items={batch.items} onView={(imageId) => setLightboxImageId(imageId, batch.items.flatMap((item) => item.outputImageId ? [item.outputImageId] : []))} onDownload={(item) => void downloadOne(item)} onRetry={(item) => startItems([item.id])} onReview={(item) => item.serverReviewItemId && setReviewItemId(item.serverReviewItemId)} />
         </div>
       </section>
+      {showSizePicker && <SizePickerModal currentSize={outputSize} currentAspectRatio={resolveOutputAspectRatio(batch)} allowAuto={false} onSelect={(size, aspectRatio) => { updateBatch({ aspectRatio: aspectRatio as BatchTryOnAspectRatio, params: { ...batch.params, size, aspect_ratio: aspectRatio } }); setShowSizePicker(false) }} onClose={() => setShowSizePicker(false)} />}
+      {reviewItemId && !runtimeConfig.isStandalone && <BatchTryOnReviewDialog itemId={reviewItemId} items={batch.items} canReview={auth.hasPermission('batch_tryon.review')} onClose={() => setReviewItemId(null)} onSelectItem={setReviewItemId} onChanged={applyReviewChange} onAdvance={advanceReview} />}
     </div>
   )
 }
@@ -521,7 +577,7 @@ function createEmptyBatch(globalParams: TaskParams): BatchTryOnBatch {
 }
 
 function createId() {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  return randomUuid()
 }
 
 function validateImageFile(file: File) {
@@ -531,14 +587,35 @@ function validateImageFile(file: File) {
 }
 
 function resolveOutputSize(batch: BatchTryOnBatch) {
+  if (batch.aspectRatio !== 'template' && batch.params.size && batch.params.size !== 'auto') return batch.params.size
   const ratio = batch.aspectRatio === 'template'
     ? batch.templateWidth && batch.templateHeight ? `${batch.templateWidth}:${batch.templateHeight}` : '1:1'
     : batch.aspectRatio
-  return calculateImageSize('2K', ratio) || 'auto'
+  return calculateDeliverySize('2K', ratio) || '2048x2048'
+}
+
+function resolveOutputAspectRatio(batch: BatchTryOnBatch) {
+  if (batch.aspectRatio !== 'template') return batch.aspectRatio
+  if (!batch.templateWidth || !batch.templateHeight) return '1:1'
+  return resolveImageSize(`${batch.templateWidth}x${batch.templateHeight}`, 'auto').aspectRatio
 }
 
 function resetItemForNewRun(item: BatchTryOnItem): BatchTryOnItem {
-  return { ...item, status: 'pending', taskId: undefined, outputImageId: undefined, error: undefined, startedAt: undefined, finishedAt: undefined }
+  return {
+    ...item,
+    status: 'pending',
+    taskId: undefined,
+    outputImageId: undefined,
+    outputTaskId: undefined,
+    serverReviewItemId: undefined,
+    serverReviewStatus: undefined,
+    serverCurrentVersionId: undefined,
+    serverApprovedVersionId: undefined,
+    regenerationCount: undefined,
+    error: undefined,
+    startedAt: undefined,
+    finishedAt: undefined,
+  }
 }
 
 function summarizeItems(items: BatchTryOnItem[]) {

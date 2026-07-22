@@ -32,6 +32,7 @@ PERMISSIONS = {
     "jobs.read": "Read organization jobs",
     "jobs.submit": "Submit organization jobs",
     "jobs.cancel": "Cancel and retry organization jobs",
+    "batch_tryon.review": "Approve and regenerate batch try-on results",
     "resource_pools.read": "Read resource pool metadata",
     "resource_pools.manage": "Manage providers, resource pools, and API keys",
 }
@@ -49,6 +50,7 @@ ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
             "projects.write", "projects.delete", "generated_outputs.read",
             "quota.read", "quota.estimate",
             "jobs.read", "jobs.submit", "jobs.cancel", "resource_pools.read",
+            "batch_tryon.review",
         },
     ),
     "manager": (
@@ -59,6 +61,7 @@ ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
             "projects.delete", "generated_outputs.read",
             "quota.read", "quota.estimate",
             "jobs.read", "jobs.submit", "jobs.cancel", "resource_pools.read",
+            "batch_tryon.review",
         },
     ),
     "member": (

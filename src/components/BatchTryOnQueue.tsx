@@ -1,4 +1,4 @@
-import type { BatchTryOnItem, BatchTryOnItemStatus } from '../types'
+import type { BatchTryOnItem, BatchTryOnItemStatus, BatchTryOnReviewStatus } from '../types'
 import { BatchTryOnImage } from './BatchTryOnImage'
 
 const STATUS_LABEL: Record<BatchTryOnItemStatus, string> = {
@@ -17,14 +17,31 @@ const STATUS_CLASS: Record<BatchTryOnItemStatus, string> = {
   stopped: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200',
 }
 
+const REVIEW_LABEL: Record<BatchTryOnReviewStatus, string> = {
+  pending: '待审核',
+  approved: '已通过',
+  rejected: '已打回',
+  regenerating: '重新生成中',
+  generation_failed: '生成失败',
+}
+
+const REVIEW_CLASS: Record<BatchTryOnReviewStatus, string> = {
+  pending: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200',
+  approved: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200',
+  rejected: 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-200',
+  regenerating: 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-200',
+  generation_failed: 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-200',
+}
+
 interface Props {
   items: BatchTryOnItem[]
   onView: (imageId: string) => void
   onDownload: (item: BatchTryOnItem) => void
   onRetry: (item: BatchTryOnItem) => void
+  onReview: (item: BatchTryOnItem) => void
 }
 
-export default function BatchTryOnQueue({ items, onView, onDownload, onRetry }: Props) {
+export default function BatchTryOnQueue({ items, onView, onDownload, onRetry, onReview }: Props) {
   if (items.length === 0) {
     return <div className="rounded-xl border border-dashed border-gray-200 px-4 py-10 text-center text-sm text-gray-400 dark:border-white/[0.08]">上传服装图片后，任务会显示在这里。</div>
   }
@@ -32,14 +49,19 @@ export default function BatchTryOnQueue({ items, onView, onDownload, onRetry }: 
   return (
     <div className="space-y-3">
       {items.map((item) => (
-        <article key={item.id} className="grid gap-3 rounded-xl border border-gray-200 bg-white p-3 dark:border-white/[0.08] dark:bg-gray-950 sm:grid-cols-[64px_minmax(0,1fr)_120px] sm:items-center">
-          <button type="button" onClick={() => onView(item.garmentImageId)} className="h-16 w-16 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-900" title="查看服装原图">
+        <article
+          key={item.id}
+          onClick={() => item.serverReviewItemId && onReview(item)}
+          className={`grid gap-3 rounded-xl border border-gray-200 bg-white p-3 dark:border-white/[0.08] dark:bg-gray-950 sm:grid-cols-[64px_minmax(0,1fr)_140px] sm:items-center ${item.serverReviewItemId ? 'cursor-pointer transition hover:border-blue-300 hover:shadow-sm dark:hover:border-blue-500/40' : ''}`}
+        >
+          <button type="button" onClick={(event) => { event.stopPropagation(); onView(item.garmentImageId) }} className="h-16 w-16 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-900" title="查看服装原图">
             <BatchTryOnImage imageId={item.garmentImageId} alt={item.garmentFileName} className="h-full w-full object-cover" />
           </button>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100" title={item.garmentFileName}>{item.garmentFileName}</span>
               <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_CLASS[item.status]}`}>{STATUS_LABEL[item.status]}</span>
+              {item.serverReviewStatus && <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${REVIEW_CLASS[item.serverReviewStatus]}`}>{REVIEW_LABEL[item.serverReviewStatus]}</span>}
             </div>
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-400">
               <span>序号 {String(item.index + 1).padStart(3, '0')}</span>
@@ -50,15 +72,16 @@ export default function BatchTryOnQueue({ items, onView, onDownload, onRetry }: 
           </div>
           <div className="flex items-center gap-2 sm:flex-col sm:items-stretch">
             {item.outputImageId ? (
-              <button type="button" onClick={() => onView(item.outputImageId!)} className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-100 dark:border-white/[0.08] dark:bg-gray-900 sm:h-20 sm:w-full" title="查看结果大图">
+              <button type="button" onClick={(event) => { event.stopPropagation(); onView(item.outputImageId!) }} className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-100 dark:border-white/[0.08] dark:bg-gray-900 sm:h-20 sm:w-full" title="查看结果大图">
                 <BatchTryOnImage imageId={item.outputImageId} alt={`${item.garmentFileName} 套图结果`} className="h-full w-full object-cover" />
               </button>
             ) : (
               <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-[11px] text-gray-400 dark:border-white/[0.08] dark:bg-white/[0.03] sm:h-20 sm:w-full">暂无结果</div>
             )}
             <div className="flex flex-wrap gap-1.5">
-              {item.outputImageId && <button type="button" onClick={() => onDownload(item)} className="rounded-md border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-700 transition hover:bg-gray-50 dark:border-white/[0.08] dark:text-gray-200 dark:hover:bg-white/[0.06]">下载结果</button>}
-              {(item.status === 'error' || item.status === 'stopped') && <button type="button" onClick={() => onRetry(item)} className="rounded-md bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-blue-500">单独重试</button>}
+              {item.serverReviewItemId && <button type="button" onClick={(event) => { event.stopPropagation(); onReview(item) }} className="rounded-md bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-blue-500">{item.serverReviewStatus === 'approved' ? '查看审核结果' : item.status === 'error' ? '查看并重试' : '对比审核'}</button>}
+              {item.outputImageId && <button type="button" onClick={(event) => { event.stopPropagation(); onDownload(item) }} className="rounded-md border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-700 transition hover:bg-gray-50 dark:border-white/[0.08] dark:text-gray-200 dark:hover:bg-white/[0.06]">下载结果</button>}
+              {(item.status === 'error' || item.status === 'stopped') && <button type="button" onClick={(event) => { event.stopPropagation(); onRetry(item) }} className="rounded-md border border-blue-200 px-2 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-50 dark:border-blue-500/30 dark:text-blue-200">单独重试</button>}
             </div>
           </div>
         </article>

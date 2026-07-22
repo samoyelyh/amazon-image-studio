@@ -28,6 +28,7 @@ import { isEventStreamResponse, looksLikeServerSentEvents, readJsonServerSentEve
 import type { SizeTier } from './size'
 import { uploadDataUrlAsset } from './serverImageAssets'
 import { cancelServerJob, getServerJob, isServerJobTerminal, resolveModelCode, submitServerJob } from './jobsApi'
+import { randomUuid } from './randomUuid'
 
 interface PlannerApiPayload {
   product?: {
@@ -868,14 +869,15 @@ export async function callServerAmazonPlannerApi(options: {
     aPlusModuleSpecs,
     marketplaceId,
   })
-  const modelCode = await resolveModelCode('text_generation')
+  const operationCode = mode === 'aplus' ? 'aplus.plan' : 'listing.plan'
+  const modelCode = await resolveModelCode('text_generation', operationCode)
   const submitted = await submitServerJob({
-    operation_code: mode === 'aplus' ? 'aplus.plan' : 'listing.plan',
+    operation_code: operationCode,
     workspace_type: mode === 'aplus' ? 'aplus' : 'listing',
     queue_name: 'planning_queue',
     capability: 'text_generation',
     model_code: modelCode,
-    idempotency_key: `plan:${crypto.randomUUID()}`,
+    idempotency_key: `plan:${randomUuid()}`,
     input: {
       system_prompt: systemPrompt,
       user_prompt: userPrompt,

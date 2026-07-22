@@ -7,9 +7,9 @@ from app.core.config import Settings, get_settings
 from app.core.errors import AppError
 from app.db.session import get_db_session
 from app.infrastructure.redis import get_redis_client
-from app.models.tasks import ApiKey, ModelCapability, Provider, ProviderModel, ResourcePool, ResourcePoolKey
+from app.models.tasks import ApiKey, ModelCapability, OperationResourcePool, Provider, ProviderModel, ResourcePool, ResourcePoolKey
 from app.schemas.tasks import (
-    ApiKeyCreateRequest, ApiKeyResponse, PoolKeyAttachRequest, ProviderCreateRequest,
+    ApiKeyCreateRequest, ApiKeyResponse, OperationPoolAttachRequest, PoolKeyAttachRequest, ProviderCreateRequest,
     ProviderModelCreateRequest, ProviderModelResponse, ProviderResponse,
     ResourcePoolCreateRequest, ResourcePoolResponse,
 )
@@ -96,7 +96,7 @@ async def add_pool(
     add_audit_log(session, request=request, actor_user_id=principal.user.id, organization_id=payload.organization_id,
                   action="resource_pool.create", resource_type="resource_pool", resource_id=pool.id)
     await session.commit()
-    return _pool_response(pool, model.code, capabilities, 0)
+    return _pool_response(pool, model.code, capabilities, 0, {})
 
 
 @router.get("", response_model=list[ResourcePoolResponse])
@@ -116,7 +116,17 @@ async def list_pools(
         count = int(await session.scalar(select(func.count()).select_from(ResourcePoolKey).where(
             ResourcePoolKey.resource_pool_id == pool.id, ResourcePoolKey.enabled.is_(True),
         )) or 0)
-        responses.append(_pool_response(pool, model.code, capabilities, count))
+        bindings: dict[str, list[str]] = {}
+        rows = (await session.execute(select(
+            OperationResourcePool.operation_code, OperationResourcePool.required_capability,
+        ).where(
+            OperationResourcePool.resource_pool_id == pool.id,
+            OperationResourcePool.enabled.is_(True),
+            (OperationResourcePool.organization_id == organization_id) | OperationResourcePool.organization_id.is_(None),
+        ).order_by(OperationResourcePool.priority))).all()
+        for operation_code, required_capability in rows:
+            bindings.setdefault(operation_code, []).append(required_capability)
+        responses.append(_pool_response(pool, model.code, capabilities, count, bindings))
     return responses
 
 
@@ -180,16 +190,56 @@ async def attach_key(
     await session.commit()
 
 
+@router.post("/{pool_id}/operations", status_code=status.HTTP_204_NO_CONTENT)
+async def attach_operation(
+    pool_id: str, payload: OperationPoolAttachRequest, request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("resource_pools.manage")),
+) -> None:
+    pool = await session.get(ResourcePool, pool_id)
+    if pool is None:
+        raise AppError("resource_pool.not_found", "Resource pool was not found", 404)
+    capabilities = set((await session.scalars(select(ModelCapability.capability).where(
+        ModelCapability.model_id == pool.model_id,
+    ))).all())
+    if payload.required_capability not in capabilities:
+        raise AppError("resource_pool.capability_mismatch", "模型未声明该能力，不能创建业务绑定", 422)
+    existing = await session.scalar(select(OperationResourcePool).where(
+        OperationResourcePool.organization_id == payload.organization_id,
+        OperationResourcePool.operation_code == payload.operation_code,
+        OperationResourcePool.resource_pool_id == pool.id,
+        OperationResourcePool.required_capability == payload.required_capability,
+    ))
+    if existing:
+        existing.priority = payload.priority
+        existing.enabled = True
+        existing.updated_by = principal.user.id
+    else:
+        session.add(OperationResourcePool(
+            organization_id=payload.organization_id, operation_code=payload.operation_code,
+            resource_pool_id=pool.id, required_capability=payload.required_capability,
+            priority=payload.priority, created_by=principal.user.id, updated_by=principal.user.id,
+        ))
+    add_audit_log(session, request=request, actor_user_id=principal.user.id, organization_id=payload.organization_id,
+                  action="resource_pool.operation.attach", resource_type="resource_pool", resource_id=pool.id,
+                  metadata={"operation_code": payload.operation_code, "required_capability": payload.required_capability})
+    await session.commit()
+
+
 def _model_response(model: ProviderModel, capabilities: list[str]) -> ProviderModelResponse:
     return ProviderModelResponse(id=model.id, provider_id=model.provider_id, code=model.code,
         upstream_model=model.upstream_model, name=model.name, enabled=model.enabled,
         capabilities=capabilities, config=model.config_json)
 
 
-def _pool_response(pool: ResourcePool, model_code: str, capabilities: list[str], key_count: int) -> ResourcePoolResponse:
+def _pool_response(
+    pool: ResourcePool, model_code: str, capabilities: list[str], key_count: int,
+    operation_bindings: dict[str, list[str]],
+) -> ResourcePoolResponse:
     return ResourcePoolResponse(id=pool.id, organization_id=pool.organization_id, model_id=pool.model_id,
         model_code=model_code, code=pool.code, name=pool.name, enabled=pool.enabled,
-        priority=pool.priority, weight=pool.weight, capabilities=capabilities, key_count=key_count)
+        priority=pool.priority, weight=pool.weight, capabilities=capabilities,
+        operation_bindings=operation_bindings, key_count=key_count)
 
 
 async def _key_response(redis: Redis, key: ApiKey) -> ApiKeyResponse:

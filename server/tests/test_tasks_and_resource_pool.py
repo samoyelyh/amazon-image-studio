@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.models.quota import QuotaAccount, QuotaReservation
-from app.models.tasks import ApiKey, BatchStatus, Job, JobBatch, JobStatus, ModelCapability, Provider, ProviderModel, ResourcePool, ResourcePoolKey
+from app.models.tasks import ApiKey, BatchStatus, Job, JobBatch, JobStatus, ModelCapability, OperationResourcePool, Provider, ProviderModel, ResourcePool, ResourcePoolKey
 from app.providers.base import ProviderError, ProviderOutput, ProviderResult
 from app.schemas.tasks import JobSubmitRequest
 from app.services.resource_pool_service import (
@@ -38,6 +38,10 @@ async def seed_pool(context, *, key_values=("relay-key-one",), capability="image
         pool = ResourcePool(model_id=model.id, code=f"pool-{len(key_values)}-{capability}", name="Pool")
         session.add(pool)
         await session.flush()
+        session.add(OperationResourcePool(
+            operation_code="listing.generate", resource_pool_id=pool.id,
+            required_capability=capability, priority=100,
+        ))
         keys = []
         for index, secret in enumerate(key_values):
             key = create_api_key(settings, provider_id=provider.id, label=f"Key {index}", secret=secret,
@@ -85,21 +89,21 @@ async def test_credentials_are_rejected_from_provider_config_and_job_input(ident
     job = await client.post("/api/v1/jobs", headers=first, json={
         "operation_code": "listing.generate", "workspace_type": "listing", "queue_name": "listing_queue",
         "capability": "image_generation", "model_code": "standard", "idempotency_key": "unsafe-job-001",
-        "input": {"prompt": "test", "nested": {"token": "must-not-be-here"}},
+        "input": {"prompt": "test", "size": "1024x1024", "nested": {"token": "must-not-be-here"}},
     })
     assert job.status_code == 422
 
     wrong_operation = await client.post("/api/v1/jobs", headers=first, json={
         "operation_code": "listing.plan", "workspace_type": "listing", "queue_name": "listing_queue",
         "capability": "image_generation", "model_code": "standard", "idempotency_key": "unsafe-job-002",
-        "input": {"prompt": "test"},
+        "input": {"prompt": "test", "size": "1024x1024"},
     })
     assert wrong_operation.status_code == 422
 
     multiple = await client.post("/api/v1/jobs", headers=first, json={
         "operation_code": "listing.generate", "workspace_type": "listing", "queue_name": "listing_queue",
         "capability": "image_generation", "model_code": "standard", "idempotency_key": "unsafe-job-003",
-        "input": {"prompt": "test", "n": 2},
+        "input": {"prompt": "test", "size": "1024x1024", "n": 2},
     })
     assert multiple.status_code == 422
 
@@ -109,31 +113,36 @@ async def test_resource_pool_enforces_capability_concurrency_and_cooldown(identi
     settings = Settings(_env_file=None)
     async with identity_test_context["session_factory"]() as session:
         first = await acquire_resource(session, identity_test_context["redis"], settings,
-            organization_id=identity_test_context["first_org"], model_code=model_code, capability="image_generation")
+            organization_id=identity_test_context["first_org"], operation_code="listing.generate",
+            model_code=model_code, capability="image_generation")
         assert first.api_key == "relay-key-one"
-        with pytest.raises(AppError, match="No API key") as unavailable:
+        with pytest.raises(AppError) as unavailable:
             await acquire_resource(session, identity_test_context["redis"], settings,
-                organization_id=identity_test_context["first_org"], model_code=model_code, capability="image_generation")
+                organization_id=identity_test_context["first_org"], operation_code="listing.generate",
+                model_code=model_code, capability="image_generation")
         assert unavailable.value.code == "resource_pool.no_available_key"
         await release_resource(identity_test_context["redis"], first)
         with pytest.raises(AppError) as mismatch:
             await acquire_resource(session, identity_test_context["redis"], settings,
-                organization_id=identity_test_context["first_org"], model_code=model_code, capability="image_edit")
+                organization_id=identity_test_context["first_org"], operation_code="listing.generate",
+                model_code=model_code, capability="image_edit")
         assert mismatch.value.code == "resource_pool.no_available_key"
         await cool_down_key(session, identity_test_context["redis"], settings, key_ids[0], seconds=60)
         with pytest.raises(AppError):
             await acquire_resource(session, identity_test_context["redis"], settings,
-                organization_id=identity_test_context["first_org"], model_code=model_code, capability="image_generation")
+                organization_id=identity_test_context["first_org"], operation_code="listing.generate",
+                model_code=model_code, capability="image_generation")
 
 
 async def test_job_submission_is_idempotent_tenant_scoped_and_cancel_refunds(identity_test_context, monkeypatch) -> None:
     client = identity_test_context["client"]
     monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
     first = await auth_headers(client, "first-admin@example.com", "correct-password")
+    _, model_code, _, _ = await seed_pool(identity_test_context)
     payload = {
         "operation_code": "listing.generate", "workspace_type": "listing", "queue_name": "listing_queue",
-        "capability": "image_generation", "model_code": "standard", "idempotency_key": "job-submit-001",
-        "input": {"prompt": "A product on white background"},
+        "capability": "image_generation", "model_code": model_code, "idempotency_key": "job-submit-001",
+        "input": {"prompt": "A product on white background", "size": "1024x1024"},
         "billing_factors": {"model": "free-model", "resource_pool": "personal"},
     }
     created = await client.post("/api/v1/jobs", headers=first, json=payload)
@@ -153,7 +162,7 @@ async def test_job_submission_is_idempotent_tenant_scoped_and_cancel_refunds(ide
             QuotaReservation.organization_id == identity_test_context["first_org"]))).all())
         assert len(reservations) == 1 and reservations[0].status == "released"
         assert reservations[0].unit_cost == 10
-        assert reservations[0].factors_json["model"] == "standard"
+        assert reservations[0].factors_json["model"] == model_code
         assert reservations[0].factors_json["resource_pool"] == "platform"
 
 
@@ -161,9 +170,10 @@ async def test_batch_split_concurrency_partial_settlement_and_refresh_recovery(i
     client = identity_test_context["client"]
     monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
     headers = await auth_headers(client, "first-admin@example.com", "correct-password")
+    _, model_code, _, _ = await seed_pool(identity_test_context)
     payload = {
         "name": "Listing batch", "workspace_type": "listing", "operation_code": "listing.generate",
-        "capability": "image_generation", "model_code": "standard", "idempotency_key": "listing-batch-001",
+        "capability": "image_generation", "model_code": model_code, "idempotency_key": "listing-batch-001",
         "concurrency": 1,
         "items": [
             {"client_item_id": "slot-1", "prompt": "First image", "reference_asset_ids": [], "size": "1024x1024", "output_format": "png"},
@@ -174,6 +184,16 @@ async def test_batch_split_concurrency_partial_settlement_and_refresh_recovery(i
     assert created.status_code == 202, created.text
     repeated = await client.post("/api/v1/job-batches", headers=headers, json=payload)
     assert repeated.status_code == 200 and repeated.json()["id"] == created.json()["id"]
+    too_many = {
+        **payload,
+        "idempotency_key": "listing-batch-too-many-001",
+        "items": [
+            {"client_item_id": f"slot-{index}", "prompt": f"Image {index}", "reference_asset_ids": [], "size": "1024x1024", "output_format": "png"}
+            for index in range(1, 12)
+        ],
+    }
+    rejected = await client.post("/api/v1/job-batches", headers=headers, json=too_many)
+    assert rejected.status_code == 422
     batch_id = created.json()["id"]
     job_ids = [item["id"] for item in created.json()["jobs"]]
 
@@ -215,10 +235,11 @@ async def test_batch_split_concurrency_partial_settlement_and_refresh_recovery(i
 async def test_duplicate_worker_claim_and_stale_recovery_are_idempotent(identity_test_context) -> None:
     settings = Settings(_env_file=None, job_heartbeat_timeout_seconds=10)
     from app.models.identity import User
+    _, model_code, _, _ = await seed_pool(identity_test_context)
     payload = JobSubmitRequest(
         operation_code="listing.generate", workspace_type="listing", queue_name="listing_queue",
-        capability="image_generation", model_code="standard", idempotency_key="worker-claim-001",
-        input={"prompt": "test"},
+        capability="image_generation", model_code=model_code, idempotency_key="worker-claim-001",
+        input={"prompt": "test", "size": "1024x1024"},
     )
     async with identity_test_context["session_factory"]() as session:
         user_id = await session.scalar(select(User.id).where(User.email == "first-admin@example.com"))
@@ -251,7 +272,7 @@ async def test_429_cools_key_and_fails_over_to_next_key(identity_test_context, m
         job, _ = await submit_job(session, settings, organization_id=identity_test_context["first_org"], user_id=user_id,
             payload=JobSubmitRequest(operation_code="listing.generate", workspace_type="listing", queue_name="listing_queue",
                 capability="image_generation", model_code=model_code, idempotency_key="failover-429-001",
-                input={"prompt": "test"}))
+                input={"prompt": "test", "size": "1024x1024"}))
         await session.commit()
         job_id = job.id
 

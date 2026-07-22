@@ -72,6 +72,8 @@ export interface BuildBatchTryOnPromptOptions {
   garmentFileName: string
   outputSize: string
   extraRequirements?: string
+  reviewNotes?: string
+  retryMode?: 'direct' | 'with_review_notes'
 }
 
 export function buildBatchTryOnPrompt(options: BuildBatchTryOnPromptOptions): string {
@@ -83,6 +85,42 @@ export function buildBatchTryOnPrompt(options: BuildBatchTryOnPromptOptions): st
   const extraRequirements = options.extraRequirements?.trim()
   if (extraRequirements) {
     sections.push(`ADDITIONAL USER REQUIREMENTS:\n${extraRequirements}\n\nThese additional requirements may refine the result but must never override the garment fidelity, model preservation, scene preservation, or reference image order rules above.`)
+  }
+
+  const reviewNotes = options.reviewNotes?.trim()
+  if (reviewNotes) {
+    sections.push(`REVIEW CORRECTION REQUIREMENTS:
+
+The previous generated result did not pass manual review.
+
+Correct the following issues:
+${reviewNotes}
+
+These correction instructions are additional requirements only.
+They must not replace or weaken the mandatory garment fidelity requirements.
+
+Continue to preserve:
+- the original model identity and face
+- hairstyle
+- pose
+- body proportions
+- camera angle
+- background
+- lighting
+- garment color
+- graphics
+- text
+- numbers, including leading zeros
+- logos
+- stripes
+- stitching
+- panel structure
+- neckline
+- sleeves
+- hem
+- garment silhouette
+- fabric appearance
+- print-versus-embroidery characteristics`)
   }
 
   return sections.join('\n\n')

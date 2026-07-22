@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
@@ -24,6 +26,11 @@ class UserResponse(BaseModel):
     display_name: str
     status: str
     auth_provider: str
+    must_change_password: bool
+    password_changed_at: datetime | None
+    temporary_password_created_at: datetime | None
+    created_by: str | None
+    last_login_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -45,6 +52,7 @@ class MembershipResponse(BaseModel):
     organization: OrganizationResponse
     role: RoleResponse
     status: str
+    invited_by: str | None
     created_at: datetime
 
 
@@ -85,12 +93,31 @@ class OrganizationCreateRequest(BaseModel):
 class MemberCreateRequest(BaseModel):
     email: EmailStr
     role_code: str = Field(pattern=r"^[a-z_]+$", max_length=80)
-    display_name: str | None = Field(default=None, min_length=1, max_length=100)
+    display_name: str | None = Field(default=None, min_length=2, max_length=50)
     temporary_password: str | None = Field(default=None, min_length=12, max_length=256)
 
 
 class MemberRoleUpdateRequest(BaseModel):
     role_code: str = Field(pattern=r"^[a-z_]+$", max_length=80)
+
+
+class MemberStatusUpdateRequest(BaseModel):
+    status: str = Field(pattern=r"^(active|disabled)$")
+
+
+class PasswordResetRequest(BaseModel):
+    temporary_password: str = Field(min_length=12, max_length=256)
+    force_change_password: Literal[True] = True
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+class PasswordResetResponse(BaseModel):
+    user_id: str
+    must_change_password: bool
 
 
 class AuditLogResponse(BaseModel):

@@ -1,6 +1,7 @@
 import type { AmazonImageKind, AmazonPromptDraft } from './amazonPrompt'
 import type { AmazonStyleDensityMode } from '../types'
-import { calculateImageSize, type SizeTier } from './size'
+import type { SizeTier } from './size'
+import { calculateDeliverySize } from './imageSizeResolver'
 import { getAmazonMarketplace, type AmazonMarketplaceId } from './amazonMarketplaces'
 
 export type AmazonPlannerMode = 'listing' | 'aplus'
@@ -342,15 +343,8 @@ function formatAPlusUploadSize(spec: Pick<AmazonAPlusModuleSpec, 'uploadWidth' |
   return `${spec.uploadWidth}x${spec.uploadHeight}`
 }
 
-function getSafeAPlusRatio(width: number, height: number): string {
-  const ratio = width / height
-  if (ratio > 3) return '3:1'
-  if (ratio < 1 / 3) return '1:3'
-  return `${width}:${height}`
-}
-
 function getAPlusGenerationSizeFromDimensions(width: number, height: number, tier: SizeTier): string {
-  return calculateImageSize(tier, getSafeAPlusRatio(width, height)) ?? (tier === '4K' ? '2880x2880' : '2048x2048')
+  return calculateDeliverySize(tier, `${width}:${height}`) ?? (tier === '4K' ? '4096x4096' : '2048x2048')
 }
 
 function getAPlusModuleSlotPrefix(type: APlusContentType): string {
@@ -602,7 +596,7 @@ export function getAPlusPlanGenerationSize(plan: Pick<AmazonAPlusPlan, 'slot' | 
 
   const spec = findAPlusModuleSpec(plan.slot)
   if (spec) return getAPlusModuleGenerationSize(spec, tier)
-  return tier === '4K' ? '2880x2880' : '2048x2048'
+  return tier === '4K' ? '4096x4096' : '2048x2048'
 }
 
 export function withAPlusGenerationSizes(plans: AmazonAPlusPlan[], tier: SizeTier): AmazonAPlusPlan[] {
