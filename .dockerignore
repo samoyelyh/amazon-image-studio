@@ -1,7 +1,11 @@
+.git
+.github
+.codex
 node_modules
 dist
-.git
-.gitignore
-*.md
-Dockerfile
-.dockerignore
+server/.venv
+server/.pytest_cache
+server/**/__pycache__
+*.log
+.env
+server/.env

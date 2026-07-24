@@ -26,6 +26,9 @@ import {
 } from './listingPlanner'
 import { isEventStreamResponse, looksLikeServerSentEvents, readJsonServerSentEvents, readJsonServerSentEventText } from './serverSentEvents'
 import type { SizeTier } from './size'
+import { uploadDataUrlAsset } from './serverImageAssets'
+import { cancelServerJob, getServerJob, isServerJobTerminal, resolveModelCode, submitServerJob } from './jobsApi'
+import { randomUuid } from './randomUuid'
 
 interface PlannerApiPayload {
   product?: {
@@ -827,6 +830,83 @@ export async function callAmazonPlannerApi(options: {
     throw new Error(`HTTP ${response.status}: ${message}`)
   }
   const text = await readPlannerResponseText(response)
+  const payload = parsePlannerPayload(text)
+  return mode === 'aplus'
+    ? normalizeAPlusPlannerApiPayload(payload, aPlusType, aPlusGenerationTier, aPlusModuleSpecs, marketplaceId)
+    : normalizeListingPlannerApiPayload(payload, listingImageCount, marketplaceId)
+}
+
+export async function callServerAmazonPlannerApi(options: {
+  listingText: string
+  baseDraft: AmazonPromptDraft
+  referenceImageDataUrls?: string[]
+  mode?: AmazonPlannerMode
+  marketplaceId?: AmazonMarketplaceId
+  listingImageCount?: number
+  aPlusType?: APlusContentType
+  aPlusModuleSpecs?: Array<Partial<AmazonAPlusModuleSpec>>
+  aPlusGenerationTier?: SizeTier
+  signal?: AbortSignal
+}): Promise<PlannerApiResult> {
+  const mode = options.mode ?? 'listing'
+  const marketplaceId = normalizeAmazonMarketplaceId(options.marketplaceId)
+  const aPlusType = options.aPlusType ?? 'standard-large'
+  const listingImageCount = normalizeListingImageCount(options.listingImageCount)
+  const aPlusModuleSpecs = normalizeAPlusModuleSpecs(aPlusType, options.aPlusModuleSpecs)
+  const aPlusGenerationTier = options.aPlusGenerationTier ?? '2K'
+  const referenceAssets = []
+  for (const [index, dataUrl] of (options.referenceImageDataUrls ?? []).entries()) {
+    referenceAssets.push(await uploadDataUrlAsset(dataUrl, 'product_reference', `planner-reference-${index + 1}`))
+  }
+  const userPrompt = buildPlannerInputText(options.listingText, mode, aPlusType, {
+    includeReferenceImageInstruction: referenceAssets.length > 0,
+    listingImageCount,
+    aPlusModuleSpecs,
+    marketplaceId,
+  })
+  const systemPrompt = buildChatPlannerSystemPrompt(options.baseDraft, mode, aPlusType, {
+    listingImageCount,
+    aPlusModuleSpecs,
+    marketplaceId,
+  })
+  const operationCode = mode === 'aplus' ? 'aplus.plan' : 'listing.plan'
+  const modelCode = await resolveModelCode('text_generation', operationCode)
+  const submitted = await submitServerJob({
+    operation_code: operationCode,
+    workspace_type: mode === 'aplus' ? 'aplus' : 'listing',
+    queue_name: 'planning_queue',
+    capability: 'text_generation',
+    model_code: modelCode,
+    idempotency_key: `plan:${randomUuid()}`,
+    input: {
+      system_prompt: systemPrompt,
+      user_prompt: userPrompt,
+      reference_asset_ids: referenceAssets.map((asset) => asset.id),
+      temperature: 0.2,
+      metadata: { mode, marketplace_id: marketplaceId },
+    },
+    billing_factors: { quality: 'standard', resolution: 'text' },
+  })
+
+  let current = submitted
+  try {
+    while (!isServerJobTerminal(current.status)) {
+      await new Promise<void>((resolve, reject) => {
+        const timer = window.setTimeout(resolve, 1_500)
+        options.signal?.addEventListener('abort', () => { clearTimeout(timer); reject(new DOMException('AI 策划已停止', 'AbortError')) }, { once: true })
+      })
+      current = await getServerJob(submitted.id)
+    }
+  } catch (error) {
+    if (options.signal?.aborted) void cancelServerJob(submitted.id).catch(() => undefined)
+    throw error
+  }
+  if (current.status !== 'succeeded') throw new Error(current.error_message || 'AI 策划任务执行失败')
+  const metadata = current.result_json?.metadata
+  const text = metadata && typeof metadata === 'object' && typeof (metadata as Record<string, unknown>).text === 'string'
+    ? String((metadata as Record<string, unknown>).text)
+    : ''
+  if (!text) throw new Error('AI 策划任务没有返回可解析内容')
   const payload = parsePlannerPayload(text)
   return mode === 'aplus'
     ? normalizeAPlusPlannerApiPayload(payload, aPlusType, aPlusGenerationTier, aPlusModuleSpecs, marketplaceId)

@@ -2,8 +2,14 @@ import { useMemo, useRef, useState, useEffect } from 'react'
 import { useStore, reuseConfig, editOutputs, removeTask } from '../store'
 import { matchesTaskHistoryFilters } from '../lib/taskHistory'
 import TaskCard from './TaskCard'
+import SendToBatchTryOnDialog from './SendToBatchTryOnDialog'
+import { runtimeConfig } from '../app/runtimeConfig'
+import { useAuth } from '../app/AuthContext'
+import type { TaskRecord } from '../types'
+import { isListingTransferTask, listingTransferDisabledReason } from '../lib/listingTransferEligibility'
 
 export default function TaskGrid() {
+  const auth = useAuth()
   const tasks = useStore((s) => s.tasks)
   const searchQuery = useStore((s) => s.searchQuery)
   const filterStatus = useStore((s) => s.filterStatus)
@@ -19,6 +25,7 @@ export default function TaskGrid() {
   const rootRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const [selectionBox, setSelectionBox] = useState<{ startPageX: number; startPageY: number; currentPageX: number; currentPageY: number } | null>(null)
+  const [sendTask, setSendTask] = useState<TaskRecord | null>(null)
   const dragStart = useRef<{ pageX: number; pageY: number } | null>(null)
   const lastClientPoint = useRef<{ x: number; y: number } | null>(null)
   const hasDragged = useRef(false)
@@ -50,6 +57,14 @@ export default function TaskGrid() {
       title: '删除记录',
       message: '确定要删除这条记录吗？关联的图片资源也会被清理（如果没有其他任务引用）。',
       action: () => removeTask(task),
+    })
+  }
+
+  const sendDisabledReason = (task: TaskRecord) => {
+    return listingTransferDisabledReason(task, {
+      isStandalone: runtimeConfig.isStandalone,
+      canReadGeneratedOutputs: auth.hasPermission('generated_outputs.read'),
+      canWriteProjects: auth.hasPermission('projects.write'),
     })
   }
 
@@ -309,6 +324,9 @@ export default function TaskGrid() {
               onReuse={() => reuseConfig(task)}
               onEditOutputs={() => editOutputs(task)}
               onDelete={() => handleDelete(task)}
+              showSendToBatchTryOn={isListingTransferTask(task)}
+              sendToBatchTryOnDisabledReason={sendDisabledReason(task)}
+              onSendToBatchTryOn={() => setSendTask(task)}
               isSelected={selectedTaskIds.includes(task.id)}
             />
           </div>
@@ -325,6 +343,7 @@ export default function TaskGrid() {
           }}
         />
       )}
+      {sendTask && <SendToBatchTryOnDialog task={sendTask} onClose={() => setSendTask(null)} />}
     </div>
   )
 }

@@ -36,7 +36,9 @@ import {
   type AmazonPlannerMode,
   type AmazonStyleDensityMode,
 } from '../lib/listingPlanner'
-import { callAmazonPlannerApi, type PlannerApiResult } from '../lib/listingPlannerApi'
+import { callAmazonPlannerApi, callServerAmazonPlannerApi, type PlannerApiResult } from '../lib/listingPlannerApi'
+import { runtimeConfig } from '../app/runtimeConfig'
+import type { SizeTier } from '../lib/size'
 import { deleteAmazonPlannerSession, getAllAmazonPlannerSessions, putAmazonPlannerSession } from '../lib/db'
 import {
   AMAZON_MARKETPLACES,
@@ -366,7 +368,11 @@ function getAmazonListingPlannerChecks(
   ]
 }
 
-export default function AmazonPlanner() {
+interface AmazonPlannerProps {
+  mode: AmazonPlannerMode
+}
+
+export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
   const prompt = useStore((s) => s.prompt)
   const inputImages = useStore((s) => s.inputImages)
   const settings = useStore((s) => s.settings)
@@ -387,7 +393,7 @@ export default function AmazonPlanner() {
   const [draft, setDraft] = useState<AmazonPromptDraft>(DEFAULT_AMAZON_PROMPT_DRAFT)
   const [resolution, setResolution] = useState<'2k' | '4k'>('2k')
   const [listingImageCount, setListingImageCount] = useState(DEFAULT_LISTING_IMAGE_COUNT)
-  const [plannerMode, setPlannerMode] = useState<AmazonPlannerMode>('listing')
+  const plannerMode = mode
   const [marketplaceId, setMarketplaceId] = useState<AmazonMarketplaceId>(DEFAULT_AMAZON_MARKETPLACE_ID)
   const [aPlusType, setAPlusType] = useState<APlusContentType>('standard-large')
   const [aPlusModuleSpecsByType, setAPlusModuleSpecsByType] = useState<APlusModuleSpecsByType>({})
@@ -424,7 +430,7 @@ export default function AmazonPlanner() {
   const [referencePayloadNotice, setReferencePayloadNotice] = useState('')
   const [actionProgress, setActionProgress] = useState<PlannerActionProgressMap>({})
   const [mobileActionDock, setMobileActionDock] = useState<MobileActionDock>(null)
-  const resolutionTier = resolution === '4k' ? '4K' : '2K'
+  const resolutionTier: SizeTier = resolution === '4k' ? '4K' : '2K'
   const marketplace = useMemo(() => getAmazonMarketplace(marketplaceId), [marketplaceId])
   const listingSlotRange = formatAmazonListingSlotRange(listingImageCount)
   const aPlusSpecs = useMemo(
@@ -482,7 +488,9 @@ export default function AmazonPlanner() {
       ].join('\n')
     : activePrompt
   const plannerProfile = getAmazonPlannerProfile(settings)
-  const plannerProfileValidation = plannerProfile ? validateApiProfile(plannerProfile) : '未选择支持 Chat Completions 或 Responses API 的 AI 策划配置'
+  const plannerProfileValidation = runtimeConfig.isStandalone
+    ? plannerProfile ? validateApiProfile(plannerProfile) : '未选择支持 Chat Completions 或 Responses API 的 AI 策划配置'
+    : null
   const plannerApiLabel = plannerProfile?.apiMode === 'chat' ? 'Chat Completions' : 'Responses API'
   const plannerUsesOfficialDeepSeek = plannerProfile ? isOfficialDeepSeekPlannerProfile(plannerProfile) : false
   const listingTargetSize = resolution === '4k' ? '4096x4096' : '2048x2048'
@@ -539,7 +547,7 @@ export default function AmazonPlanner() {
     },
   ] satisfies Array<{ label: string; detail: string; status: WorkflowStepStatus }>
   const hasListingText = Boolean(listingText.trim())
-  const hasUsablePlannerProfile = Boolean(plannerProfile && !plannerProfileValidation)
+  const hasUsablePlannerProfile = runtimeConfig.isStandalone ? Boolean(plannerProfile && !plannerProfileValidation) : true
   const seriesStyleReferenceNeeded = plannerMode === 'aplus'
     ? hasPlanOptions
     : imagePlans.some((plan) => !isAmazonListingMainSlot(plan.slot))
@@ -1141,13 +1149,13 @@ export default function AmazonPlanner() {
       return
     }
 
-    if (!plannerProfile) {
+    if (runtimeConfig.isStandalone && !plannerProfile) {
       setPlannerError('未选择支持 Chat Completions 或 Responses API 的 AI 策划配置。\n\n请在设置 -> API 中创建或选择一个 Chat Completions 配置，例如 DeepSeek 文本模型；生图配置继续使用 Images API，不要把 gpt-image-2 用作策划模型。')
       showToast('AI 策划配置缺失', 'error')
       return
     }
-    if (plannerProfileValidation) {
-      setPlannerError(`AI 策划配置「${plannerProfile.name}」不完整：${plannerProfileValidation}`)
+    if (runtimeConfig.isStandalone && plannerProfileValidation) {
+      setPlannerError(`AI 策划配置「${plannerProfile?.name || '未选择'}」不完整：${plannerProfileValidation}`)
       showToast('AI 策划配置不完整', 'error')
       return
     }
@@ -1159,10 +1167,9 @@ export default function AmazonPlanner() {
     try {
       const currentMarketplaceId = marketplaceId
       const referencePayload = await prepareReferencePayloadForRequest(inputImages.map((image) => image.dataUrl), controller.signal)
-      const result = await callAmazonPlannerApi({
+      const plannerOptions = {
         listingText,
         baseDraft: draft,
-        profile: plannerProfile,
         referenceImageDataUrls: referencePayload.dataUrls,
         mode: plannerMode,
         marketplaceId: currentMarketplaceId,
@@ -1171,7 +1178,10 @@ export default function AmazonPlanner() {
         aPlusModuleSpecs: aPlusSpecs,
         aPlusGenerationTier: resolutionTier,
         signal: controller.signal,
-      })
+      }
+      const result = runtimeConfig.isStandalone
+        ? await callAmazonPlannerApi({ ...plannerOptions, profile: plannerProfile! })
+        : await callServerAmazonPlannerApi(plannerOptions)
       if (controller.signal.aborted) return
       applyPlannerResult(result, plannerMode === 'aplus' ? 'A+ AI 策划' : 'AI 策划')
     } catch (err) {
@@ -1229,14 +1239,6 @@ export default function AmazonPlanner() {
     if (visiblePlanCount === 0 || visiblePlanIndex == null) return
     const nextIndex = Math.min(visiblePlanCount - 1, Math.max(0, visiblePlanIndex + direction))
     if (nextIndex !== visiblePlanIndex) selectVisiblePlan(nextIndex)
-  }
-
-  const changePlannerMode = (mode: AmazonPlannerMode) => {
-    if (mode === plannerMode) return
-    setPlannerMode(mode)
-    setStylePreview(null)
-    setStyleError('')
-    setActionProgress({})
   }
 
   const changeAPlusType = (nextType: APlusContentType) => {
@@ -1446,7 +1448,6 @@ export default function AmazonPlanner() {
 
     const restoredAPlusModuleSpecsByType = getSessionAPlusModuleSpecsByType(session)
     const restoredMarketplaceId = getSessionMarketplaceId(session)
-    setPlannerMode(session.mode)
     setMarketplaceId(restoredMarketplaceId)
     setAPlusType(session.aPlusType)
     setResolution(session.resolution)
@@ -1571,28 +1572,15 @@ export default function AmazonPlanner() {
       <div className="border-b border-gray-200 px-4 py-4 dark:border-white/[0.08] sm:px-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-50">亚马逊图片工作台</h2>
+            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-50">
+              {plannerMode === 'aplus' ? 'A+ 图工作台' : 'Listing 图工作台'}
+            </h2>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
               <span>OpenAI gpt-image-2</span>
               <span className="h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600" />
               <span>2K / 4K</span>
               <span className="h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600" />
-              <span>主图、附图与 A+ 策划</span>
-            </div>
-            <div className="mt-3 inline-flex rounded-xl border border-gray-200 bg-gray-100 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
-              {([
-                ['listing', 'Listing 图'],
-                ['aplus', 'A+ 图'],
-              ] as const).map(([mode, label]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => changePlannerMode(mode)}
-                  className={`h-8 rounded-lg px-3 text-sm font-medium transition ${plannerMode === mode ? 'bg-white text-gray-900 shadow-sm dark:bg-white/10 dark:text-white' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}
-                >
-                  {label}
-                </button>
-              ))}
+              <span>{plannerMode === 'aplus' ? 'A+ 模块策划与生成' : '主图与附图策划生成'}</span>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1641,9 +1629,9 @@ export default function AmazonPlanner() {
             >
               <HistoryIcon className="h-4 w-4" />
               策划历史
-              {plannerSessions.length > 0 && (
+              {plannerSessions.filter((session) => session.mode === plannerMode).length > 0 && (
                 <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500 dark:bg-white/[0.08] dark:text-gray-300">
-                  {plannerSessions.length}
+                  {plannerSessions.filter((session) => session.mode === plannerMode).length}
                 </span>
               )}
             </button>
@@ -1666,9 +1654,9 @@ export default function AmazonPlanner() {
                 收起
               </button>
             </div>
-            {plannerSessions.length > 0 ? (
+            {plannerSessions.filter((session) => session.mode === plannerMode).length > 0 ? (
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {plannerSessions.map((session) => (
+                {plannerSessions.filter((session) => session.mode === plannerMode).map((session) => (
                   <div key={session.id} className="rounded-lg border border-gray-200 bg-white p-3 dark:border-white/[0.08] dark:bg-gray-900">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -1776,10 +1764,10 @@ export default function AmazonPlanner() {
               />
             </label>
             <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-              <div className={`rounded-xl border px-3 py-2 transition ${guideState.target === 'planner-api' ? 'border-blue-300 bg-blue-50 text-blue-800 ring-2 ring-blue-500/15 dark:border-blue-400/60 dark:bg-blue-500/10 dark:text-blue-100' : plannerProfile && !plannerProfileValidation ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200' : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200'}`}>
+              <div className={`rounded-xl border px-3 py-2 transition ${guideState.target === 'planner-api' ? 'border-blue-300 bg-blue-50 text-blue-800 ring-2 ring-blue-500/15 dark:border-blue-400/60 dark:bg-blue-500/10 dark:text-blue-100' : !plannerProfileValidation ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200' : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200'}`}>
                 <div className="text-xs font-semibold">AI 策划配置</div>
                 <div className="mt-1 text-xs leading-relaxed">
-                  {plannerProfile ? `${plannerProfile.name} · ${plannerProfile.model} · ${plannerApiLabel}` : '未配置，请在设置中选择一个 Chat Completions 策划配置'}
+                  {runtimeConfig.isStandalone ? (plannerProfile ? `${plannerProfile.name} · ${plannerProfile.model} · ${plannerApiLabel}` : '未配置，请在设置中选择一个 Chat Completions 策划配置') : '平台统一文本模型资源池（API Key 仅保存在服务端）'}
                   {plannerProfileValidation ? `（${plannerProfileValidation}）` : ''}
                 </div>
               </div>

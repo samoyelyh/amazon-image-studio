@@ -5,7 +5,8 @@ import type { AmazonMarketplaceId } from './lib/amazonMarketplaces'
 export type ApiMode = 'images' | 'responses' | 'chat'
 export type ApiSetupMode = 'standard' | 'single-connection'
 export type AppMode = 'gallery' | 'agent'
-export type TaskWorkflow = 'amazon-listing' | 'amazon-aplus' | 'gallery' | 'agent' | 'unknown'
+export type GalleryWorkspace = 'listing' | 'aplus'
+export type TaskWorkflow = 'amazon-listing' | 'amazon-aplus' | 'batch-tryon' | 'gallery' | 'agent' | 'unknown'
 export type TaskAspect = 'square' | 'landscape' | 'portrait'
 export type HistoryWorkflowFilter = 'all' | TaskWorkflow
 export type HistoryAspectFilter = 'all' | TaskAspect
@@ -113,6 +114,8 @@ export interface AppSettings {
 
 export interface TaskParams {
   size: string
+  /** 用户选择的宽高比；与提交给 Provider 的具体尺寸分开保存。 */
+  aspect_ratio: string
   quality: 'auto' | 'low' | 'medium' | 'high'
   output_format: 'png' | 'jpeg' | 'webp'
   output_compression: number | null
@@ -124,6 +127,7 @@ export const DEFAULT_OUTPUT_COMPRESSION = 70
 
 export const DEFAULT_PARAMS: TaskParams = {
   size: 'auto',
+  aspect_ratio: 'auto',
   quality: 'auto',
   output_format: 'jpeg',
   output_compression: DEFAULT_OUTPUT_COMPRESSION,
@@ -152,6 +156,14 @@ export type TaskStatus = 'running' | 'done' | 'error'
 
 export interface TaskRecord {
   id: string
+  /** 多人模式服务端统一任务 ID；standalone 任务不设置。 */
+  serverJobId?: string
+  /** 多人模式服务端任务所属工作台，用于准确识别历史任务来源。 */
+  serverWorkspaceType?: 'listing' | 'batch_tryon' | 'aplus'
+  /** 多人模式输出在素材中心对应的 Asset ID。 */
+  serverOutputAssetIds?: string[]
+  /** 多人模式输出对应的 GeneratedOutput ID，用于精确选择当前结果版本。 */
+  serverGeneratedOutputIds?: string[]
   prompt: string
   params: TaskParams
   /** 生成时使用的 Provider 类型 */
@@ -195,9 +207,21 @@ export interface TaskRecord {
   status: TaskStatus
   error: string | null
   createdAt: number
+  /** 真正开始调用 Provider 的时间；服务端任务排队期间为空。 */
+  startedAt?: number | null
   finishedAt: number | null
-  /** 总耗时毫秒 */
+  /** 旧版任务总耗时毫秒；新服务端任务使用 generationDurationMs。 */
   elapsed: number | null
+  /** 服务端持久化的纯生成耗时，不包含排队和重试等待。 */
+  generationDurationMs?: number | null
+  serverJobStatus?: string
+  requestedAspectRatio?: string | null
+  requestedWidth?: number | null
+  requestedHeight?: number | null
+  resolvedProviderSize?: string | null
+  actualWidth?: number | null
+  actualHeight?: number | null
+  sizeMismatch?: boolean
   /** 是否收藏 */
   isFavorite?: boolean
   /** 来源模式：画廊 / Agent */
@@ -222,7 +246,119 @@ export interface TaskRecord {
     aPlusType?: 'standard' | 'standard-large' | 'premium' | 'mobile'
     marketplaceId?: AmazonMarketplaceId
     styleReferenceImageId?: string
+    /** 批量套图批次 ID（旧任务可为空） */
+    batchTryOnBatchId?: string
+    /** 当前服装原文件名（旧任务可为空） */
+    batchTryOnGarmentName?: string
+    /** 模特模板图 ID（旧任务可为空） */
+    batchTryOnTemplateImageId?: string
+    /** 当前服装在批次中的排序序号（旧任务可为空） */
+    batchTryOnIndex?: number
   }
+}
+
+// ===== 批量套图 =====
+
+export type BatchTryOnItemStatus = 'pending' | 'queued' | 'retry_waiting' | 'running' | 'done' | 'error' | 'stopped'
+export type BatchTryOnReviewStatus = 'pending' | 'approved' | 'rejected' | 'regenerating' | 'generation_failed'
+/** `template` or any positive width:height ratio selected by the user. */
+export type BatchTryOnAspectRatio = string
+
+export interface BatchTryOnTemplate {
+  id: string
+  imageId: string
+  serverAssetId?: string
+  projectAssetLinkId?: string
+  fileName: string
+  displayName: string
+  width?: number
+  height?: number
+  selected: boolean
+  isDefault: boolean
+  sourceType?: 'listing_generated_output' | 'upload'
+  sourceId?: string
+}
+
+export interface BatchTryOnGarment {
+  id: string
+  batchId: string
+  garmentImageId: string
+  serverAssetId?: string
+  projectAssetLinkId?: string
+  garmentFileName: string
+  index: number
+  selected: boolean
+  createdAt: number
+}
+
+export interface BatchTryOnPresetSelection {
+  targetAudience?: string
+  replacementMode?: string
+  backgroundStyle?: string
+  backgroundAdaptationMode?: string
+}
+
+export interface BatchTryOnItem {
+  id: string
+  batchId: string
+  templateId?: string
+  templateImageId?: string
+  templateServerAssetId?: string
+  templateName?: string
+  garmentId?: string
+  garmentImageId: string
+  garmentServerAssetId?: string
+  garmentFileName: string
+  presetSelection?: BatchTryOnPresetSelection
+  presetSummary?: string
+  index: number
+  taskId?: string
+  outputImageId?: string
+  /** 本地缓存的结果对应哪个服务端 Job，防止新版本完成后继续显示旧图。 */
+  outputTaskId?: string
+  serverOutputAssetId?: string
+  serverOutputFilename?: string
+  serverOutputDownloadFilename?: string
+  serverOutputDownloadUrl?: string
+  serverVersionNumber?: number
+  serverReviewItemId?: string
+  serverReviewStatus?: BatchTryOnReviewStatus
+  serverCurrentVersionId?: string
+  serverApprovedVersionId?: string
+  regenerationCount?: number
+  status: BatchTryOnItemStatus
+  error?: string
+  createdAt: number
+  startedAt?: number
+  finishedAt?: number
+}
+
+export interface BatchTryOnBatch {
+  id: string
+  /** 当前绑定的服务端批量套图项目。 */
+  serverProjectId?: string
+  serverProjectName?: string
+  /** 多人模式服务端批次 ID；用于刷新恢复、暂停、取消和重试。 */
+  serverBatchId?: string
+  templateImageId: string | null
+  templateServerAssetId?: string
+  templateSourceType?: 'listing_generated_output' | 'upload'
+  templateSourceId?: string
+  templateFileName?: string
+  templateWidth?: number
+  templateHeight?: number
+  templates: BatchTryOnTemplate[]
+  garments: BatchTryOnGarment[]
+  items: BatchTryOnItem[]
+  presetSelection: BatchTryOnPresetSelection
+  extraRequirements: string
+  aspectRatio: BatchTryOnAspectRatio
+  concurrency: 1 | 2 | 3 | 5 | 10
+  adminTestMode: boolean
+  params: TaskParams
+  queuePaused: boolean
+  createdAt: number
+  updatedAt: number
 }
 
 export interface AmazonVisualSystem {

@@ -8,6 +8,7 @@ import { DEFAULT_IMAGES_MODEL, DEFAULT_FAL_MODEL } from '../lib/apiProfiles'
 import { isAgentTaskPromptPending } from '../lib/taskPromptDisplay'
 import { CodeIcon } from './icons'
 import ViewportTooltip from './ViewportTooltip'
+import { calculateTaskDuration, formatDuration, isTaskWaitingForGeneration } from '../lib/taskDuration'
 
 interface Props {
   task: TaskRecord
@@ -17,6 +18,9 @@ interface Props {
   onClick: (e: React.MouseEvent | React.TouchEvent) => void
   isSelected?: boolean
   disableSwipe?: boolean
+  showSendToBatchTryOn?: boolean
+  sendToBatchTryOnDisabledReason?: string
+  onSendToBatchTryOn?: () => void
 }
 
 const TASK_SIZE_PATTERN = /^\s*(\d+)\s*[xX×]\s*(\d+)\s*$/
@@ -87,6 +91,9 @@ export default function TaskCard({
   onClick,
   isSelected,
   disableSwipe,
+  showSendToBatchTryOn,
+  sendToBatchTryOnDisabledReason,
+  onSendToBatchTryOn,
 }: Props) {
   const [thumbSrc, setThumbSrc] = useState<string>('')
   const [coverRatio, setCoverRatio] = useState<string>('')
@@ -259,13 +266,16 @@ export default function TaskCard({
     setStreamPreviewLoaded(false)
   }, [streamPreviewSrc, task.id])
 
-  // 定时更新运行中任务的计时
+  const waitingForGeneration = isTaskWaitingForGeneration(task)
+
+  // 每张卡片仅在 Provider 真正运行时更新；排队、重试等待和终态不启动计时器。
   useEffect(() => {
-    if (task.status !== 'running' && !(task.status === 'error' && (task.falRecoverable || task.customRecoverable))) return
+    const serverRunning = !task.serverJobId || task.serverJobStatus === 'running'
+    if ((task.status !== 'running' || !serverRunning) && !(task.status === 'error' && (task.falRecoverable || task.customRecoverable))) return
     const id = setInterval(() => setNow(Date.now()), 1000)
     setNow(Date.now())
     return () => clearInterval(id)
-  }, [task.customRecoverable, task.falRecoverable, task.status])
+  }, [task.customRecoverable, task.falRecoverable, task.serverJobId, task.serverJobStatus, task.status])
 
   // 加载缩略图
   useEffect(() => {
@@ -304,23 +314,10 @@ export default function TaskCard({
     }
   }, [task.outputImages])
 
-  const duration = (() => {
-    let seconds: number
-    if (task.status === 'running' || task.falRecoverable || task.customRecoverable) {
-      seconds = Math.floor((now - task.createdAt) / 1000)
-    } else if (task.elapsed != null) {
-      seconds = Math.floor(task.elapsed / 1000)
-    } else {
-      return '00:00'
-    }
-    const mm = String(Math.floor(seconds / 60)).padStart(2, '0')
-    const ss = String(seconds % 60).padStart(2, '0')
-    return `${mm}:${ss}`
-  })()
+  const durationMs = calculateTaskDuration(task, now)
+  const duration = formatDuration(durationMs)
   const showSwipeAction = swipeActionActive
   const isFalReconnecting = task.status === 'error' && task.falRecoverable
-  const isCustomReconnecting = task.status === 'error' && task.customRecoverable
-  const showRunningTimer = task.status === 'running' || isFalReconnecting || isCustomReconnecting
   const swipeBgClass = showSwipeAction
     ? swipeStartedSelected
       ? 'bg-gray-500 dark:bg-gray-600'
@@ -544,16 +541,19 @@ export default function TaskCard({
               />
             </svg>
           )}
-          {/* 运行中显示耗时，完成后显示封面图比例与分辨率标签 */}
-          <div className="absolute top-1.5 left-1.5 flex items-center gap-1">
-            {showRunningTimer || task.status !== 'done' || !coverRatio || !coverSize ? (
+          {/* 生成耗时只从 Provider 开始计算；终态固定显示服务端持久化值。 */}
+          <div className="absolute top-1.5 left-1.5 flex max-w-[calc(100%-0.75rem)] flex-wrap items-center gap-1">
+            {waitingForGeneration ? (
+              <span className="bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm">等待队列中</span>
+            ) : durationMs != null ? (
               <span className="flex items-center gap-1 bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 {duration}
               </span>
-            ) : (
+            ) : null}
+            {task.status === 'done' && coverRatio && coverSize && (
               <>
                 <span className="bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
                   {coverRatio}
@@ -638,6 +638,23 @@ export default function TaskCard({
                   {sizeDisplay.isMismatch ? <ActualValueBadge value={sizeDisplay.displayValue} className="px-1 rounded-sm" /> : <span className="text-gray-600 dark:text-gray-300">{sizeDisplay.displayValue}</span>}
                 </span>
               )}
+              {task.requestedAspectRatio && task.requestedAspectRatio !== 'auto' && (
+                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/[0.04] text-xs flex-shrink-0">
+                  <span className="text-gray-400 dark:text-gray-500">比例</span>
+                  <span className="text-gray-600 dark:text-gray-300">{task.requestedAspectRatio}</span>
+                </span>
+              )}
+              {task.requestedWidth && task.requestedHeight && (
+                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/[0.04] text-xs flex-shrink-0">
+                  <span className="text-gray-400 dark:text-gray-500">目标</span>
+                  <span className="text-gray-600 dark:text-gray-300">{task.requestedWidth}×{task.requestedHeight}</span>
+                </span>
+              )}
+              {task.sizeMismatch && (
+                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-500/10 text-xs text-amber-700 dark:text-amber-300 flex-shrink-0" title="生成结果尺寸与所选规格不一致，请重新生成或联系管理员。">
+                  输出尺寸不一致
+                </span>
+              )}
               {showFormat && (
                 <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/[0.04] text-xs flex-shrink-0">
                   <span className="text-gray-400 dark:text-gray-500">格式</span>
@@ -661,6 +678,18 @@ export default function TaskCard({
               onTouchEnd={(e) => e.stopPropagation()}
               onTouchCancel={(e) => e.stopPropagation()}
             >
+              {showSendToBatchTryOn && (
+                <TaskActionButton
+                  tooltip={sendToBatchTryOnDisabledReason || '批量套图'}
+                  onClick={onSendToBatchTryOn}
+                  disabled={Boolean(sendToBatchTryOnDisabledReason)}
+                  className="p-1.5 rounded-md hover:bg-blue-50 dark:hover:bg-blue-950/30 text-gray-400 hover:text-blue-500 transition disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 15V6a2 2 0 012-2h9a2 2 0 012 2v1M8 20h10a2 2 0 002-2v-8a2 2 0 00-2-2H8a2 2 0 00-2 2v8a2 2 0 002 2zm1-3l2.5-2.5a1 1 0 011.414 0L15 16.586l1-1a1 1 0 011.414 0L19 17.172M10 11.5h.01" />
+                  </svg>
+                </TaskActionButton>
+              )}
               {((task.status === 'error' && !isFalReconnecting) || settings.alwaysShowRetryButton) && (
                 <TaskActionButton
                   tooltip="重试任务"

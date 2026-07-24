@@ -17,6 +17,7 @@ import Select from './Select'
 import SizePickerModal from './SizePickerModal'
 import ViewportTooltip from './ViewportTooltip'
 import { CloseIcon, ImportIcon } from './icons'
+import { runtimeConfig } from '../app/runtimeConfig'
 
 
 function getMentionTagTextLength(el: Element) {
@@ -599,7 +600,7 @@ export default function InputBar() {
       ? settings
       : normalizeSettings({ ...settings, activeProfileId: activeProfile.id })
   ), [activeProfile.id, currentActiveProfile.id, settings])
-  const hasSubmitApiConfig = Boolean(activeProfile.apiKey)
+  const hasSubmitApiConfig = !runtimeConfig.isStandalone || Boolean(activeProfile.apiKey)
   const canSubmit = Boolean(prompt.trim() && hasSubmitApiConfig && !activeAgentIsRunning)
   const submitButtonAriaLabel = activeAgentIsRunning
     ? '停止生成'
@@ -1991,7 +1992,8 @@ export default function InputBar() {
       {showSizePicker && (
         <SizePickerModal
           currentSize={isFalTextToImage && params.size === 'auto' ? DEFAULT_FAL_IMAGE_SIZE : params.size}
-          onSelect={(size) => setParams({ size })}
+          currentAspectRatio={params.aspect_ratio}
+          onSelect={(size, aspect_ratio) => setParams({ size, aspect_ratio })}
           onClose={() => setShowSizePicker(false)}
           allowAuto={!isFalTextToImage}
         />

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { calculateImageSize, normalizeImageSize, parseRatio, type SizeTier } from '../lib/size'
+import { parseRatio, type SizeTier } from '../lib/size'
+import { calculateDeliverySize, inferAspectRatio, normalizeDeliverySize, validateDeliverySize } from '../lib/imageSizeResolver'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import ViewportTooltip from './ViewportTooltip'
 
 const TIERS: SizeTier[] = ['1K', '2K', '4K']
-const SIZE_LIMIT_TEXT = '由于模型限制，最终输出会自动规整到合法尺寸：\n宽高均为 16 的倍数，最大边长 3840px，宽高比不超过 3:1，总像素限制为 655360-8294400。'
+const SIZE_LIMIT_TEXT = '2K/4K 是最终交付规格，不受上游工作画布限制。上游按已验证比例生成，服务端再输出精确尺寸。自定义交付文件最大边长 10000px，总像素不超过 4000 万。'
 const RATIOS = [
   { label: '1:1', value: '1:1' },
   { label: '3:2', value: '3:2' },
@@ -18,7 +19,8 @@ const RATIOS = [
 
 interface Props {
   currentSize: string
-  onSelect: (size: string) => void
+  currentAspectRatio?: string
+  onSelect: (size: string, aspectRatio: string) => void
   onClose: () => void
   allowAuto?: boolean
 }
@@ -32,10 +34,10 @@ function parseSize(size: string) {
 }
 
 function findPresetForSize(size: string) {
-  const normalized = normalizeImageSize(size)
+  const normalized = normalizeDeliverySize(size)
   for (const tier of TIERS) {
     for (const ratio of RATIOS) {
-      if (calculateImageSize(tier, ratio.value) === normalized) {
+      if (calculateDeliverySize(tier, ratio.value) === normalized) {
         return { tier, ratio: ratio.value }
       }
     }
@@ -43,7 +45,7 @@ function findPresetForSize(size: string) {
   return null
 }
 
-export default function SizePickerModal({ currentSize, onSelect, onClose, allowAuto = true }: Props) {
+export default function SizePickerModal({ currentSize, currentAspectRatio, onSelect, onClose, allowAuto = true }: Props) {
   usePreventBackgroundScroll(true)
 
   const currentPreset = findPresetForSize(currentSize)
@@ -56,7 +58,7 @@ export default function SizePickerModal({ currentSize, onSelect, onClose, allowA
 
   // Ratio mode state
   const [tier, setTier] = useState<SizeTier>(currentPreset?.tier ?? '1K')
-  const [ratio, setRatio] = useState(currentPreset?.ratio ?? (allowAuto ? '1:1' : '4:3'))
+  const [ratio, setRatio] = useState(currentAspectRatio && parseRatio(currentAspectRatio) ? currentAspectRatio : currentPreset?.ratio ?? (allowAuto ? '1:1' : '4:3'))
   const [customRatio, setCustomRatio] = useState('16:9')
 
   // Resolution mode state
@@ -73,44 +75,25 @@ export default function SizePickerModal({ currentSize, onSelect, onClose, allowA
   const activeRatio = ratio === 'custom' ? customRatio : ratio
   const parsedCustomRatio = parseRatio(customRatio)
   const customRatioValid = ratio !== 'custom' || Boolean(parsedCustomRatio)
-  const customRatioClamped = Boolean(
-    ratio === 'custom' &&
-    parsedCustomRatio &&
-    Math.max(parsedCustomRatio.width, parsedCustomRatio.height) / Math.min(parsedCustomRatio.width, parsedCustomRatio.height) > 3,
-  )
-
   const previewSize = useMemo(() => {
     if (mode === 'auto') return 'auto'
     
     if (mode === 'ratio') {
-      const size = calculateImageSize(tier, activeRatio)
-      return size ? normalizeImageSize(size) : ''
+      return calculateDeliverySize(tier, activeRatio) ?? ''
     }
     
     if (mode === 'resolution') {
       const w = parseInt(customW, 10)
       const h = parseInt(customH, 10)
-      if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
-        return normalizeImageSize(`${w}x${h}`)
-      }
+      const candidate = `${w}x${h}`
+      if (Number.isFinite(w) && Number.isFinite(h) && validateDeliverySize(candidate)) return normalizeDeliverySize(candidate)
       return ''
     }
     
     return ''
   }, [mode, tier, activeRatio, customW, customH])
 
-  const isClamped = useMemo(() => {
-    if (!previewSize || previewSize === 'auto') return false
-    if (mode === 'ratio' && ratio === 'custom') return customRatioClamped
-    if (mode === 'resolution') {
-      const w = parseInt(customW, 10)
-      const h = parseInt(customH, 10)
-      if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
-        return `${w}x${h}` !== previewSize
-      }
-    }
-    return false
-  }, [mode, ratio, customRatioClamped, customW, customH, previewSize])
+  const showDeliveryInfo = mode !== 'auto'
 
   const showHint = () => setHintVisible(true)
   const hideHint = () => {
@@ -132,7 +115,15 @@ export default function SizePickerModal({ currentSize, onSelect, onClose, allowA
 
   const applySize = () => {
     if (!previewSize) return
-    onSelect(previewSize)
+    const selectedAspectRatio = mode === 'auto'
+      ? 'auto'
+      : mode === 'ratio'
+        ? activeRatio
+        : (() => {
+            const parsed = parseSize(previewSize)
+            return parsed ? inferAspectRatio(Number(parsed.width), Number(parsed.height)) : 'auto'
+          })()
+    onSelect(previewSize, selectedAspectRatio)
     onClose()
   }
 
@@ -318,7 +309,7 @@ export default function SizePickerModal({ currentSize, onSelect, onClose, allowA
               <span className="font-mono text-lg font-semibold text-gray-800 dark:text-gray-100">
                 {previewSize || '尺寸无效'}
               </span>
-              {isClamped && (
+              {showDeliveryInfo && (
                 <div
                   className="relative flex items-center"
                   onMouseEnter={showHint}

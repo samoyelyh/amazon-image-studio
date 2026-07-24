@@ -1,5 +1,11 @@
 # Dependencies
 node_modules/
+server/.venv/
+server/__pycache__/
+server/.pytest_cache/
+server/.mypy_cache/
+server/.ruff_cache/
+server/**/*.pyc
 
 # Build output
 dist/
@@ -15,6 +21,7 @@ dev-proxy.config.json
 .amazon-image-studio-deps.hash
 *.pid
 *.log
+celerybeat-schedule*
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

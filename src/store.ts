@@ -9,6 +9,7 @@ import type {
   ApiProfile,
   AppSettings,
   AppMode,
+  BatchTryOnBatch,
   HistoryAspectFilter,
   HistoryWorkflowFilter,
   TaskParams,
@@ -16,6 +17,7 @@ import type {
   MaskDraft,
   TaskRecord,
   ExportData,
+  GalleryWorkspace,
   ResponsesApiResponse,
   ResponsesOutputItem,
 } from './types'
@@ -23,6 +25,11 @@ import { DEFAULT_AGENT_MAX_TOOL_ROUNDS, DEFAULT_PARAMS } from './types'
 import { canApiProfileGenerateImages, DEFAULT_SETTINGS, getActiveApiProfile, getCustomProviderDefinition, isImageStreamingEnabled, mergeImportedSettings, normalizeSettings, validateApiProfile } from './lib/apiProfiles'
 import { dismissAllTooltips } from './lib/tooltipDismiss'
 import { remapImageMentionsForOrder, replaceImageMentionsForApi } from './lib/promptImageMentions'
+import {
+  DEFAULT_BATCH_TRY_ON_PRESET_SELECTION,
+  resolveBatchTryOnPresetSelection,
+  summarizeBatchTryOnPresets,
+} from './lib/batchTryOnPresets'
 import {
   CURRENT_THUMBNAIL_VERSION,
   getAllTasks,
@@ -51,11 +58,17 @@ import { getFalErrorMessage, getFalQueuedImageResult } from './lib/falAiImageApi
 import { getCustomQueuedImageResult } from './lib/openaiCompatibleImageApi'
 import { validateMaskMatchesImage } from './lib/canvasImage'
 import { orderInputImagesForMask } from './lib/mask'
-import { getChangedParams, normalizeParamsForSettings } from './lib/paramCompatibility'
+import { getChangedParams, MAX_OPENAI_OUTPUT_IMAGES, normalizeParamsForSettings } from './lib/paramCompatibility'
 import { prepareReferenceImageAndMaskPayload } from './lib/referenceImagePayload'
 import { getTaskHistoryCategory } from './lib/taskHistory'
 import { isAmazonListingMainSlot } from './lib/listingPlanner'
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
+import { runtimeConfig } from './app/runtimeConfig'
+import { uploadDataUrlAsset, importServerOutput } from './lib/serverImageAssets'
+import { getServerJob, isServerJobTerminal, resolveModelCode, submitServerBatch, submitServerJob, type JobCapability, type JobWorkspace } from './lib/jobsApi'
+import { randomUuid } from './lib/randomUuid'
+import { resolveImageSize } from './lib/imageSizeResolver'
+import { parseApiDateTime } from './lib/taskDuration'
 
 // ===== Image cache =====
 // 内存缓存，id → dataUrl。只保留少量最近使用图片，避免大量 4K data URL 常驻内存。
@@ -76,6 +89,7 @@ const AGENT_INPUT_DRAFT_RETENTION_MS = 3 * 24 * 60 * 60 * 1000
 const falRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const customRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const openAIWatchdogTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const serverJobRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const agentRoundControllers = new Map<string, AbortController>()
 const OPENAI_INTERRUPTED_ERROR = '请求中断'
 const AGENT_STOPPED_MESSAGE = '已停止生成。'
@@ -90,6 +104,9 @@ type AgentInputDraft = {
   maskEditorImageId: string | null
   updatedAt?: number
 }
+
+type GalleryWorkspaceDrafts = Record<GalleryWorkspace, AgentInputDraft | null>
+type GalleryWorkspaceParams = Record<GalleryWorkspace, TaskParams>
 
 type PendingTaskCategory =
   | {
@@ -177,7 +194,7 @@ function isErrorToastTitle(title: string): boolean {
   return /(?:失败|错误|异常|报错|无法|不能|超时|中断|断开|请先|请输入|已达上限|不存在|已丢失)$/.test(title)
 }
 
-export type SettingsTab = 'general' | 'agent' | 'api' | 'data' | 'about'
+export type SettingsTab = 'general' | 'agent' | 'api' | 'data'
 
 type TimeoutStreamingHintProfile = Pick<ApiProfile, 'provider' | 'streamImages' | 'streamPartialImages'>
 
@@ -595,6 +612,11 @@ export function getPersistedState(state: AppState) {
     galleryInputDraft: settings.persistInputOnRestart && galleryInputDraft
       ? { ...galleryInputDraft, inputImages: galleryInputDraft.inputImages.map((img) => ({ id: img.id, dataUrl: '' })) }
       : null,
+    activeGalleryWorkspace: state.activeGalleryWorkspace,
+    galleryWorkspaceDrafts: settings.persistInputOnRestart
+      ? getPersistableGalleryWorkspaceDrafts(state)
+      : createGalleryWorkspaceDrafts(),
+    galleryWorkspaceParams: state.galleryWorkspaceParams,
     agentConversations: state.agentConversations,
     activeAgentConversationId: state.activeAgentConversationId,
     agentInputDrafts: getPersistableAgentInputDrafts(state),
@@ -604,6 +626,110 @@ export function getPersistedState(state: AppState) {
     supportPromptDismissed: state.supportPromptDismissed,
     supportPromptOpen: state.supportPromptOpen,
     supportPromptSkippedForImportedData: state.supportPromptSkippedForImportedData,
+    batchTryOnBatch: state.batchTryOnBatch,
+  }
+}
+
+function normalizePersistedBatchTryOnBatch(value: unknown): BatchTryOnBatch | null {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Partial<BatchTryOnBatch>
+  if (typeof record.id !== 'string' || !Array.isArray(record.items)) return null
+  const now = Date.now()
+  const items = record.items.flatMap((item, index) => {
+    if (!item || typeof item !== 'object') return []
+    const current = item as BatchTryOnBatch['items'][number]
+    if (typeof current.id !== 'string' || typeof current.garmentImageId !== 'string') return []
+    const wasRunning = current.status === 'running'
+    const normalizedStatus = current.status === 'pending' || current.status === 'queued'
+      || current.status === 'retry_waiting' || current.status === 'done'
+      || current.status === 'error' || current.status === 'stopped'
+      ? current.status
+      : 'pending'
+    return [{
+      ...current,
+      batchId: record.id!,
+      garmentFileName: typeof current.garmentFileName === 'string' ? current.garmentFileName : `服装-${index + 1}`,
+      index,
+      status: wasRunning && runtimeConfig.isStandalone ? 'error' as const : wasRunning ? 'running' as const : normalizedStatus,
+      ...(wasRunning && runtimeConfig.isStandalone
+        ? {
+            error: '页面刷新时任务仍在生成，普通请求无法自动续接，请重试此任务。',
+            finishedAt: now,
+          }
+        : {}),
+    }]
+  })
+  const templates = Array.isArray(record.templates)
+    ? record.templates.filter((template) => template && typeof template.id === 'string' && typeof template.imageId === 'string')
+    : record.templateImageId ? [{
+        id: `legacy-template-${record.templateImageId}`,
+        imageId: record.templateImageId,
+        serverAssetId: record.templateServerAssetId,
+        fileName: record.templateFileName || 'model-template.png',
+        displayName: (record.templateFileName || '默认模板').replace(/\.[^.]+$/, ''),
+        width: record.templateWidth,
+        height: record.templateHeight,
+        selected: true,
+        isDefault: true,
+        sourceType: record.templateSourceType,
+        sourceId: record.templateSourceId,
+      }] : []
+  const garments = Array.isArray(record.garments)
+    ? record.garments.filter((garment) => garment && typeof garment.id === 'string' && typeof garment.garmentImageId === 'string')
+    : Array.from(new Map(items.map((item) => [
+        item.garmentId || item.garmentImageId,
+        {
+          id: item.garmentId || item.id,
+          batchId: record.id!,
+          garmentImageId: item.garmentImageId,
+          serverAssetId: item.garmentServerAssetId,
+          garmentFileName: item.garmentFileName,
+          index: item.index,
+          selected: true,
+          createdAt: item.createdAt,
+        },
+      ])).values())
+  const presetSelection = resolveBatchTryOnPresetSelection({
+    ...DEFAULT_BATCH_TRY_ON_PRESET_SELECTION,
+    ...(record.presetSelection || {}),
+  })
+  const defaultTemplate = templates.find((template) => template.isDefault) || templates[0]
+  return {
+    id: record.id,
+    serverProjectId: typeof record.serverProjectId === 'string' ? record.serverProjectId : undefined,
+    serverProjectName: typeof record.serverProjectName === 'string' ? record.serverProjectName : undefined,
+    serverBatchId: typeof record.serverBatchId === 'string' ? record.serverBatchId : undefined,
+    templateImageId: typeof record.templateImageId === 'string' ? record.templateImageId : null,
+    templateServerAssetId: typeof record.templateServerAssetId === 'string' ? record.templateServerAssetId : undefined,
+    templateSourceType: record.templateSourceType === 'listing_generated_output' || record.templateSourceType === 'upload' ? record.templateSourceType : undefined,
+    templateSourceId: typeof record.templateSourceId === 'string' ? record.templateSourceId : undefined,
+    templateFileName: typeof record.templateFileName === 'string' ? record.templateFileName : undefined,
+    templateWidth: typeof record.templateWidth === 'number' ? record.templateWidth : undefined,
+    templateHeight: typeof record.templateHeight === 'number' ? record.templateHeight : undefined,
+    templates,
+    garments,
+    items: items.map((item) => ({
+      ...item,
+      templateId: item.templateId || defaultTemplate?.id,
+      templateImageId: item.templateImageId || defaultTemplate?.imageId,
+      templateServerAssetId: item.templateServerAssetId || defaultTemplate?.serverAssetId,
+      templateName: item.templateName || defaultTemplate?.displayName,
+      garmentId: item.garmentId || garments.find((garment) => garment.garmentImageId === item.garmentImageId)?.id,
+      presetSelection: item.presetSelection || presetSelection,
+      presetSummary: item.presetSummary || summarizeBatchTryOnPresets(item.presetSelection || presetSelection),
+    })),
+    presetSelection,
+    extraRequirements: typeof record.extraRequirements === 'string' ? record.extraRequirements : '',
+    aspectRatio: typeof record.aspectRatio === 'string' && (
+      record.aspectRatio === 'template' || /^\d+(?:\.\d+)?:\d+(?:\.\d+)?$/.test(record.aspectRatio)
+    ) ? record.aspectRatio : 'template',
+    concurrency: record.concurrency === 1 || record.concurrency === 2 || record.concurrency === 3
+      || record.concurrency === 5 || record.concurrency === 10 ? record.concurrency : 2,
+    adminTestMode: Boolean(record.adminTestMode),
+    params: normalizePersistedParams(record.params),
+    queuePaused: runtimeConfig.isStandalone ? true : Boolean(record.queuePaused),
+    createdAt: typeof record.createdAt === 'number' ? record.createdAt : now,
+    updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : now,
   }
 }
 
@@ -640,6 +766,12 @@ export function mergePersistedState(persistedState: unknown, currentState: AppSt
         maskEditorImageId: null,
       })
     : null
+  const activeGalleryWorkspace: GalleryWorkspace = persisted.activeGalleryWorkspace === 'aplus' ? 'aplus' : 'listing'
+  const galleryWorkspaceDrafts = settings.persistInputOnRestart
+    ? normalizeGalleryWorkspaceDrafts(persisted.galleryWorkspaceDrafts, galleryInputDraft)
+    : createGalleryWorkspaceDrafts()
+  const activeWorkspaceDraft = galleryWorkspaceDrafts[activeGalleryWorkspace]
+  const galleryWorkspaceParams = normalizeGalleryWorkspaceParams(persisted.galleryWorkspaceParams, params)
   let agentInputDrafts = cleanStaleAgentInputDrafts(
     normalizeAgentInputDrafts(persisted.agentInputDrafts, agentConversations),
     activeAgentConversationId,
@@ -648,9 +780,12 @@ export function mergePersistedState(persistedState: unknown, currentState: AppSt
     ...currentState,
     ...persisted,
     settings,
-    params,
+    params: galleryWorkspaceParams[activeGalleryWorkspace],
     appMode,
-    galleryInputDraft: galleryInputDraft && !isEmptyAgentInputDraft(galleryInputDraft) ? galleryInputDraft : null,
+    galleryInputDraft: activeWorkspaceDraft,
+    activeGalleryWorkspace,
+    galleryWorkspaceDrafts,
+    galleryWorkspaceParams,
     agentConversations,
     activeAgentConversationId,
     agentInputDrafts,
@@ -660,10 +795,11 @@ export function mergePersistedState(persistedState: unknown, currentState: AppSt
     supportPromptDismissed: Boolean(persisted.supportPromptDismissed),
     supportPromptOpen: Boolean(persisted.supportPromptOpen),
     supportPromptSkippedForImportedData: Boolean(persisted.supportPromptSkippedForImportedData),
-    prompt: galleryInputDraft?.prompt ?? '',
-    inputImages: galleryInputDraft?.inputImages ?? [],
-    maskDraft: galleryInputDraft?.maskDraft ?? null,
-    maskEditorImageId: galleryInputDraft?.maskEditorImageId ?? null,
+    prompt: activeWorkspaceDraft?.prompt ?? '',
+    inputImages: activeWorkspaceDraft?.inputImages ?? [],
+    maskDraft: activeWorkspaceDraft?.maskDraft ?? null,
+    maskEditorImageId: activeWorkspaceDraft?.maskEditorImageId ?? null,
+    batchTryOnBatch: normalizePersistedBatchTryOnBatch(persisted.batchTryOnBatch),
   }
 }
 
@@ -696,6 +832,16 @@ interface AppState {
   maskEditorImageId: string | null
   setMaskEditorImageId: (id: string | null) => void
   galleryInputDraft: AgentInputDraft | null
+  activeGalleryWorkspace: GalleryWorkspace
+  galleryWorkspaceDrafts: GalleryWorkspaceDrafts
+  galleryWorkspaceParams: GalleryWorkspaceParams
+  activateGalleryWorkspace: (workspace: GalleryWorkspace) => void
+
+  // 批量套图
+  batchTryOnBatch: BatchTryOnBatch | null
+  setBatchTryOnBatch: (
+    batch: BatchTryOnBatch | null | ((current: BatchTryOnBatch | null) => BatchTryOnBatch | null),
+  ) => void
 
   // 参数
   params: TaskParams
@@ -807,7 +953,12 @@ interface AppState {
 function isImageReferencedByState(state: AppState, imageId: string) {
   if (state.inputImages.some((img) => img.id === imageId)) return true
   if (state.galleryInputDraft?.inputImages.some((img) => img.id === imageId)) return true
+  if (Object.values(state.galleryWorkspaceDrafts).some((draft) => draft?.inputImages.some((img) => img.id === imageId))) return true
   if (Object.values(state.agentInputDrafts).some((draft) => draft.inputImages.some((img) => img.id === imageId))) return true
+  if (
+    state.batchTryOnBatch?.templateImageId === imageId ||
+    state.batchTryOnBatch?.items.some((item) => item.garmentImageId === imageId || item.outputImageId === imageId)
+  ) return true
   if (state.tasks.some((task) =>
     task.inputImageIds.includes(imageId) ||
     task.outputImages.includes(imageId) ||
@@ -960,6 +1111,24 @@ function getPersistableGalleryInputDraft(state: AppState) {
   return saveGalleryInputDraft(state)
 }
 
+function getCurrentGalleryWorkspaceDrafts(state: AppState): GalleryWorkspaceDrafts {
+  const drafts = { ...state.galleryWorkspaceDrafts }
+  if (state.appMode === 'gallery') drafts[state.activeGalleryWorkspace] = saveGalleryInputDraft(state)
+  return drafts
+}
+
+function getPersistableGalleryWorkspaceDrafts(state: AppState): GalleryWorkspaceDrafts {
+  const drafts = getCurrentGalleryWorkspaceDrafts(state)
+  return {
+    listing: drafts.listing
+      ? { ...copyAgentInputDraft(drafts.listing), inputImages: drafts.listing.inputImages.map((img) => ({ id: img.id, dataUrl: '' })) }
+      : null,
+    aplus: drafts.aplus
+      ? { ...copyAgentInputDraft(drafts.aplus), inputImages: drafts.aplus.inputImages.map((img) => ({ id: img.id, dataUrl: '' })) }
+      : null,
+  }
+}
+
 function restoreGalleryInputDraftState(draft: AgentInputDraft | null): Pick<AgentInputDraft, 'prompt' | 'inputImages' | 'maskDraft' | 'maskEditorImageId'> {
   if (!draft) return clearInputDraftState()
   return {
@@ -978,7 +1147,11 @@ function restoreAgentInputDraftState(drafts: Record<string, AgentInputDraft>, co
 function syncActiveInputDraft<T extends Partial<AgentInputDraft>>(
   state: AppState,
   patch: T,
-): T & { agentInputDrafts?: Record<string, AgentInputDraft>; galleryInputDraft?: AgentInputDraft | null } {
+): T & {
+  agentInputDrafts?: Record<string, AgentInputDraft>
+  galleryInputDraft?: AgentInputDraft | null
+  galleryWorkspaceDrafts?: GalleryWorkspaceDrafts
+} {
   const draft: AgentInputDraft = {
     prompt: patch.prompt ?? state.prompt,
     inputImages: patch.inputImages ?? state.inputImages,
@@ -986,9 +1159,14 @@ function syncActiveInputDraft<T extends Partial<AgentInputDraft>>(
     maskEditorImageId: patch.maskEditorImageId !== undefined ? patch.maskEditorImageId : state.maskEditorImageId,
   }
   if (state.appMode === 'gallery') {
+    const nextDraft = isEmptyAgentInputDraft(draft) ? null : copyAgentInputDraft(draft)
     return {
       ...patch,
-      galleryInputDraft: isEmptyAgentInputDraft(draft) ? null : copyAgentInputDraft(draft),
+      galleryInputDraft: nextDraft,
+      galleryWorkspaceDrafts: {
+        ...state.galleryWorkspaceDrafts,
+        [state.activeGalleryWorkspace]: nextDraft,
+      },
     }
   }
   if (!state.activeAgentConversationId) return patch
@@ -1175,10 +1353,49 @@ export const useStore = create<AppState>()(
         set((s) => syncActiveInputDraft(s, { maskEditorImageId }))
       },
       galleryInputDraft: null,
+      activeGalleryWorkspace: 'listing',
+      galleryWorkspaceDrafts: createGalleryWorkspaceDrafts(),
+      galleryWorkspaceParams: {
+        listing: { ...DEFAULT_PARAMS },
+        aplus: { ...DEFAULT_PARAMS },
+      },
+      activateGalleryWorkspace: (workspace) => set((state) => {
+        if (state.activeGalleryWorkspace === workspace) return state
+        const currentDraft = getCurrentAgentInputDraft(state)
+        const savedCurrentDraft = isEmptyAgentInputDraft(currentDraft) ? null : copyAgentInputDraft(currentDraft)
+        const galleryWorkspaceDrafts: GalleryWorkspaceDrafts = {
+          ...state.galleryWorkspaceDrafts,
+          [state.activeGalleryWorkspace]: savedCurrentDraft,
+        }
+        const nextDraft = galleryWorkspaceDrafts[workspace]
+        return {
+          activeGalleryWorkspace: workspace,
+          galleryWorkspaceDrafts,
+          galleryInputDraft: nextDraft,
+          params: { ...state.galleryWorkspaceParams[workspace] },
+          ...restoreGalleryInputDraftState(nextDraft),
+        }
+      }),
+
+      // Batch try-on
+      batchTryOnBatch: null,
+      setBatchTryOnBatch: (batch) => set((state) => ({
+        batchTryOnBatch: typeof batch === 'function' ? batch(state.batchTryOnBatch) : batch,
+      })),
 
       // Params
       params: { ...DEFAULT_PARAMS },
-      setParams: (p) => set((s) => ({ params: { ...s.params, ...p } })),
+      setParams: (p) => set((s) => {
+        const params = { ...s.params, ...p }
+        if (s.appMode !== 'gallery') return { params }
+        return {
+          params,
+          galleryWorkspaceParams: {
+            ...s.galleryWorkspaceParams,
+            [s.activeGalleryWorkspace]: params,
+          },
+        }
+      }),
       reusedTaskApiProfileId: null,
       reusedTaskApiProfileName: null,
       reusedTaskApiProfileMissing: false,
@@ -1430,7 +1647,7 @@ function isAsyncCustomProviderTask(settings: AppSettings, provider: string, hasI
 export function markInterruptedOpenAIRunningTasks(tasks: TaskRecord[], now = Date.now()) {
   const interruptedTasks: TaskRecord[] = []
   const updatedTasks = tasks.map((task) => {
-    if (!isRunningOpenAITask(task) || task.customTaskId) return task
+    if (!isRunningOpenAITask(task) || task.customTaskId || task.serverJobId) return task
 
     const updated: TaskRecord = {
       ...task,
@@ -1769,6 +1986,9 @@ export async function initStore() {
   useStore.getState().setTasks(tasks)
   showSupportPromptForExistingLocalData(tasks)
   for (const task of tasks) {
+    if (!runtimeConfig.isStandalone && task.serverJobId && task.status === 'running') {
+      scheduleServerJobRecovery(task.id, 0)
+    }
     if (
       task.apiProvider === 'fal' &&
       task.falRequestId &&
@@ -1790,14 +2010,24 @@ export async function initStore() {
   const state = useStore.getState()
   const persistedInputImages = state.inputImages
   const galleryInputDraft = state.galleryInputDraft
+  const galleryWorkspaceDrafts = state.galleryWorkspaceDrafts
   const agentConversations = state.agentConversations
   const agentInputDrafts = state.agentInputDrafts
+  const batchTryOnBatch = state.batchTryOnBatch
   for (const img of persistedInputImages) referencedIds.add(img.id)
   if (galleryInputDraft) {
     for (const img of galleryInputDraft.inputImages) referencedIds.add(img.id)
   }
+  for (const draft of Object.values(galleryWorkspaceDrafts)) {
+    for (const img of draft?.inputImages ?? []) referencedIds.add(img.id)
+  }
   for (const draft of Object.values(agentInputDrafts)) {
     for (const img of draft.inputImages) referencedIds.add(img.id)
+  }
+  if (batchTryOnBatch?.templateImageId) referencedIds.add(batchTryOnBatch.templateImageId)
+  for (const item of batchTryOnBatch?.items ?? []) {
+    referencedIds.add(item.garmentImageId)
+    if (item.outputImageId) referencedIds.add(item.outputImageId)
   }
   for (const conversation of agentConversations) {
     for (const round of conversation.rounds) {
@@ -1874,6 +2104,46 @@ export async function initStore() {
     }
   }
 
+  const restoredGalleryWorkspaceDrafts: GalleryWorkspaceDrafts = createGalleryWorkspaceDrafts()
+  let galleryWorkspaceDraftsChanged = false
+  for (const workspace of ['listing', 'aplus'] as const) {
+    const draft = galleryWorkspaceDrafts[workspace]
+    if (!draft) continue
+    const restoredImages: InputImage[] = []
+    for (const img of draft.inputImages) {
+      if (img.dataUrl) {
+        restoredImages.push(img)
+        cacheImage(img.id, img.dataUrl)
+        continue
+      }
+      const storedImage = await getImage(img.id)
+      if (storedImage?.dataUrl) {
+        restoredImages.push({ ...img, dataUrl: storedImage.dataUrl })
+        cacheImage(img.id, storedImage.dataUrl)
+      }
+    }
+    const shouldClearMask = Boolean(draft.maskDraft) && !restoredImages.some((img) => img.id === draft.maskDraft?.targetImageId)
+    const restoredDraft: AgentInputDraft = {
+      ...draft,
+      inputImages: restoredImages,
+      prompt: remapImageMentionsForOrder(draft.prompt, draft.inputImages, restoredImages),
+      ...(shouldClearMask ? { maskDraft: null, maskEditorImageId: null } : {}),
+    }
+    restoredGalleryWorkspaceDrafts[workspace] = isEmptyAgentInputDraft(restoredDraft) ? null : restoredDraft
+    galleryWorkspaceDraftsChanged ||= restoredImages.length !== draft.inputImages.length ||
+      restoredImages.some((img, index) => img.dataUrl !== draft.inputImages[index]?.dataUrl) ||
+      shouldClearMask
+  }
+  if (galleryWorkspaceDraftsChanged) {
+    const latestState = useStore.getState()
+    const activeDraft = restoredGalleryWorkspaceDrafts[latestState.activeGalleryWorkspace]
+    useStore.setState({
+      galleryWorkspaceDrafts: restoredGalleryWorkspaceDrafts,
+      galleryInputDraft: activeDraft,
+      ...(latestState.appMode === 'gallery' ? restoreGalleryInputDraftState(activeDraft) : {}),
+    })
+  }
+
   const restoredAgentInputDrafts: Record<string, AgentInputDraft> = {}
   let agentDraftsChanged = false
   for (const [conversationId, draft] of Object.entries(agentInputDrafts)) {
@@ -1918,8 +2188,281 @@ export async function initStore() {
   }
 }
 
+function clearServerJobRecoveryTimer(taskId: string) {
+  const timer = serverJobRecoveryTimers.get(taskId)
+  if (timer) clearTimeout(timer)
+  serverJobRecoveryTimers.delete(taskId)
+}
+
+function scheduleServerJobRecovery(taskId: string, delayMs = 2_000) {
+  if (serverJobRecoveryTimers.has(taskId)) return
+  const timer = setTimeout(() => {
+    serverJobRecoveryTimers.delete(taskId)
+    void recoverServerJob(taskId)
+  }, delayMs)
+  serverJobRecoveryTimers.set(taskId, timer)
+}
+
+async function recoverServerJob(taskId: string) {
+  const localTask = useStore.getState().tasks.find((task) => task.id === taskId)
+  if (!localTask?.serverJobId || localTask.status !== 'running') {
+    clearServerJobRecoveryTimer(taskId)
+    return
+  }
+
+  try {
+    const job = await getServerJob(localTask.serverJobId)
+    if (!isServerJobTerminal(job.status)) {
+      updateTaskInStore(taskId, {
+        error: null,
+        serverJobStatus: job.status,
+        startedAt: parseApiDateTime(job.started_at),
+        generationDurationMs: job.generation_duration_ms,
+        requestedAspectRatio: job.requested_aspect_ratio,
+        requestedWidth: job.requested_width,
+        requestedHeight: job.requested_height,
+        resolvedProviderSize: job.resolved_provider_size,
+      })
+      scheduleServerJobRecovery(taskId)
+      return
+    }
+
+    clearServerJobRecoveryTimer(taskId)
+    const finishedAt = parseApiDateTime(job.finished_at) ?? Date.now()
+    const startedAt = parseApiDateTime(job.started_at)
+    const generationDurationMs = job.generation_duration_ms
+      ?? (startedAt == null ? null : Math.max(0, finishedAt - startedAt))
+    if (job.status !== 'succeeded') {
+      const message = job.error_message || (job.status === 'cancelled' ? '任务已取消' : '服务端任务执行失败')
+      updateTaskInStore(taskId, {
+        status: 'error',
+        error: message,
+        serverJobStatus: job.status,
+        startedAt,
+        finishedAt,
+        generationDurationMs,
+        elapsed: generationDurationMs,
+      })
+      return
+    }
+
+    if (!job.outputs.length) {
+      updateTaskInStore(taskId, {
+        status: 'error',
+        error: '服务端任务已完成，但没有返回图片。',
+        serverJobStatus: job.status,
+        startedAt,
+        finishedAt,
+        generationDurationMs,
+        elapsed: generationDurationMs,
+      })
+      return
+    }
+
+    const outputImages: string[] = []
+    for (const output of job.outputs) outputImages.push(await importServerOutput(output))
+    const actualParamsByImage = Object.fromEntries(job.outputs.map((output, index) => [
+      outputImages[index],
+      { size: `${output.width}x${output.height}` },
+    ]))
+    updateTaskInStore(taskId, {
+      outputImages,
+      serverWorkspaceType: job.workspace_type,
+      serverOutputAssetIds: job.outputs.map((output) => output.asset_id),
+      serverGeneratedOutputIds: job.outputs.map((output) => output.id),
+      status: 'done',
+      error: null,
+      serverJobStatus: job.status,
+      startedAt,
+      finishedAt,
+      generationDurationMs,
+      elapsed: generationDurationMs,
+      actualParams: job.actual_width && job.actual_height ? { size: `${job.actual_width}x${job.actual_height}` } : undefined,
+      actualParamsByImage,
+      requestedAspectRatio: job.requested_aspect_ratio,
+      requestedWidth: job.requested_width,
+      requestedHeight: job.requested_height,
+      resolvedProviderSize: job.resolved_provider_size,
+      actualWidth: job.actual_width,
+      actualHeight: job.actual_height,
+      sizeMismatch: job.size_mismatch,
+    })
+    useStore.getState().showToast(`任务完成，共生成 ${outputImages.length} 张图片`, 'success')
+  } catch (error) {
+    const latest = useStore.getState().tasks.find((task) => task.id === taskId)
+    if (!latest || latest.status !== 'running') return
+    updateTaskInStore(taskId, { error: error instanceof Error ? `状态同步中断：${error.message}` : '状态同步中断，正在重试。' })
+    scheduleServerJobRecovery(taskId, 5_000)
+  }
+}
+
+async function submitServerBackedTask(options: { allowFullMask?: boolean } = {}): Promise<boolean> {
+  const state = useStore.getState()
+  const trimmedPrompt = state.prompt.trim()
+  if (!trimmedPrompt) {
+    state.showToast('请输入提示词', 'error')
+    return false
+  }
+
+  try {
+    const category = resolvePendingTaskCategory(state.pendingTaskCategory, trimmedPrompt)
+    let orderedInputImages = state.inputImages
+    let maskImageId: string | null = null
+    let maskTargetImageId: string | null = null
+    let maskAssetId: string | undefined
+
+    if (state.maskDraft) {
+      orderedInputImages = orderInputImagesForMask(state.inputImages, state.maskDraft.targetImageId)
+      const coverage = await validateMaskMatchesImage(state.maskDraft.maskDataUrl, orderedInputImages[0].dataUrl)
+      if (coverage === 'full' && !options.allowFullMask) {
+        state.setConfirmDialog({
+          title: '确认编辑整张图片？',
+          message: '当前遮罩覆盖了整张图片，提交后可能会重绘全部内容。是否继续？',
+          confirmText: '继续提交',
+          tone: 'warning',
+          action: () => { void submitServerBackedTask({ allowFullMask: true }) },
+        })
+        return false
+      }
+      maskImageId = await storeImage(state.maskDraft.maskDataUrl, 'mask')
+      maskTargetImageId = state.maskDraft.targetImageId
+    }
+
+    const styleReferenceImageId = category.styleReferenceImageId?.trim()
+    if (styleReferenceImageId && !orderedInputImages.some((image) => image.id === styleReferenceImageId)) {
+      if (orderedInputImages.length + 1 > API_MAX_INPUT_IMAGES) throw new Error(`参考图不能超过 ${API_MAX_INPUT_IMAGES} 张`)
+      const dataUrl = await ensureImageCached(styleReferenceImageId)
+      if (!dataUrl) throw new Error('所选风格参考图不存在，请重新选择。')
+      orderedInputImages = [...orderedInputImages, { id: styleReferenceImageId, dataUrl }]
+    }
+
+    for (const image of orderedInputImages) await storeImage(image.dataUrl)
+    const referenceAssets = []
+    for (const [index, image] of orderedInputImages.entries()) {
+      const assetCategory = image.id === styleReferenceImageId ? 'style_reference' : 'product_reference'
+      referenceAssets.push(await uploadDataUrlAsset(image.dataUrl, assetCategory, `reference-${index + 1}`))
+    }
+    if (state.maskDraft) {
+      maskAssetId = (await uploadDataUrlAsset(state.maskDraft.maskDataUrl, 'temporary', 'mask')).id
+    }
+
+    const capability: JobCapability = maskAssetId
+      ? 'mask_edit'
+      : referenceAssets.length >= 1
+          ? 'image_edit'
+          : 'image_generation'
+    const workspace: JobWorkspace = category.workflow === 'amazon-aplus' || state.activeGalleryWorkspace === 'aplus' ? 'aplus' : 'listing'
+    const operationCode = workspace === 'aplus' ? 'aplus.generate' : 'listing.generate'
+    const modelCode = await resolveModelCode(capability, operationCode)
+    const requestedCount = Math.min(MAX_OPENAI_OUTPUT_IMAGES, Math.max(1, Math.trunc(state.params.n || 1)))
+    const normalizedParams = { ...state.params, n: requestedCount }
+    const sizeSnapshot = resolveImageSize(normalizedParams.size, normalizedParams.aspect_ratio)
+    const referenceAssetIds = referenceAssets.map((asset) => asset.id)
+    const submittedJobs = requestedCount === 1
+      ? [await submitServerJob({
+          operation_code: operationCode,
+          workspace_type: workspace,
+          queue_name: workspace === 'aplus' ? 'aplus_queue' : 'listing_queue',
+          capability,
+          model_code: modelCode,
+          idempotency_key: `web:${randomUuid()}`,
+          input: {
+            prompt: trimmedPrompt,
+            reference_asset_ids: referenceAssetIds,
+            ...(maskAssetId ? { mask_asset_id: maskAssetId } : {}),
+            size: sizeSnapshot.providerSize,
+            aspect_ratio: sizeSnapshot.aspectRatio,
+            ...(sizeSnapshot.width ? { requested_width: sizeSnapshot.width } : {}),
+            ...(sizeSnapshot.height ? { requested_height: sizeSnapshot.height } : {}),
+            quality: normalizedParams.quality,
+            output_format: normalizedParams.output_format,
+            output_compression: normalizedParams.output_compression,
+            n: 1,
+            metadata: { category },
+          },
+          billing_factors: {
+            quality: normalizedParams.quality,
+            resolution: normalizedParams.size,
+          },
+        })]
+      : (await submitServerBatch({
+          name: `${workspace === 'aplus' ? 'A+图' : 'Listing图'}批量生成 ${new Date().toLocaleString('zh-CN', { hour12: false })}`,
+          workspace_type: workspace,
+          operation_code: operationCode,
+          capability,
+          model_code: modelCode,
+          idempotency_key: `batch:${randomUuid()}`,
+          concurrency: requestedCount,
+          items: Array.from({ length: requestedCount }, (_, index) => ({
+            client_item_id: `image-${index + 1}-${randomUuid()}`,
+            prompt: trimmedPrompt,
+            reference_asset_ids: referenceAssetIds,
+            ...(maskAssetId ? { mask_asset_id: maskAssetId } : {}),
+            size: sizeSnapshot.providerSize,
+            aspect_ratio: sizeSnapshot.aspectRatio,
+            ...(sizeSnapshot.width ? { requested_width: sizeSnapshot.width } : {}),
+            ...(sizeSnapshot.height ? { requested_height: sizeSnapshot.height } : {}),
+            quality: normalizedParams.quality,
+            output_format: normalizedParams.output_format,
+            output_compression: normalizedParams.output_compression,
+            metadata: { category, output_index: index + 1, output_count: requestedCount },
+          })),
+        })).jobs
+
+    const taskParams = { ...normalizedParams, n: 1 }
+    const tasks: TaskRecord[] = submittedJobs.map((submitted) => ({
+      id: submitted.id,
+      serverJobId: submitted.id,
+      serverWorkspaceType: submitted.workspace_type,
+      prompt: trimmedPrompt,
+      params: taskParams,
+      apiProvider: 'platform',
+      apiProfileName: '平台统一资源池',
+      apiMode: 'images',
+      apiModel: modelCode,
+      inputImageIds: orderedInputImages.map((image) => image.id),
+      maskTargetImageId,
+      maskImageId,
+      outputImages: [],
+      status: 'running',
+      error: null,
+      createdAt: parseApiDateTime(submitted.created_at) ?? Date.now(),
+      startedAt: parseApiDateTime(submitted.started_at),
+      finishedAt: null,
+      elapsed: null,
+      generationDurationMs: submitted.generation_duration_ms,
+      serverJobStatus: submitted.status,
+      requestedAspectRatio: submitted.requested_aspect_ratio ?? sizeSnapshot.aspectRatio,
+      requestedWidth: submitted.requested_width ?? sizeSnapshot.width,
+      requestedHeight: submitted.requested_height ?? sizeSnapshot.height,
+      resolvedProviderSize: submitted.resolved_provider_size ?? sizeSnapshot.providerSize,
+      category,
+    }))
+    const submittedIds = new Set(tasks.map((task) => task.id))
+    useStore.getState().setTasks([...tasks, ...useStore.getState().tasks.filter((item) => !submittedIds.has(item.id))])
+    await Promise.all(tasks.map((task) => putTask(task)))
+    if (state.settings.clearInputAfterSubmit) {
+      useStore.getState().setPrompt('')
+      useStore.getState().clearInputImages()
+    }
+    useStore.getState().setReusedTaskApiProfile(null)
+    useStore.getState().setPendingTaskCategory(null)
+    useStore.getState().showToast(
+      requestedCount === 1 ? '任务已提交到服务端，离开页面后仍会继续执行' : `已提交 ${requestedCount} 张图片，系统将通过统一资源池并发生成`,
+      'success',
+    )
+    tasks.forEach((task) => scheduleServerJobRecovery(task.id, 0))
+    return true
+  } catch (error) {
+    state.showToast(error instanceof Error ? error.message : '任务提交失败', 'error')
+    return false
+  }
+}
+
 /** 提交新任务 */
 export async function submitTask(options: { allowFullMask?: boolean; useCurrentApiProfileWhenReusedMissing?: boolean } = {}): Promise<boolean> {
+  if (!runtimeConfig.isStandalone) return submitServerBackedTask(options)
+
   const { settings, prompt, inputImages, maskDraft, params, reusedTaskApiProfileId, reusedTaskApiProfileName, reusedTaskApiProfileMissing, pendingTaskCategory, showToast, setConfirmDialog } =
     useStore.getState()
 
@@ -2317,6 +2860,45 @@ function addInputDraftReferencedImageIds(target: Set<string>, draft: AgentInputD
   for (const img of draft.inputImages) target.add(img.id)
 }
 
+function addGalleryWorkspaceDraftReferencedImageIds(target: Set<string>, drafts: GalleryWorkspaceDrafts) {
+  for (const draft of Object.values(drafts)) addInputDraftReferencedImageIds(target, draft)
+}
+
+function addBatchTryOnReferencedImageIds(target: Set<string>, batch = useStore.getState().batchTryOnBatch) {
+  if (!batch) return
+  if (batch.templateImageId) target.add(batch.templateImageId)
+  for (const item of batch.items) {
+    target.add(item.garmentImageId)
+    if (item.outputImageId) target.add(item.outputImageId)
+  }
+}
+
+function createGalleryWorkspaceDrafts(listingDraft: AgentInputDraft | null = null): GalleryWorkspaceDrafts {
+  return {
+    listing: listingDraft ? copyAgentInputDraft(listingDraft) : null,
+    aplus: null,
+  }
+}
+
+function normalizeGalleryWorkspaceDrafts(value: unknown, legacyListingDraft: AgentInputDraft | null): GalleryWorkspaceDrafts {
+  const drafts = createGalleryWorkspaceDrafts(legacyListingDraft)
+  if (!isRecord(value)) return drafts
+  for (const workspace of ['listing', 'aplus'] as const) {
+    if (!(workspace in value)) continue
+    const normalized = normalizeAgentInputDraft(value[workspace])
+    drafts[workspace] = isEmptyAgentInputDraft(normalized) ? null : normalized
+  }
+  return drafts
+}
+
+function normalizeGalleryWorkspaceParams(value: unknown, legacyParams: TaskParams): GalleryWorkspaceParams {
+  const record = isRecord(value) ? value : {}
+  return {
+    listing: normalizePersistedParams(record.listing ?? legacyParams),
+    aplus: normalizePersistedParams(record.aplus ?? DEFAULT_PARAMS),
+  }
+}
+
 function addTaskReferencedImageIds(target: Set<string>, task: TaskRecord) {
   for (const id of task.inputImageIds || []) target.add(id)
   if (task.maskImageId) target.add(task.maskImageId)
@@ -2328,11 +2910,13 @@ async function deleteUnreferencedImageIds(imageIds: Iterable<string>) {
   const candidates = Array.from(new Set(Array.from(imageIds).filter(Boolean)))
   if (candidates.length === 0) return
 
-  const { tasks, inputImages, galleryInputDraft } = useStore.getState()
+  const { tasks, inputImages, galleryInputDraft, galleryWorkspaceDrafts } = useStore.getState()
   const stillUsed = new Set<string>()
   for (const task of tasks) addTaskReferencedImageIds(stillUsed, task)
   addAgentReferencedImageIds(stillUsed)
   addInputDraftReferencedImageIds(stillUsed, galleryInputDraft)
+  addGalleryWorkspaceDraftReferencedImageIds(stillUsed, galleryWorkspaceDrafts)
+  addBatchTryOnReferencedImageIds(stillUsed)
   for (const img of inputImages) stillUsed.add(img.id)
 
   for (const imgId of candidates) {
@@ -3537,7 +4121,97 @@ async function executeAgentRound(
   }
 }
 
-async function executeTask(taskId: string) {
+export interface RunBatchTryOnTaskOptions {
+  batchId: string
+  garmentFileName: string
+  index: number
+  templateImageId: string
+  garmentImageId: string
+  prompt: string
+  params: TaskParams
+  onTaskCreated?: (taskId: string) => void
+}
+
+export function getBatchTryOnProfileError(settings: AppSettings): string | null {
+  const profile = getActiveApiProfile(settings)
+  const validation = validateApiProfile(profile)
+  if (validation) return `请先完善生图 API 配置：${validation}`
+
+  const supportsBuiltInReferenceImages =
+    profile.provider === 'fal' ||
+    (profile.provider === 'openai' && (profile.apiMode === 'images' || profile.apiMode === 'responses')) ||
+    canApiProfileGenerateImages(profile)
+  if (supportsBuiltInReferenceImages) return null
+
+  const customProvider = getCustomProviderDefinition(settings, profile.provider)
+  const mapping = customProvider?.editSubmit ?? customProvider?.submit
+  const serializedMapping = mapping ? JSON.stringify(mapping) : ''
+  const supportsCustomReferenceImages = Boolean(
+    mapping?.files?.some((file) => file.source === 'inputImages') ||
+    serializedMapping.includes('$inputImages'),
+  )
+  if (!supportsCustomReferenceImages) {
+    return '当前生图配置不支持参考图套图，请更换支持多图参考或图片编辑的生图模型。'
+  }
+  return null
+}
+
+/** 为批量套图创建标准历史任务，并复用现有任务执行、图片压缩、API 和输出存储链路。 */
+export async function runBatchTryOnTask(options: RunBatchTryOnTaskOptions): Promise<TaskRecord> {
+  const { settings } = useStore.getState()
+  const activeProfile = getActiveApiProfile(settings)
+  const profileError = getBatchTryOnProfileError(settings)
+  if (profileError) throw new Error(profileError)
+
+  const inputImageIds = [options.templateImageId, options.garmentImageId]
+  for (const imageId of inputImageIds) {
+    if (!await ensureImageCached(imageId)) throw new Error('参考图读取失败，请重新上传后再试。')
+  }
+
+  const normalizedParams = normalizeParamsForSettings(
+    { ...options.params, n: 1 },
+    settings,
+    { hasInputImages: true },
+  )
+  const taskId = genId()
+  const createdAt = Date.now()
+  const task: TaskRecord = {
+    id: taskId,
+    prompt: options.prompt.trim(),
+    params: normalizedParams,
+    apiProvider: activeProfile.provider,
+    apiProfileId: activeProfile.id,
+    apiProfileName: activeProfile.name,
+    apiMode: activeProfile.apiMode,
+    apiModel: activeProfile.model,
+    inputImageIds,
+    maskTargetImageId: null,
+    maskImageId: null,
+    outputImages: [],
+    status: 'running',
+    error: null,
+    createdAt,
+    finishedAt: null,
+    elapsed: null,
+    category: {
+      workflow: 'batch-tryon',
+      batchTryOnBatchId: options.batchId,
+      batchTryOnGarmentName: options.garmentFileName,
+      batchTryOnTemplateImageId: options.templateImageId,
+      batchTryOnIndex: options.index,
+    },
+  }
+
+  useStore.getState().setTasks([task, ...useStore.getState().tasks])
+  await putTask(task)
+  options.onTaskCreated?.(taskId)
+  await executeTask(taskId, { quiet: true })
+  const completed = useStore.getState().tasks.find((item) => item.id === taskId)
+  if (!completed) throw new Error('任务记录保存失败，请重试。')
+  return completed
+}
+
+async function executeTask(taskId: string, options: { quiet?: boolean } = {}) {
   const { settings } = useStore.getState()
   const task = useStore.getState().tasks.find((t) => t.id === taskId)
   if (!task) return
@@ -3678,7 +4352,7 @@ async function executeTask(taskId: string) {
     })
     void deleteUnreferencedImageIds(partialImageIdsToClean)
 
-    useStore.getState().showToast(`生成完成，共 ${outputIds.length} 张图片`, 'success')
+    if (!options.quiet) useStore.getState().showToast(`生成完成，共 ${outputIds.length} 张图片`, 'success')
     const currentMask = useStore.getState().maskDraft
     if (
       maskDataUrl &&
@@ -3743,7 +4417,7 @@ async function executeTask(taskId: string) {
         finishedAt: Date.now(),
         elapsed: Date.now() - task.createdAt,
       })
-      useStore.getState().setDetailTaskId(taskId)
+      if (!options.quiet) useStore.getState().setDetailTaskId(taskId)
     }
   } finally {
     // 释放输入图片的内存缓存（已持久化到 IndexedDB，后续按需从 DB 加载）
@@ -3910,7 +4584,7 @@ export async function editOutputs(task: TaskRecord, selectedOutputImageId?: stri
 
 /** 删除多条任务 */
 export async function removeMultipleTasks(taskIds: string[]) {
-  const { tasks, setTasks, inputImages, galleryInputDraft, showToast, clearSelection, selectedTaskIds } = useStore.getState()
+  const { tasks, setTasks, inputImages, galleryInputDraft, galleryWorkspaceDrafts, showToast, clearSelection, selectedTaskIds } = useStore.getState()
   
   if (!taskIds.length) return
 
@@ -3938,6 +4612,8 @@ export async function removeMultipleTasks(taskIds: string[]) {
   }
   addAgentReferencedImageIds(stillUsed)
   addInputDraftReferencedImageIds(stillUsed, galleryInputDraft)
+  addGalleryWorkspaceDraftReferencedImageIds(stillUsed, galleryWorkspaceDrafts)
+  addBatchTryOnReferencedImageIds(stillUsed)
   for (const img of inputImages) stillUsed.add(img.id)
 
   // 删除孤立图片
@@ -3960,7 +4636,7 @@ export async function removeMultipleTasks(taskIds: string[]) {
 
 /** 删除单条任务 */
 export async function removeTask(task: TaskRecord) {
-  const { tasks, setTasks, inputImages, galleryInputDraft, showToast } = useStore.getState()
+  const { tasks, setTasks, inputImages, galleryInputDraft, galleryWorkspaceDrafts, showToast } = useStore.getState()
 
   // 收集此任务关联的图片
   const taskImageIds = new Set([
@@ -3982,6 +4658,8 @@ export async function removeTask(task: TaskRecord) {
   }
   addAgentReferencedImageIds(stillUsed)
   addInputDraftReferencedImageIds(stillUsed, galleryInputDraft)
+  addGalleryWorkspaceDraftReferencedImageIds(stillUsed, galleryWorkspaceDrafts)
+  addBatchTryOnReferencedImageIds(stillUsed)
   for (const img of inputImages) stillUsed.add(img.id)
 
   // 删除孤立图片
@@ -4017,6 +4695,13 @@ export async function clearData(options: ClearOptions = { clearConfig: true, cle
     useStore.setState({
       agentConversations: [],
       activeAgentConversationId: null,
+      batchTryOnBatch: null,
+      activeGalleryWorkspace: 'listing',
+      galleryWorkspaceDrafts: createGalleryWorkspaceDrafts(),
+      galleryWorkspaceParams: {
+        listing: { ...DEFAULT_PARAMS },
+        aplus: { ...DEFAULT_PARAMS },
+      },
       supportPromptOpen: false,
       supportPromptSkippedForImportedData: false,
     })

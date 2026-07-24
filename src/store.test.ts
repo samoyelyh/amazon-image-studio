@@ -94,10 +94,64 @@ vi.mock('./lib/agentApi', () => ({
 }))
 import { clearAmazonPlannerSessions, clearImages, getAllAmazonPlannerSessions, putAmazonPlannerSession, putImage } from './lib/db'
 import { callAgentResponsesApi, callBatchImageSingle } from './lib/agentApi'
-import { cleanStaleAgentInputDrafts, clearData, editOutputs, exportData, getErrorToastMessage, getPersistedState, getTaskApiProfile, importData, markInterruptedOpenAIRunningTasks, mergePersistedState, regenerateAgentAssistantMessage, removeTask, retryTask, reuseConfig, submitAgentMessage, submitTask, useStore } from './store'
+import { callImageApi } from './lib/api'
+import { cleanStaleAgentInputDrafts, clearData, editOutputs, exportData, getErrorToastMessage, getPersistedState, getTaskApiProfile, importData, markInterruptedOpenAIRunningTasks, mergePersistedState, regenerateAgentAssistantMessage, removeTask, retryTask, reuseConfig, runBatchTryOnTask, submitAgentMessage, submitTask, useStore } from './store'
 
 const imageA = { id: 'image-a', dataUrl: 'data:image/png;base64,a' }
 const imageB = { id: 'image-b', dataUrl: 'data:image/png;base64,b' }
+
+describe('workspace draft isolation', () => {
+  beforeEach(() => {
+    useStore.setState({
+      appMode: 'gallery',
+      activeGalleryWorkspace: 'listing',
+      galleryWorkspaceDrafts: { listing: null, aplus: null },
+      galleryWorkspaceParams: {
+        listing: { ...DEFAULT_PARAMS },
+        aplus: { ...DEFAULT_PARAMS },
+      },
+      galleryInputDraft: null,
+      prompt: '',
+      inputImages: [],
+      maskDraft: null,
+      maskEditorImageId: null,
+      params: { ...DEFAULT_PARAMS },
+    })
+  })
+
+  it('restores prompt, images and params independently for Listing and A+', () => {
+    useStore.getState().setPrompt('listing prompt')
+    useStore.getState().setInputImages([imageA])
+    useStore.getState().setParams({ quality: 'high' })
+
+    useStore.getState().activateGalleryWorkspace('aplus')
+    expect(useStore.getState()).toMatchObject({
+      activeGalleryWorkspace: 'aplus',
+      prompt: '',
+      inputImages: [],
+      params: { quality: DEFAULT_PARAMS.quality },
+    })
+
+    useStore.getState().setPrompt('aplus prompt')
+    useStore.getState().setInputImages([imageB])
+    useStore.getState().setParams({ quality: 'low' })
+
+    useStore.getState().activateGalleryWorkspace('listing')
+    expect(useStore.getState()).toMatchObject({
+      activeGalleryWorkspace: 'listing',
+      prompt: 'listing prompt',
+      inputImages: [imageA],
+      params: { quality: 'high' },
+    })
+
+    useStore.getState().activateGalleryWorkspace('aplus')
+    expect(useStore.getState()).toMatchObject({
+      prompt: 'aplus prompt',
+      inputImages: [imageB],
+      params: { quality: 'low' },
+    })
+  })
+})
 
 describe('error toast messages', () => {
   it('drops long error detail after the failure title', () => {
@@ -244,6 +298,50 @@ describe('mask draft lifecycle in store actions', () => {
     expect(state.inputImages).toEqual([imageB])
     expect(state.maskDraft).toBeNull()
     expect(state.maskEditorImageId).toBeNull()
+  })
+
+  it('runs batch try-on through the existing image API with template first and garment second', async () => {
+    await putImage(imageA)
+    await putImage(imageB)
+    const profile = createDefaultOpenAIProfile({ id: 'batch-profile', apiKey: 'test-key', apiMode: 'images' })
+    useStore.setState({
+      settings: normalizeSettings({
+        ...DEFAULT_SETTINGS,
+        profiles: [profile],
+        activeProfileId: profile.id,
+        apiKey: 'test-key',
+      }),
+      tasks: [],
+    })
+    vi.mocked(callImageApi).mockResolvedValueOnce({
+      images: ['data:image/jpeg;base64,output'],
+      actualParams: { size: '1760x2352', n: 1 },
+      actualParamsList: [{ size: '1760x2352', n: 1 }],
+    })
+
+    const result = await runBatchTryOnTask({
+      batchId: 'batch-a',
+      garmentFileName: 'shirt-07.jpg',
+      index: 0,
+      templateImageId: imageA.id,
+      garmentImageId: imageB.id,
+      prompt: 'batch try-on prompt',
+      params: { ...DEFAULT_PARAMS, quality: 'high', size: '1760x2352', n: 1 },
+    })
+
+    expect(vi.mocked(callImageApi)).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: 'batch try-on prompt',
+      inputImageDataUrls: [imageA.dataUrl, imageB.dataUrl],
+    }))
+    expect(result.status).toBe('done')
+    expect(result.outputImages).toHaveLength(1)
+    expect(result.category).toMatchObject({
+      workflow: 'batch-tryon',
+      batchTryOnBatchId: 'batch-a',
+      batchTryOnGarmentName: 'shirt-07.jpg',
+      batchTryOnTemplateImageId: imageA.id,
+      batchTryOnIndex: 0,
+    })
   })
 
   it('clears an invalid mask draft when submit cannot find the mask target image', async () => {
