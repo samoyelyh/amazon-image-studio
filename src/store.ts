@@ -26,6 +26,11 @@ import { canApiProfileGenerateImages, DEFAULT_SETTINGS, getActiveApiProfile, get
 import { dismissAllTooltips } from './lib/tooltipDismiss'
 import { remapImageMentionsForOrder, replaceImageMentionsForApi } from './lib/promptImageMentions'
 import {
+  DEFAULT_BATCH_TRY_ON_PRESET_SELECTION,
+  resolveBatchTryOnPresetSelection,
+  summarizeBatchTryOnPresets,
+} from './lib/batchTryOnPresets'
+import {
   CURRENT_THUMBNAIL_VERSION,
   getAllTasks,
   putTask,
@@ -635,7 +640,9 @@ function normalizePersistedBatchTryOnBatch(value: unknown): BatchTryOnBatch | nu
     const current = item as BatchTryOnBatch['items'][number]
     if (typeof current.id !== 'string' || typeof current.garmentImageId !== 'string') return []
     const wasRunning = current.status === 'running'
-    const normalizedStatus = current.status === 'pending' || current.status === 'done' || current.status === 'error' || current.status === 'stopped'
+    const normalizedStatus = current.status === 'pending' || current.status === 'queued'
+      || current.status === 'retry_waiting' || current.status === 'done'
+      || current.status === 'error' || current.status === 'stopped'
       ? current.status
       : 'pending'
     return [{
@@ -652,19 +659,73 @@ function normalizePersistedBatchTryOnBatch(value: unknown): BatchTryOnBatch | nu
         : {}),
     }]
   })
+  const templates = Array.isArray(record.templates)
+    ? record.templates.filter((template) => template && typeof template.id === 'string' && typeof template.imageId === 'string')
+    : record.templateImageId ? [{
+        id: `legacy-template-${record.templateImageId}`,
+        imageId: record.templateImageId,
+        serverAssetId: record.templateServerAssetId,
+        fileName: record.templateFileName || 'model-template.png',
+        displayName: (record.templateFileName || '默认模板').replace(/\.[^.]+$/, ''),
+        width: record.templateWidth,
+        height: record.templateHeight,
+        selected: true,
+        isDefault: true,
+        sourceType: record.templateSourceType,
+        sourceId: record.templateSourceId,
+      }] : []
+  const garments = Array.isArray(record.garments)
+    ? record.garments.filter((garment) => garment && typeof garment.id === 'string' && typeof garment.garmentImageId === 'string')
+    : Array.from(new Map(items.map((item) => [
+        item.garmentId || item.garmentImageId,
+        {
+          id: item.garmentId || item.id,
+          batchId: record.id!,
+          garmentImageId: item.garmentImageId,
+          serverAssetId: item.garmentServerAssetId,
+          garmentFileName: item.garmentFileName,
+          index: item.index,
+          selected: true,
+          createdAt: item.createdAt,
+        },
+      ])).values())
+  const presetSelection = resolveBatchTryOnPresetSelection({
+    ...DEFAULT_BATCH_TRY_ON_PRESET_SELECTION,
+    ...(record.presetSelection || {}),
+  })
+  const defaultTemplate = templates.find((template) => template.isDefault) || templates[0]
   return {
     id: record.id,
+    serverProjectId: typeof record.serverProjectId === 'string' ? record.serverProjectId : undefined,
+    serverProjectName: typeof record.serverProjectName === 'string' ? record.serverProjectName : undefined,
     serverBatchId: typeof record.serverBatchId === 'string' ? record.serverBatchId : undefined,
     templateImageId: typeof record.templateImageId === 'string' ? record.templateImageId : null,
+    templateServerAssetId: typeof record.templateServerAssetId === 'string' ? record.templateServerAssetId : undefined,
+    templateSourceType: record.templateSourceType === 'listing_generated_output' || record.templateSourceType === 'upload' ? record.templateSourceType : undefined,
+    templateSourceId: typeof record.templateSourceId === 'string' ? record.templateSourceId : undefined,
     templateFileName: typeof record.templateFileName === 'string' ? record.templateFileName : undefined,
     templateWidth: typeof record.templateWidth === 'number' ? record.templateWidth : undefined,
     templateHeight: typeof record.templateHeight === 'number' ? record.templateHeight : undefined,
-    items,
+    templates,
+    garments,
+    items: items.map((item) => ({
+      ...item,
+      templateId: item.templateId || defaultTemplate?.id,
+      templateImageId: item.templateImageId || defaultTemplate?.imageId,
+      templateServerAssetId: item.templateServerAssetId || defaultTemplate?.serverAssetId,
+      templateName: item.templateName || defaultTemplate?.displayName,
+      garmentId: item.garmentId || garments.find((garment) => garment.garmentImageId === item.garmentImageId)?.id,
+      presetSelection: item.presetSelection || presetSelection,
+      presetSummary: item.presetSummary || summarizeBatchTryOnPresets(item.presetSelection || presetSelection),
+    })),
+    presetSelection,
     extraRequirements: typeof record.extraRequirements === 'string' ? record.extraRequirements : '',
     aspectRatio: typeof record.aspectRatio === 'string' && (
       record.aspectRatio === 'template' || /^\d+(?:\.\d+)?:\d+(?:\.\d+)?$/.test(record.aspectRatio)
     ) ? record.aspectRatio : 'template',
-    concurrency: record.concurrency === 1 || record.concurrency === 3 ? record.concurrency : 2,
+    concurrency: record.concurrency === 1 || record.concurrency === 2 || record.concurrency === 3
+      || record.concurrency === 5 || record.concurrency === 10 ? record.concurrency : 2,
+    adminTestMode: Boolean(record.adminTestMode),
     params: normalizePersistedParams(record.params),
     queuePaused: runtimeConfig.isStandalone ? true : Boolean(record.queuePaused),
     createdAt: typeof record.createdAt === 'number' ? record.createdAt : now,
@@ -2206,7 +2267,9 @@ async function recoverServerJob(taskId: string) {
     ]))
     updateTaskInStore(taskId, {
       outputImages,
+      serverWorkspaceType: job.workspace_type,
       serverOutputAssetIds: job.outputs.map((output) => output.asset_id),
+      serverGeneratedOutputIds: job.outputs.map((output) => output.id),
       status: 'done',
       error: null,
       serverJobStatus: job.status,
@@ -2350,6 +2413,7 @@ async function submitServerBackedTask(options: { allowFullMask?: boolean } = {})
     const tasks: TaskRecord[] = submittedJobs.map((submitted) => ({
       id: submitted.id,
       serverJobId: submitted.id,
+      serverWorkspaceType: submitted.workspace_type,
       prompt: trimmedPrompt,
       params: taskParams,
       apiProvider: 'platform',

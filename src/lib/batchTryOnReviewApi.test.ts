@@ -29,4 +29,14 @@ describe('batch try-on review API', () => {
     expect(input).toMatchObject({ source_version_id: 'version-1', retry_mode: 'with_review_notes', review_notes: 'Keep 06.' })
     expect(input.idempotency_key).toBe('review:uuid-1')
   })
+
+  it('passes the React Query abort signal to the detail request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ item_id: 'item-1' }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const controller = new AbortController()
+    await getBatchTryOnReviewDetail('item-1', controller.signal)
+    expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal)
+  })
 })

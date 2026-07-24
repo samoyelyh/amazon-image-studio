@@ -23,7 +23,15 @@ export interface Asset {
 
 export interface AssetPage { items: Asset[]; total: number; limit: number; offset: number }
 export interface ProjectVersion { id: string; version_number: number; draft_json: Record<string, unknown>; change_summary: string | null; created_by: string; created_at: string }
-export interface ProjectAsset { id: string; role: string; sort_order: number; asset: Asset; created_at: string }
+export interface ProjectAsset {
+  id: string
+  role: string
+  sort_order: number
+  display_name: string | null
+  is_default: boolean
+  asset: Asset
+  created_at: string
+}
 export interface Project {
   id: string
   project_type: ProjectType
@@ -69,6 +77,10 @@ export function listProjects(projectType?: ProjectType, search?: string) {
   return authenticatedFetch<ProjectPage>(`/projects${params({ project_type: projectType, search })}`)
 }
 
+export function getProject(projectId: string) {
+  return authenticatedFetch<Project>(`/projects/${projectId}`)
+}
+
 export function createProject(input: { project_type: ProjectType; name: string; description?: string; draft: Record<string, unknown> }) {
   return authenticatedFetch<Project>('/projects', { method: 'POST', body: JSON.stringify(input) })
 }
@@ -82,6 +94,41 @@ export function saveProjectVersion(projectId: string, draft: Record<string, unkn
 
 export function updateProject(projectId: string, input: Partial<Pick<Project, 'name' | 'description' | 'status'>>) {
   return authenticatedFetch<Project>(`/projects/${projectId}`, { method: 'PATCH', body: JSON.stringify(input) })
+}
+
+export function linkProjectAsset(
+  projectId: string,
+  assetId: string,
+  role: string,
+  sortOrder = 0,
+  displayName?: string,
+  isDefault = false,
+) {
+  return authenticatedFetch<Project>(`/projects/${projectId}/assets`, {
+    method: 'POST',
+    body: JSON.stringify({
+      asset_id: assetId,
+      role,
+      sort_order: sortOrder,
+      display_name: displayName,
+      is_default: isDefault,
+    }),
+  })
+}
+
+export function updateProjectAsset(
+  projectId: string,
+  linkId: string,
+  input: { display_name?: string; is_default?: boolean; sort_order?: number },
+) {
+  return authenticatedFetch<Project>(`/projects/${projectId}/assets/${linkId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  })
+}
+
+export function unlinkProjectAsset(projectId: string, linkId: string) {
+  return authenticatedFetch<void>(`/projects/${projectId}/assets/${linkId}`, { method: 'DELETE' })
 }
 
 export function removeProject(projectId: string) {

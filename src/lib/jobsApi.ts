@@ -7,6 +7,9 @@ export interface JobOutput {
   id: string
   asset_id: string
   filename: string
+  display_filename: string
+  download_filename: string
+  download_url: string
   mime_type: string
   width: number
   height: number
@@ -73,6 +76,7 @@ export interface ServerJobBatch {
   capability: JobCapability | null
   status: string
   concurrency: number
+  admin_test_mode: boolean
   total_jobs: number
   succeeded_jobs: number
   failed_jobs: number
@@ -86,6 +90,34 @@ export interface ServerJobBatch {
 }
 
 export interface ServerJobBatchPage { items: ServerJobBatch[]; total: number; limit: number; offset: number }
+
+export interface ServerJobBatchDiagnostics {
+  batch_id: string
+  status_counts: Record<string, number>
+  configured_concurrency: number
+  effective_concurrency: number
+  actual_max_concurrency: number
+  worker_concurrency: number
+  active_jobs: number
+  stale_jobs: number
+  queue_name: string
+  broker_queue_length: number
+  online_workers: string[]
+  resource_pool_ids: string[]
+  resource_key_capacity: number
+  resource_available_capacity: number
+  attempts: number
+  retries: number
+  http_status_counts: Record<string, number>
+  error_code_counts: Record<string, number>
+  average_queue_wait_ms: number | null
+  average_generation_ms: number | null
+  latest_completed_at: string | null
+  latest_error_code: string | null
+  latest_error_message: string | null
+  limitation_reasons: string[]
+  availability_reasons: string[]
+}
 
 export interface ResourcePoolSummary {
   id: string
@@ -119,6 +151,7 @@ export interface JobBatchSubmitInput {
   idempotency_key: string
   project_id?: string
   concurrency: number
+  admin_test_mode?: boolean
   items: Array<{
     client_item_id: string
     prompt: string
@@ -183,6 +216,10 @@ export function listServerBatches(options: { status?: string; limit?: number; of
 
 export function getServerBatch(batchId: string) {
   return authenticatedFetch<ServerJobBatch>(`/job-batches/${batchId}`)
+}
+
+export function getServerBatchDiagnostics(batchId: string) {
+  return authenticatedFetch<ServerJobBatchDiagnostics>(`/job-batches/${batchId}/diagnostics`)
 }
 
 export function cancelServerBatch(batchId: string) {

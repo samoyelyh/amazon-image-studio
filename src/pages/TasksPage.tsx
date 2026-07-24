@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useAuth } from '../app/AuthContext'
-import { cancelServerBatch, cancelServerJob, listServerBatches, listServerJobs, type ServerJob } from '../lib/jobsApi'
-import { downloadServerOutput, downloadServerOutputZip } from '../lib/serverDownloads'
+import { cancelServerBatch, cancelServerJob, listServerBatches, listServerJobs, type ServerJob, type ServerJobBatch } from '../lib/jobsApi'
+import { downloadBatchTryOnResultsZip, downloadServerOutput, downloadServerOutputZip } from '../lib/serverDownloads'
 
 const statusLabel: Record<string, string> = {
-  pending: '等待调度', dispatched: '已入队', running: '生成中', retry_waiting: '等待重试',
-  succeeded: '已完成', failed: '失败', cancelled: '已取消', queued: '排队中', paused: '已暂停', partially_succeeded: '部分成功',
+  pending: '等待队列中', dispatched: '等待队列中', running: '生成中', retry_waiting: '等待队列中',
+  succeeded: '已完成', failed: '失败', cancelled: '已取消', queued: '等待队列中', paused: '已暂停', partially_succeeded: '部分成功',
 }
 const workspaceLabel: Record<string, string> = { listing: 'Listing 图', batch_tryon: '批量套图', aplus: 'A+ 图' }
 
@@ -27,8 +27,7 @@ export default function TasksPage() {
   const [message, setMessage] = useState('')
   const batches = useQuery({ queryKey: ['server-job-batches'], queryFn: () => listServerBatches({ limit: 50 }), refetchInterval: 3_000 })
   const jobs = useQuery({ queryKey: ['server-jobs'], queryFn: () => listServerJobs({ limit: 100 }), refetchInterval: 3_000 })
-  const batchedIds = useMemo(() => new Set(batches.data?.items.flatMap((batch) => batch.jobs.map((job) => job.id)) ?? []), [batches.data])
-  const standaloneJobs = jobs.data?.items.filter((job) => !batchedIds.has(job.id)) ?? []
+  const standaloneJobs = jobs.data?.items.filter((job) => !job.batch_id) ?? []
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['server-jobs'] })
     void queryClient.invalidateQueries({ queryKey: ['server-job-batches'] })
@@ -36,10 +35,17 @@ export default function TasksPage() {
   const cancelJob = useMutation({ mutationFn: cancelServerJob, onSuccess: () => { setMessage('已提交取消请求'); refresh() }, onError: (error) => setMessage(error.message) })
   const cancelBatch = useMutation({ mutationFn: cancelServerBatch, onSuccess: () => { setMessage('批次取消请求已提交'); refresh() }, onError: (error) => setMessage(error.message) })
 
-  const downloadBatch = async (name: string, batchJobs: ServerJob[]) => {
+  const downloadBatch = async (batch: ServerJobBatch) => {
     try {
       setMessage('正在打包成功结果…')
-      await downloadServerOutputZip(batchJobs.flatMap((job) => job.outputs), `${name || '生成批次'}.zip`)
+      if (batch.workspace_type === 'batch_tryon') {
+        await downloadBatchTryOnResultsZip(batch.id)
+      } else {
+        await downloadServerOutputZip(
+          batch.jobs.flatMap((job) => job.outputs),
+          `${batch.name || '生成批次'}.zip`,
+        )
+      }
       setMessage('下载已开始')
     } catch (error) { setMessage(error instanceof Error ? error.message : '下载失败') }
   }
@@ -62,7 +68,7 @@ export default function TasksPage() {
           <div className="flex flex-col gap-3 border-b border-gray-100 px-5 py-4 dark:border-white/[0.06] sm:flex-row sm:items-center sm:justify-between">
             <div><div className="flex flex-wrap items-center gap-2"><h2 className="font-bold text-gray-950 dark:text-white">{batch.name || '未命名批次'}</h2><span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusClass(batch.status)}`}>{statusLabel[batch.status] ?? batch.status}</span></div><div className="mt-1 text-xs text-gray-500">{workspaceLabel[batch.workspace_type]} · {time(batch.created_at)} · 并发 {batch.concurrency}</div></div>
             <div className="flex gap-2">
-              {batch.succeeded_jobs > 0 && <button onClick={() => void downloadBatch(batch.name || '生成批次', batch.jobs)} className="rounded-xl border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-700 dark:border-emerald-400/20 dark:text-emerald-200">批量下载</button>}
+              {batch.succeeded_jobs > 0 && <button onClick={() => void downloadBatch(batch)} className="rounded-xl border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-700 dark:border-emerald-400/20 dark:text-emerald-200">批量下载</button>}
               {auth.hasPermission('jobs.cancel') && canCancel && <button onClick={() => cancelBatch.mutate(batch.id)} disabled={cancelBatch.isPending} className="rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 disabled:opacity-50">取消批次</button>}
             </div>
           </div>
@@ -79,5 +85,7 @@ export default function TasksPage() {
 
 function JobRow({ job, index, canCancel, onCancel, onMessage }: { job: ServerJob; index: number; canCancel: boolean; onCancel: () => void; onMessage: (value: string) => void }) {
   const active = !['succeeded', 'failed', 'cancelled'].includes(job.status)
-  return <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-white">#{index + 1} {job.client_item_id || job.operation_code}</span><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusClass(job.status)}`}>{statusLabel[job.status] ?? job.status}</span></div><div className="mt-1 text-xs text-gray-500">尝试 {job.attempts}/{job.max_attempts} · {job.error_message || `进度 ${job.progress}%`}</div></div><div className="flex flex-wrap gap-2">{job.outputs.map((output) => <button key={output.id} onClick={() => void downloadServerOutput(output).catch((error) => onMessage(error.message))} className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-700 dark:border-white/[0.1] dark:text-gray-200">下载结果</button>)}{canCancel && active && <button onClick={onCancel} className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600">取消</button>}</div></div>
+  const waiting = ['pending', 'queued', 'dispatched', 'retry_waiting'].includes(job.status)
+  const detail = waiting ? '等待队列中' : job.error_message || `进度 ${job.progress}%`
+  return <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-white">#{index + 1} {job.client_item_id || job.operation_code}</span><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusClass(job.status)}`}>{statusLabel[job.status] ?? job.status}</span></div><div className="mt-1 text-xs text-gray-500">尝试 {job.attempts}/{job.max_attempts} · {detail}</div></div><div className="flex flex-wrap gap-2">{job.outputs.map((output) => <button key={output.id} onClick={() => void downloadServerOutput(output).catch((error) => onMessage(error.message))} className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-700 dark:border-white/[0.1] dark:text-gray-200">下载结果</button>)}{canCancel && active && <button onClick={onCancel} className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600">取消</button>}</div></div>
 }

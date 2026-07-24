@@ -13,8 +13,10 @@ from app.schemas.tasks import JobSubmitRequest
 from app.services.resource_pool_service import (
     acquire_resource, cool_down_key, create_api_key, release_resource,
 )
-from app.services.billing_service import settle_reservation
-from app.services.task_service import claim_job, recover_stale_jobs, refresh_batch_status, schedule_retry_or_fail, submit_job
+from app.services.billing_service import release_reservation, settle_reservation
+from app.services.task_service import (
+    claim_job, due_jobs, recover_stale_jobs, refresh_batch_status, schedule_retry_or_fail, submit_job,
+)
 
 
 async def auth_headers(client, email: str, password: str) -> dict[str, str]:
@@ -23,7 +25,14 @@ async def auth_headers(client, email: str, password: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
-async def seed_pool(context, *, key_values=("relay-key-one",), capability="image_generation", max_concurrency=1):
+async def seed_pool(
+    context,
+    *,
+    key_values=("relay-key-one",),
+    capability="image_generation",
+    max_concurrency=1,
+    operation_code="listing.generate",
+):
     settings = Settings(_env_file=None)
     async with context["session_factory"]() as session:
         provider = Provider(code=f"provider-{len(key_values)}-{capability}", name="Relay", provider_type="openai_compatible",
@@ -39,7 +48,7 @@ async def seed_pool(context, *, key_values=("relay-key-one",), capability="image
         session.add(pool)
         await session.flush()
         session.add(OperationResourcePool(
-            operation_code="listing.generate", resource_pool_id=pool.id,
+            operation_code=operation_code, resource_pool_id=pool.id,
             required_capability=capability, priority=100,
         ))
         keys = []
@@ -196,6 +205,8 @@ async def test_batch_split_concurrency_partial_settlement_and_refresh_recovery(i
     assert rejected.status_code == 422
     batch_id = created.json()["id"]
     job_ids = [item["id"] for item in created.json()["jobs"]]
+    assert [item["status"] for item in created.json()["jobs"]].count("dispatching") == 1
+    assert [item["status"] for item in created.json()["jobs"]].count("queued") == 1
 
     settings = Settings(_env_file=None)
     async with identity_test_context["session_factory"]() as session:
@@ -261,6 +272,225 @@ async def test_duplicate_worker_claim_and_stale_recovery_are_idempotent(identity
         await session.commit()
         recovered = await session.get(Job, job_id)
         assert recovered.status == JobStatus.RETRY_WAITING.value
+
+
+async def test_claim_reactivates_an_expired_zero_use_reservation(identity_test_context) -> None:
+    settings = Settings(_env_file=None)
+    from app.models.identity import User
+
+    _, model_code, _, _ = await seed_pool(identity_test_context)
+    async with identity_test_context["session_factory"]() as session:
+        user_id = await session.scalar(select(User.id).where(User.email == "first-admin@example.com"))
+        job, _ = await submit_job(
+            session, settings,
+            organization_id=identity_test_context["first_org"], user_id=user_id,
+            payload=JobSubmitRequest(
+                operation_code="listing.generate", workspace_type="listing", queue_name="listing_queue",
+                capability="image_generation", model_code=model_code,
+                idempotency_key="expired-reservation-reactivation-001",
+                input={"prompt": "test", "size": "1024x1024"},
+            ),
+        )
+        old_reservation_id = job.quota_reservation_id
+        await release_reservation(
+            session, organization_id=job.organization_id, reservation_id=old_reservation_id,
+            user_id=user_id, idempotency_key=f"job-failed:{job.id}",
+        )
+        await session.commit()
+        job_id = job.id
+
+    async with identity_test_context["session_factory"]() as session:
+        claimed = await claim_job(session, settings, job_id)
+        assert claimed is not None
+        assert claimed.quota_reservation_id != old_reservation_id
+        replacement = await session.get(QuotaReservation, claimed.quota_reservation_id)
+        assert replacement.status == "reserved"
+        claimed.attempts = claimed.max_attempts
+        await schedule_retry_or_fail(
+            session,
+            claimed,
+            code="provider.timeout",
+            message="upstream timeout",
+        )
+        assert claimed.status == JobStatus.FAILED.value
+        assert replacement.status == "released"
+        await session.commit()
+
+
+@pytest.mark.parametrize(("item_count", "concurrency"), [(5, 1), (10, 2), (20, 3), (25, 10)])
+async def test_due_job_scheduler_respects_batch_concurrency_under_load(
+    identity_test_context, item_count: int, concurrency: int,
+) -> None:
+    settings = Settings(
+        _env_file=None,
+        job_system_max_concurrency=100,
+        job_organization_max_concurrency=100,
+        job_user_max_concurrency=100,
+    )
+    from app.models.identity import User
+
+    _, model_code, _, _ = await seed_pool(identity_test_context, max_concurrency=concurrency)
+    async with identity_test_context["session_factory"]() as session:
+        user_id = await session.scalar(select(User.id).where(User.email == "first-admin@example.com"))
+        batch = JobBatch(
+            organization_id=identity_test_context["first_org"],
+            workspace_type="listing", operation_code="listing.generate", name=f"load-{item_count}",
+            model_code=model_code, capability="image_generation", concurrency=concurrency,
+            status=BatchStatus.QUEUED.value, total_jobs=item_count,
+            created_by=user_id, updated_by=user_id,
+        )
+        session.add(batch)
+        await session.flush()
+        for index in range(item_count):
+            await submit_job(
+                session, settings,
+                organization_id=identity_test_context["first_org"], user_id=user_id, batch_id=batch.id,
+                payload=JobSubmitRequest(
+                    operation_code="listing.generate", workspace_type="listing", queue_name="listing_queue",
+                    capability="image_generation", model_code=model_code,
+                    idempotency_key=f"load-{item_count}-{concurrency}-{index:03d}",
+                    input={"prompt": f"item {index}", "size": "1024x1024"},
+                ),
+            )
+        await session.commit()
+        batch_id = batch.id
+
+    selected_total = 0
+    wave_sizes: list[int] = []
+    while selected_total < item_count:
+        async with identity_test_context["session_factory"]() as session:
+            selected = await due_jobs(session, settings, limit=item_count, batch_id=batch_id)
+            wave_sizes.append(len(selected))
+            assert 0 < len(selected) <= concurrency
+            for job in selected:
+                job.status = JobStatus.SUCCEEDED.value
+                job.finished_at = datetime.now(timezone.utc)
+            selected_total += len(selected)
+            await session.commit()
+    assert selected_total == item_count
+    assert max(wave_sizes) == concurrency
+
+
+async def test_batch_try_on_ten_concurrency_requires_admin_test_mode(
+    identity_test_context,
+    monkeypatch,
+) -> None:
+    from app.models.identity import OrganizationMember, Role
+
+    monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
+    client = identity_test_context["client"]
+    _, model_code, _, _ = await seed_pool(
+        identity_test_context,
+        capability="image_generation",
+        max_concurrency=10,
+        operation_code="batch_tryon.generate",
+    )
+    payload = {
+        "name": "Admin concurrency test",
+        "workspace_type": "batch_tryon",
+        "operation_code": "batch_tryon.generate",
+        "capability": "image_generation",
+        "model_code": model_code,
+        "idempotency_key": "batch-tryon-admin-ten",
+        "concurrency": 10,
+        "admin_test_mode": True,
+        "items": [{
+            "client_item_id": "pair-1",
+            "prompt": "Replace garment",
+            "reference_asset_ids": [],
+            "size": "1024x1024",
+            "output_format": "png",
+        }],
+    }
+
+    admin_headers = await auth_headers(client, "first-admin@example.com", "correct-password")
+    accepted = await client.post("/api/v1/job-batches", headers=admin_headers, json=payload)
+    assert accepted.status_code == 202, accepted.text
+    assert accepted.json()["concurrency"] == 10
+    assert accepted.json()["admin_test_mode"] is True
+
+    async with identity_test_context["session_factory"]() as session:
+        member_role = await session.scalar(select(Role).where(Role.code == "member"))
+        membership = await session.get(
+            OrganizationMember,
+            identity_test_context["first_viewer_membership"],
+        )
+        membership.role_id = member_role.id
+        await session.commit()
+
+    member_headers = await auth_headers(client, "first-viewer@example.com", "viewer-password")
+    forbidden = await client.post(
+        "/api/v1/job-batches",
+        headers=member_headers,
+        json={**payload, "idempotency_key": "batch-tryon-member-ten"},
+    )
+    assert forbidden.status_code == 403
+    assert forbidden.json()["error"]["code"] == "job.admin_concurrency_forbidden"
+
+    no_test_mode = await client.post(
+        "/api/v1/job-batches",
+        headers=admin_headers,
+        json={
+            **payload,
+            "idempotency_key": "batch-tryon-admin-ten-no-mode",
+            "admin_test_mode": False,
+        },
+    )
+    assert no_test_mode.status_code == 422
+    assert no_test_mode.json()["error"]["code"] == "job.admin_concurrency_required"
+
+
+async def test_due_job_scheduler_prioritizes_new_work_and_skips_cooling_capacity(
+    identity_test_context,
+) -> None:
+    settings = Settings(
+        _env_file=None,
+        job_system_max_concurrency=10,
+        job_organization_max_concurrency=10,
+        job_user_max_concurrency=10,
+    )
+    from app.models.identity import User
+
+    _, model_code, _, key_ids = await seed_pool(identity_test_context)
+    async with identity_test_context["session_factory"]() as session:
+        user_id = await session.scalar(select(User.id).where(User.email == "first-admin@example.com"))
+        retry_job, _ = await submit_job(
+            session, settings,
+            organization_id=identity_test_context["first_org"], user_id=user_id,
+            payload=JobSubmitRequest(
+                operation_code="listing.generate", workspace_type="listing", queue_name="listing_queue",
+                capability="image_generation", model_code=model_code, idempotency_key="scheduler-retry-first",
+                input={"prompt": "retry", "size": "1024x1024"},
+            ),
+        )
+        queued_job, _ = await submit_job(
+            session, settings,
+            organization_id=identity_test_context["first_org"], user_id=user_id,
+            payload=JobSubmitRequest(
+                operation_code="listing.generate", workspace_type="listing", queue_name="listing_queue",
+                capability="image_generation", model_code=model_code, idempotency_key="scheduler-new-first",
+                input={"prompt": "new", "size": "1024x1024"},
+            ),
+        )
+        retry_job.status = JobStatus.RETRY_WAITING.value
+        retry_job.attempts = 1
+        retry_job.next_retry_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        await session.commit()
+        queued_job_id = queued_job.id
+
+    async with identity_test_context["session_factory"]() as session:
+        selected = await due_jobs(session, settings, limit=1)
+        assert [job.id for job in selected] == [queued_job_id]
+        await session.rollback()
+
+    async with identity_test_context["session_factory"]() as session:
+        key = await session.get(ApiKey, key_ids[0])
+        key.status = "cooling"
+        key.cooldown_until = datetime.now(timezone.utc) + timedelta(minutes=1)
+        await session.commit()
+
+    async with identity_test_context["session_factory"]() as session:
+        assert await due_jobs(session, settings, limit=10) == []
 
 
 async def test_429_cools_key_and_fails_over_to_next_key(identity_test_context, monkeypatch) -> None:

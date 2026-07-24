@@ -18,8 +18,8 @@ export function findNextPendingReviewItem(items: BatchTryOnItem[], currentReview
 
 export function findAdjacentReviewItem(items: BatchTryOnItem[], currentReviewItemId: string, direction: -1 | 1) {
   const ordered = getReviewableQueueItems(items)
-  if (ordered.length < 2) return null
+  if (!ordered.length) return null
   const currentIndex = ordered.findIndex((item) => item.serverReviewItemId === currentReviewItemId)
   if (currentIndex < 0) return ordered[0]
-  return ordered[(currentIndex + direction + ordered.length) % ordered.length]
+  return ordered[currentIndex + direction] ?? null
 }

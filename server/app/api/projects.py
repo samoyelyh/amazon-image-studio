@@ -8,6 +8,7 @@ from app.db.session import get_db_session
 from app.models.content import ProjectVersion
 from app.schemas.content import (
     ProjectAssetCreateRequest,
+    ProjectAssetUpdateRequest,
     ProjectCreateRequest,
     ProjectPage,
     ProjectResponse,
@@ -28,6 +29,7 @@ from app.services.project_service import (
     list_projects,
     project_response,
     unlink_asset,
+    update_asset_link,
 )
 
 
@@ -164,11 +166,40 @@ async def add_project_asset(
     link = await link_asset(
         session, organization_id=org_id, project_id=project_id, asset_id=payload.asset_id,
         user_id=principal.user.id, role=payload.role, sort_order=payload.sort_order,
+        display_name=payload.display_name, is_default=payload.is_default,
     )
     add_audit_log(
         session, request=request, actor_user_id=principal.user.id, organization_id=org_id,
         action="project.asset.link", resource_type="project", resource_id=project_id,
         metadata={"asset_id": payload.asset_id, "link_id": link.id, "role": payload.role},
+    )
+    await session.commit()
+    return project_response(await get_project(session, org_id, project_id))
+
+
+@router.patch("/{project_id}/assets/{link_id}", response_model=ProjectResponse)
+async def patch_project_asset(
+    project_id: str,
+    link_id: str,
+    payload: ProjectAssetUpdateRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("projects.write")),
+) -> ProjectResponse:
+    org_id = organization_id(principal)
+    await update_asset_link(
+        session,
+        organization_id=org_id,
+        project_id=project_id,
+        link_id=link_id,
+        display_name=payload.display_name,
+        is_default=payload.is_default,
+        sort_order=payload.sort_order,
+    )
+    add_audit_log(
+        session, request=request, actor_user_id=principal.user.id, organization_id=org_id,
+        action="project.asset.update", resource_type="project", resource_id=project_id,
+        metadata={"link_id": link_id},
     )
     await session.commit()
     return project_response(await get_project(session, org_id, project_id))

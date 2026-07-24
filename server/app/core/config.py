@@ -71,11 +71,15 @@ class Settings(BaseSettings):
     api_key_encryption_key: SecretStr = SecretStr("bG9jYWwtZGV2ZWxvcG1lbnQta2V5LTMyLWJ5dGVzISE=")
     resource_lease_ttl_seconds: int = 900
     resource_key_cooldown_seconds: int = 60
-    provider_request_timeout_seconds: float = 120.0
+    provider_request_timeout_seconds: float = 180.0
     provider_output_max_bytes: int = 25 * 1024 * 1024
     job_timeout_seconds: int = 600
     job_heartbeat_timeout_seconds: int = 180
     job_max_attempts: int = 3
+    celery_worker_concurrency: int = 10
+    job_system_max_concurrency: int = 10
+    job_organization_max_concurrency: int = 10
+    job_user_max_concurrency: int = 10
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -118,7 +122,9 @@ class Settings(BaseSettings):
         if self.environment == "production" and self.api_key_encryption_key.get_secret_value() == "bG9jYWwtZGV2ZWxvcG1lbnQta2V5LTMyLWJ5dGVzISE=":
             raise ValueError("API_KEY_ENCRYPTION_KEY must be replaced in production")
         if min(self.resource_lease_ttl_seconds, self.resource_key_cooldown_seconds, self.job_timeout_seconds,
-               self.job_heartbeat_timeout_seconds, self.job_max_attempts, self.provider_output_max_bytes) < 1:
+               self.job_heartbeat_timeout_seconds, self.job_max_attempts, self.provider_output_max_bytes,
+               self.celery_worker_concurrency, self.job_system_max_concurrency,
+               self.job_organization_max_concurrency, self.job_user_max_concurrency) < 1:
             raise ValueError("Task and resource-pool limits must be positive")
         return self
 

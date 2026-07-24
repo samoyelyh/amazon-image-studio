@@ -362,7 +362,7 @@ async def settle_reservation(
         _add_transaction(
             session, account=account, reservation=reservation, transaction_type=QuotaTransactionType.CONSUME.value,
             amount=consume, balance_delta=-consume, reserved_delta=-consume,
-            idempotency_key=f"consume:{idempotency_key}", user_id=user_id,
+            idempotency_key=f"consume:{reservation.id}:{idempotency_key}", user_id=user_id,
             operation_code=reservation.operation_code, reference_type=reservation.reference_type,
             reference_id=reservation.reference_id, metadata={"actual_quantity": actual_quantity},
         )
@@ -371,7 +371,7 @@ async def settle_reservation(
         _add_transaction(
             session, account=account, reservation=reservation, transaction_type=QuotaTransactionType.RELEASE.value,
             amount=release, balance_delta=0, reserved_delta=-release,
-            idempotency_key=f"release:{idempotency_key}", user_id=user_id,
+            idempotency_key=f"release:{reservation.id}:{idempotency_key}", user_id=user_id,
             operation_code=reservation.operation_code, reference_type=reservation.reference_type,
             reference_id=reservation.reference_id, metadata={"reason": "partial settlement"},
         )
@@ -413,7 +413,7 @@ async def release_reservation(
     _add_transaction(
         session, account=account, reservation=reservation, transaction_type=transaction_type,
         amount=reservation.reserved_amount, balance_delta=0, reserved_delta=-reservation.reserved_amount,
-        idempotency_key=f"{transaction_type}:{idempotency_key}", user_id=user_id,
+        idempotency_key=f"{transaction_type}:{reservation.id}:{idempotency_key}", user_id=user_id,
         operation_code=reservation.operation_code, reference_type=reservation.reference_type,
         reference_id=reservation.reference_id, metadata={"reason": "expired" if expired else "failed or cancelled"},
     )
@@ -425,6 +425,61 @@ async def release_reservation(
     reservation.updated_by = user_id
     await session.flush()
     return reservation
+
+
+async def renew_reservation(
+    session: AsyncSession,
+    settings: Settings,
+    *,
+    organization_id: str,
+    reservation_id: str,
+) -> QuotaReservation:
+    """Keep quota frozen while its job is still eligible to run."""
+    _, reservation = await _locked_reservation(session, organization_id, reservation_id)
+    if reservation.status == QuotaReservationStatus.RESERVED.value:
+        reservation.expires_at = datetime.now(UTC) + timedelta(minutes=settings.quota_reservation_ttl_minutes)
+        await session.flush()
+    return reservation
+
+
+async def reactivate_job_reservation(
+    session: AsyncSession,
+    settings: Settings,
+    *,
+    job,
+) -> QuotaReservation:
+    """Renew an active reservation or replace an incorrectly expired zero-use one."""
+    _, reservation = await _locked_reservation(session, job.organization_id, job.quota_reservation_id)
+    if reservation.status == QuotaReservationStatus.RESERVED.value:
+        reservation.expires_at = datetime.now(UTC) + timedelta(minutes=settings.quota_reservation_ttl_minutes)
+        await session.flush()
+        return reservation
+    if reservation.status not in {
+        QuotaReservationStatus.EXPIRED.value,
+        QuotaReservationStatus.RELEASED.value,
+    } or int(reservation.actual_quantity or 0) != 0:
+        raise AppError(
+            "quota.reservation_unavailable",
+            "任务额度预占已结算，无法继续执行，请重新提交任务",
+            409,
+            {"job_id": job.id, "reservation_status": reservation.status},
+        )
+    replacement = await reserve_quota(
+        session,
+        settings,
+        organization_id=job.organization_id,
+        user_id=job.updated_by or job.created_by,
+        operation_code=reservation.operation_code,
+        quantity=reservation.quantity,
+        factors=dict(reservation.factors_json or {}),
+        idempotency_key=f"job-reactivate:{job.id}:{reservation.id}",
+        reference_type="job",
+        reference_id=job.id,
+    )
+    job.quota_reservation_id = replacement.id
+    replacement.expires_at = datetime.now(UTC) + timedelta(minutes=settings.quota_reservation_ttl_minutes)
+    await session.flush()
+    return replacement
 
 
 async def refund_reservation(
@@ -439,7 +494,7 @@ async def refund_reservation(
     account, reservation = await _locked_reservation(session, organization_id, reservation_id)
     existing = await session.scalar(select(QuotaTransaction).where(
         QuotaTransaction.organization_id == organization_id,
-        QuotaTransaction.idempotency_key == f"refund:{idempotency_key}",
+        QuotaTransaction.idempotency_key == f"refund:{reservation.id}:{idempotency_key}",
     ).with_for_update())
     if existing:
         if existing.amount != amount or existing.reservation_id != reservation_id:
@@ -461,7 +516,7 @@ async def refund_reservation(
     _add_transaction(
         session, account=account, reservation=reservation, transaction_type=QuotaTransactionType.REFUND.value,
         amount=amount, balance_delta=amount, reserved_delta=0,
-        idempotency_key=f"refund:{idempotency_key}", user_id=user_id,
+        idempotency_key=f"refund:{reservation.id}:{idempotency_key}", user_id=user_id,
         operation_code=reservation.operation_code, reference_type=reservation.reference_type,
         reference_id=reservation.reference_id,
     )

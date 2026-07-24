@@ -20,10 +20,165 @@ from app.schemas.batch_tryon_review import (
 )
 from app.schemas.tasks import JobSubmitRequest
 from app.services.asset_service import asset_content_url
+from app.services.batch_tryon_filename_service import (
+    build_batch_try_on_output_filename,
+    normalize_output_extension,
+    sanitize_batch_try_on_filename_stem,
+)
 
 
 UTC = timezone.utc
 REVIEW_CORRECTION_HEADER = "REVIEW CORRECTION REQUIREMENTS:"
+
+
+def _job_source_filename(job: Job | None) -> str | None:
+    if job is None:
+        return None
+    metadata = job.input_json.get("metadata") if isinstance(job.input_json.get("metadata"), dict) else {}
+    value = metadata.get("source_filename") or metadata.get("garment_filename")
+    return str(value).strip() if value else None
+
+
+async def _item_source_filename(
+    session: AsyncSession,
+    item: BatchTryOnReviewItem,
+    *,
+    job: Job | None = None,
+) -> str:
+    garment = await session.get(Asset, item.garment_asset_id)
+    asset_filename = garment.filename if garment is not None else None
+    job_filename = _job_source_filename(job)
+    # Older clients uploaded the garment asset without its extension. Their
+    # immutable job metadata still contains the full original filename.
+    source = item.source_filename or asset_filename or job_filename or ""
+    if job_filename and "." not in source.rsplit("/", 1)[-1]:
+        source = job_filename
+    item.source_filename = source or None
+    return source
+
+
+async def _item_duplicate_index(
+    session: AsyncSession,
+    item: BatchTryOnReviewItem,
+    source_filename: str,
+) -> int:
+    rows = (await session.execute(
+        select(BatchTryOnReviewItem, Asset.filename)
+        .join(Asset, Asset.id == BatchTryOnReviewItem.garment_asset_id)
+        .where(BatchTryOnReviewItem.batch_id == item.batch_id)
+    )).all()
+    target_stem = sanitize_batch_try_on_filename_stem(source_filename).casefold()
+    target_template = sanitize_batch_try_on_filename_stem(item.template_name).casefold()
+    matching_ids = sorted(
+        candidate.id
+        for candidate, asset_filename in rows
+        if sanitize_batch_try_on_filename_stem(candidate.source_filename or asset_filename).casefold() == target_stem
+        and sanitize_batch_try_on_filename_stem(candidate.template_name).casefold() == target_template
+    )
+    return matching_ids.index(item.id) + 1 if item.id in matching_ids else 1
+
+
+async def ensure_batch_try_on_version_filenames(
+    session: AsyncSession,
+    item: BatchTryOnReviewItem,
+    version: BatchTryOnVersion,
+    *,
+    job: Job | None = None,
+    generated_asset: Asset | None = None,
+    output_format: str | None = None,
+) -> tuple[str, str, str, str]:
+    if job is None and version.task_id:
+        job = await session.get(Job, version.task_id)
+    source_filename = version.source_filename or await _item_source_filename(session, item, job=job)
+    resolved_format = normalize_output_extension(
+        output_format
+        or version.output_format
+        or (generated_asset.mime_type if generated_asset is not None else None)
+        or (job.input_json.get("output_format") if job is not None else None)
+    )
+    duplicate_index = await _item_duplicate_index(session, item, source_filename)
+    display_filename = build_batch_try_on_output_filename(
+        source_filename,
+        resolved_format,
+        version.version_number,
+        True,
+        duplicate_index,
+        item_id=item.id,
+        template_name=item.template_name,
+    )
+    historical_filename = build_batch_try_on_output_filename(
+        source_filename,
+        resolved_format,
+        version.version_number,
+        False,
+        duplicate_index,
+        item_id=item.id,
+        template_name=item.template_name,
+    )
+    version.source_filename = source_filename
+    version.display_filename = display_filename
+    version.download_filename = historical_filename
+    version.output_format = resolved_format
+    if job is not None:
+        metadata = job.input_json.get("metadata") if isinstance(job.input_json.get("metadata"), dict) else {}
+        job.input_json = {
+            **job.input_json,
+            "metadata": {**metadata, "source_filename": source_filename},
+        }
+    await session.flush()
+    return source_filename, display_filename, historical_filename, resolved_format
+
+
+async def prepare_batch_try_on_output_filename(
+    session: AsyncSession,
+    job: Job,
+    output_format: str,
+) -> str | None:
+    if job.workspace_type != "batch_tryon":
+        return None
+    metadata = job.input_json.get("metadata") if isinstance(job.input_json.get("metadata"), dict) else {}
+    version_id = str(metadata.get("batch_tryon_version_id") or "")
+    version = await session.scalar(select(BatchTryOnVersion).where(
+        BatchTryOnVersion.organization_id == job.organization_id,
+        BatchTryOnVersion.id == version_id,
+    )) if version_id else None
+    if version is None:
+        version = await session.scalar(select(BatchTryOnVersion).where(
+            BatchTryOnVersion.organization_id == job.organization_id,
+            BatchTryOnVersion.task_id == job.id,
+        ))
+    if version is None:
+        return None
+    item = await session.get(BatchTryOnReviewItem, version.item_id)
+    if item is None:
+        return None
+    _, display_filename, _, _ = await ensure_batch_try_on_version_filenames(
+        session, item, version, job=job, output_format=output_format,
+    )
+    return display_filename
+
+
+async def resolve_batch_try_on_asset_download_filename(
+    session: AsyncSession,
+    organization_id: str,
+    asset: Asset,
+) -> str:
+    row = (await session.execute(
+        select(BatchTryOnVersion, BatchTryOnReviewItem)
+        .join(BatchTryOnReviewItem, BatchTryOnReviewItem.id == BatchTryOnVersion.item_id)
+        .where(
+            BatchTryOnVersion.organization_id == organization_id,
+            BatchTryOnVersion.generated_asset_id == asset.id,
+        )
+        .limit(1)
+    )).first()
+    if row is None:
+        return asset.filename
+    version, item = row
+    _, display_filename, historical_filename, _ = await ensure_batch_try_on_version_filenames(
+        session, item, version, generated_asset=asset,
+    )
+    return display_filename if item.approved_version_id == version.id else historical_filename
 
 
 def append_batch_try_on_review_requirements(base_prompt: str, review_notes: str | None) -> str:
@@ -90,12 +245,17 @@ async def ensure_batch_try_on_review_records(
         if item is None:
             if len(references) < 2:
                 continue
+            metadata = item_jobs[0].input_json.get("metadata") if isinstance(item_jobs[0].input_json.get("metadata"), dict) else {}
+            preset_codes = metadata.get("preset_codes") if isinstance(metadata.get("preset_codes"), dict) else None
             item = BatchTryOnReviewItem(
                 organization_id=batch.organization_id,
                 batch_id=batch.id,
                 client_item_id=client_item_id,
                 model_asset_id=references[0],
                 garment_asset_id=references[1],
+                template_name=str(metadata.get("template_name") or "").strip() or None,
+                preset_summary=str(metadata.get("preset_summary") or "").strip() or None,
+                preset_codes=preset_codes,
                 review_status="pending",
                 regeneration_count=0,
                 created_by=item_jobs[0].created_by,
@@ -104,6 +264,20 @@ async def ensure_batch_try_on_review_records(
             session.add(item)
             await session.flush()
             existing[client_item_id] = item
+
+        source_filename = await _item_source_filename(session, item, job=item_jobs[0])
+        item.source_filename = source_filename
+        first_metadata = item_jobs[0].input_json.get("metadata") if isinstance(item_jobs[0].input_json.get("metadata"), dict) else {}
+        item.template_name = item.template_name or str(first_metadata.get("template_name") or "").strip() or None
+        item.preset_summary = item.preset_summary or str(first_metadata.get("preset_summary") or "").strip() or None
+        if item.preset_codes is None and isinstance(first_metadata.get("preset_codes"), dict):
+            item.preset_codes = first_metadata["preset_codes"]
+        for item_job in item_jobs:
+            metadata = item_job.input_json.get("metadata") if isinstance(item_job.input_json.get("metadata"), dict) else {}
+            item_job.input_json = {
+                **item_job.input_json,
+                "metadata": {**metadata, "source_filename": source_filename},
+            }
 
         versions = list((await session.scalars(
             select(BatchTryOnVersion).where(BatchTryOnVersion.item_id == item.id)
@@ -137,6 +311,10 @@ async def ensure_batch_try_on_review_records(
             )
             session.add(version)
             await session.flush()
+            generated_asset = await session.get(Asset, generated_asset_id) if generated_asset_id else None
+            await ensure_batch_try_on_version_filenames(
+                session, item, version, job=job, generated_asset=generated_asset,
+            )
             metadata = {
                 **metadata,
                 "batch_tryon_review_item_id": item.id,
@@ -146,6 +324,15 @@ async def ensure_batch_try_on_review_records(
             versions.append(version)
             versions_by_task[job.id] = version
             parent = version
+
+        for version in versions:
+            generated_asset = await session.get(Asset, version.generated_asset_id) if version.generated_asset_id else None
+            await ensure_batch_try_on_version_filenames(
+                session,
+                item,
+                version,
+                generated_asset=generated_asset,
+            )
 
         if versions and item.current_version_id is None:
             latest = versions[-1]
@@ -181,10 +368,18 @@ async def get_review_item(
     return item
 
 
-def _asset_response(asset: Asset) -> ReviewAssetResponse:
+def _asset_response(
+    asset: Asset,
+    *,
+    display_filename: str | None = None,
+    download_filename: str | None = None,
+) -> ReviewAssetResponse:
     return ReviewAssetResponse(
         id=asset.id,
-        filename=asset.filename,
+        filename=display_filename or asset.filename,
+        display_filename=display_filename or asset.filename,
+        download_filename=download_filename or asset.filename,
+        download_url=f"/api/v1/assets/{asset.id}/download",
         preview_url=asset_content_url(asset.id),
         width=asset.width,
         height=asset.height,
@@ -223,6 +418,14 @@ async def review_detail(
             select(Asset).where(Asset.organization_id == organization_id, Asset.id.in_(asset_ids), Asset.deleted_at.is_(None))
         )).all()
     } if asset_ids else {}
+    for version in versions:
+        await ensure_batch_try_on_version_filenames(
+            session,
+            item,
+            version,
+            job=jobs.get(version.task_id or ""),
+            generated_asset=assets.get(version.generated_asset_id or ""),
+        )
     version_responses = [
         BatchTryOnVersionResponse(
             id=version.id,
@@ -235,8 +438,21 @@ async def review_detail(
             retry_mode=version.retry_mode,
             generation_status=version.generation_status,
             review_status=version.review_status,
-            generated_asset=_asset_response(assets[version.generated_asset_id])
-            if version.generated_asset_id in assets else None,
+            source_filename=version.source_filename,
+            display_filename=version.display_filename,
+            download_filename=(
+                version.display_filename if item.approved_version_id == version.id
+                else version.download_filename
+            ),
+            output_format=version.output_format,
+            generated_asset=_asset_response(
+                assets[version.generated_asset_id],
+                display_filename=version.display_filename,
+                download_filename=(
+                    version.display_filename if item.approved_version_id == version.id
+                    else version.download_filename
+                ),
+            ) if version.generated_asset_id in assets else None,
             created_at=version.created_at,
             completed_at=version.completed_at,
             reviewed_by=version.reviewed_by,
@@ -254,6 +470,9 @@ async def review_detail(
         current_version_id=item.current_version_id,
         approved_version_id=item.approved_version_id,
         regeneration_count=item.regeneration_count,
+        template_name=item.template_name or model.filename,
+        preset_summary=item.preset_summary,
+        preset_codes=item.preset_codes,
         garment_asset=_asset_response(garment),
         model_asset=_asset_response(model),
         current_version=current,
@@ -264,6 +483,8 @@ async def review_detail(
 async def approve_version(
     session: AsyncSession, *, organization_id: str, item_id: str, version_id: str, user_id: str,
 ) -> BatchTryOnReviewItem:
+    from app.services.task_service import refresh_batch_status
+
     item = await get_review_item(session, organization_id, item_id, lock=True)
     version = await session.scalar(select(BatchTryOnVersion).where(
         BatchTryOnVersion.id == version_id,
@@ -283,6 +504,7 @@ async def approve_version(
     item.review_status = "approved"
     item.approved_version_id = version.id
     item.updated_by = user_id
+    await refresh_batch_status(session, item.batch_id)
     await session.flush()
     return item
 
@@ -364,6 +586,7 @@ async def regenerate_version(
         parent_version_id=source.id,
         generated_asset_id=None,
         task_id=job.id,
+        source_filename=item.source_filename,
         prompt_snapshot=str(input_json["prompt"]),
         review_notes=payload.review_notes,
         retry_mode=payload.retry_mode,
@@ -372,6 +595,8 @@ async def regenerate_version(
         created_at=now,
     )
     session.add(version)
+    await session.flush()
+    await ensure_batch_try_on_version_filenames(session, item, version, job=job)
     source.review_status = "rejected"
     source.review_notes = payload.review_notes
     source.reviewed_by = user_id
@@ -409,6 +634,10 @@ async def sync_batch_try_on_version_for_job(
     version.generation_status = job.status
     if generated_asset_id:
         version.generated_asset_id = generated_asset_id
+        generated_asset = await session.get(Asset, generated_asset_id)
+        await ensure_batch_try_on_version_filenames(
+            session, item, version, job=job, generated_asset=generated_asset,
+        )
     if job.status == "succeeded":
         version.review_status = "pending"
         version.completed_at = job.finished_at or datetime.now(UTC)

@@ -162,8 +162,19 @@ async def test_project_asset_reference_blocks_delete_and_project_delete_keeps_ob
     })).json()
     linked = await client.post(f"/api/v1/projects/{project['id']}/assets", headers=headers, json={
         "asset_id": asset["id"], "role": "garment", "sort_order": 0,
+        "display_name": "蓝色球衣", "is_default": True,
     })
     assert linked.status_code == 201, linked.text
+    link = linked.json()["assets"][0]
+    assert link["display_name"] == "蓝色球衣"
+    assert link["is_default"] is True
+    updated = await client.patch(
+        f"/api/v1/projects/{project['id']}/assets/{link['id']}",
+        headers=headers,
+        json={"display_name": "主款蓝色球衣", "is_default": True},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["assets"][0]["display_name"] == "主款蓝色球衣"
     blocked = await client.delete(f"/api/v1/assets/{asset['id']}", headers=headers)
     assert blocked.status_code == 409
     assert blocked.json()["error"]["code"] == "asset.in_use"
@@ -175,6 +186,52 @@ async def test_project_asset_reference_blocks_delete_and_project_delete_keeps_ob
     deleted_asset = await client.delete(f"/api/v1/assets/{asset['id']}", headers=headers)
     assert deleted_asset.status_code == 204
     assert not identity_test_context["storage"].objects
+
+
+async def test_project_asset_links_sort_mixed_datetimes_and_retry_idempotently(identity_test_context) -> None:
+    client = identity_test_context["client"]
+    headers = await auth_headers(client, "first-admin@example.com", "correct-password")
+    first_asset = (await upload(client, headers, filename="first.png")).json()
+    second_asset = (await upload(client, headers, filename="second.png")).json()
+    project = (await client.post("/api/v1/projects", headers=headers, json={
+        "project_type": "batch_tryon", "name": "Multiple templates", "draft": {},
+    })).json()
+
+    first_payload = {
+        "asset_id": first_asset["id"],
+        "role": "model_template",
+        "sort_order": 0,
+        "display_name": "模板一",
+        "is_default": True,
+    }
+    first = await client.post(
+        f"/api/v1/projects/{project['id']}/assets",
+        headers=headers,
+        json=first_payload,
+    )
+    assert first.status_code == 201, first.text
+
+    second = await client.post(
+        f"/api/v1/projects/{project['id']}/assets",
+        headers=headers,
+        json={
+            "asset_id": second_asset["id"],
+            "role": "model_template",
+            "sort_order": 1,
+            "display_name": "模板二",
+        },
+    )
+    assert second.status_code == 201, second.text
+    assert [item["display_name"] for item in second.json()["assets"]] == ["模板一", "模板二"]
+
+    retried = await client.post(
+        f"/api/v1/projects/{project['id']}/assets",
+        headers=headers,
+        json={**first_payload, "display_name": "模板一（重试）"},
+    )
+    assert retried.status_code == 201, retried.text
+    assert len(retried.json()["assets"]) == 2
+    assert retried.json()["assets"][0]["display_name"] == "模板一（重试）"
 
 
 async def test_projects_are_tenant_isolated_and_viewer_read_only(identity_test_context) -> None:

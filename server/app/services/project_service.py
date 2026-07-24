@@ -16,9 +16,14 @@ from app.schemas.content import (
     ProjectResponse,
     ProjectVersionResponse,
 )
+from app.services.asset_service import asset_content_url
 
 
 UTC = timezone.utc
+
+
+def _aware_datetime(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
 def validate_draft(draft: dict[str, object], settings: Settings) -> None:
@@ -39,7 +44,10 @@ def project_response(project: Project) -> ProjectResponse:
     if not project.versions:
         raise AppError("project.version_missing", "Project has no saved version", 500)
     latest = max(project.versions, key=lambda item: item.version_number)
-    links = sorted(project.asset_links, key=lambda item: (item.sort_order, item.created_at))
+    links = sorted(
+        project.asset_links,
+        key=lambda item: (item.sort_order, _aware_datetime(item.created_at)),
+    )
     return ProjectResponse(
         id=project.id,
         project_type=project.project_type,
@@ -56,7 +64,12 @@ def project_response(project: Project) -> ProjectResponse:
                 id=link.id,
                 role=link.role,
                 sort_order=link.sort_order,
-                asset=AssetResponse.model_validate(link.asset),
+                display_name=link.display_name,
+                is_default=link.is_default,
+                asset=AssetResponse.model_validate(link.asset).model_copy(update={
+                    "url": asset_content_url(link.asset.id),
+                    "url_expires_at": None,
+                }),
                 created_at=link.created_at,
             )
             for link in links
@@ -210,8 +223,10 @@ async def link_asset(
     user_id: str,
     role: str,
     sort_order: int,
+    display_name: str | None = None,
+    is_default: bool = False,
 ) -> ProjectAsset:
-    await get_project(session, organization_id, project_id, lock=True)
+    project = await get_project(session, organization_id, project_id, lock=True)
     asset = await session.scalar(select(Asset).where(
         Asset.id == asset_id,
         Asset.organization_id == organization_id,
@@ -219,12 +234,32 @@ async def link_asset(
     ))
     if asset is None:
         raise AppError("asset.not_found", "Asset was not found", 404)
+    existing = next((
+        item for item in project.asset_links
+        if item.asset_id == asset_id and item.role == role
+    ), None)
+    if existing is not None:
+        existing.sort_order = sort_order
+        if display_name is not None:
+            existing.display_name = display_name.strip()
+        if is_default:
+            for candidate in project.asset_links:
+                if candidate.role == role:
+                    candidate.is_default = candidate.id == existing.id
+        await session.flush()
+        return existing
+    if is_default:
+        for candidate in project.asset_links:
+            if candidate.role == role:
+                candidate.is_default = False
     link = ProjectAsset(
         organization_id=organization_id,
         project_id=project_id,
         asset_id=asset_id,
         role=role,
         sort_order=sort_order,
+        display_name=display_name,
+        is_default=is_default,
         created_by=user_id,
         created_at=datetime.now(UTC),
     )
@@ -234,6 +269,34 @@ async def link_asset(
     except IntegrityError as error:
         raise AppError("project.asset_already_linked", "Asset is already linked with this role", 409) from error
     return link
+
+
+async def update_asset_link(
+    session: AsyncSession,
+    *,
+    organization_id: str,
+    project_id: str,
+    link_id: str,
+    display_name: str | None,
+    is_default: bool | None,
+    sort_order: int | None,
+) -> None:
+    project = await get_project(session, organization_id, project_id, lock=True)
+    link = next((item for item in project.asset_links if item.id == link_id), None)
+    if link is None:
+        raise AppError("project.asset_link_not_found", "Project asset link was not found", 404)
+    if display_name is not None:
+        link.display_name = display_name.strip()
+    if sort_order is not None:
+        link.sort_order = sort_order
+    if is_default is not None:
+        if is_default:
+            for candidate in project.asset_links:
+                if candidate.role == link.role:
+                    candidate.is_default = candidate.id == link.id
+        else:
+            link.is_default = False
+    await session.flush()
 
 
 async def unlink_asset(session: AsyncSession, *, organization_id: str, project_id: str, link_id: str) -> None:

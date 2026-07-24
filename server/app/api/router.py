@@ -13,6 +13,7 @@ from app.api.jobs import batch_router as job_batches_router, router as jobs_rout
 from app.api.resource_pools import router as resource_pools_router
 from app.api.admin import router as admin_router
 from app.api.batch_tryon_review import router as batch_tryon_review_router
+from app.api.listing_transfer import router as listing_transfer_router
 from app.core.config import get_settings
 
 
@@ -29,6 +30,7 @@ api_router.include_router(quota_router)
 api_router.include_router(jobs_router)
 api_router.include_router(job_batches_router)
 api_router.include_router(batch_tryon_review_router)
+api_router.include_router(listing_transfer_router)
 api_router.include_router(resource_pools_router)
 api_router.include_router(admin_router)
 

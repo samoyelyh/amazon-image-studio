@@ -171,6 +171,13 @@ async def release_resource(redis: Redis, lease: ResourceLease) -> None:
     await redis.eval(RELEASE_SCRIPT, 1, key)
 
 
+async def renew_resource_lease(redis: Redis, settings: Settings, lease: ResourceLease) -> None:
+    """Renew only an existing inflight lease; never recreate a lost counter."""
+    key = _redis_keys(lease.key_id, datetime.now(UTC))[0]
+    if await redis.exists(key):
+        await redis.expire(key, settings.resource_lease_ttl_seconds)
+
+
 async def cool_down_key(
     session: AsyncSession, redis: Redis, settings: Settings, key_id: str, *, seconds: int | None = None,
 ) -> None:

@@ -2,6 +2,8 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
+import re
+from urllib.parse import quote
 from uuid import uuid4
 import warnings
 
@@ -31,6 +33,19 @@ FORMAT_DETAILS = {
 def safe_filename(value: str | None) -> str:
     name = Path(value or "image").name.replace("\x00", "").strip()
     return (name or "image")[:255]
+
+
+def content_disposition_header(filename: str, disposition: str = "attachment") -> str:
+    ascii_fallback = filename.encode("ascii", "ignore").decode("ascii")
+    ascii_fallback = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "-", ascii_fallback).strip(" .")
+    extension = Path(filename).suffix if Path(filename).suffix else ".bin"
+    if not ascii_fallback or ascii_fallback.casefold() == extension.lstrip(".").casefold():
+        ascii_fallback = f"download{extension}"
+    ascii_fallback = ascii_fallback.replace("\\", "-").replace('"', "'")
+    return (
+        f'{disposition}; filename="{ascii_fallback}"; '
+        f"filename*=UTF-8''{quote(filename, safe='')}"
+    )
 
 
 def validate_image(

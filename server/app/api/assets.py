@@ -1,7 +1,5 @@
 from typing import Annotated
 
-from urllib.parse import quote
-
 from fastapi import APIRouter, Depends, File, Form, Query, Request, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,7 +14,16 @@ from app.schemas.content import (
     GeneratedAssetCategoryValue,
 )
 from app.security.principal import Principal, require_permissions
-from app.services.asset_service import asset_url, create_asset, delete_asset, get_asset, list_assets, read_asset_content, signed_asset_response
+from app.services.asset_service import (
+    asset_url,
+    content_disposition_header,
+    create_asset,
+    delete_asset,
+    get_asset,
+    list_assets,
+    read_asset_content,
+    signed_asset_response,
+)
 from app.services.audit_service import add_audit_log
 from app.services.storage_service import StorageService, get_storage_service
 
@@ -123,7 +130,32 @@ async def get_asset_content(
         media_type=asset.mime_type,
         headers={
             "Cache-Control": "private, max-age=300",
-            "Content-Disposition": f"inline; filename*=UTF-8''{quote(asset.filename)}",
+            "Content-Disposition": content_disposition_header(asset.filename, "inline"),
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/{asset_id}/download")
+async def download_asset(
+    asset_id: str,
+    session: AsyncSession = Depends(get_db_session),
+    storage: StorageService = Depends(get_storage_service),
+    principal: Principal = Depends(require_permissions("assets.read")),
+) -> Response:
+    org_id = organization_id(principal)
+    asset = await get_asset(session, org_id, asset_id)
+    from app.services.batch_tryon_review_service import resolve_batch_try_on_asset_download_filename
+
+    filename = await resolve_batch_try_on_asset_download_filename(session, org_id, asset)
+    content = await read_asset_content(asset, storage)
+    await session.commit()
+    return Response(
+        content=content,
+        media_type=asset.mime_type,
+        headers={
+            "Cache-Control": "private, no-store",
+            "Content-Disposition": content_disposition_header(filename),
             "X-Content-Type-Options": "nosniff",
         },
     )

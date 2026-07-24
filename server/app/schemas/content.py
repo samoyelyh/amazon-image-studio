@@ -67,6 +67,8 @@ class ProjectAssetResponse(BaseModel):
     id: str
     role: str
     sort_order: int
+    display_name: str | None
+    is_default: bool
     asset: AssetResponse
     created_at: datetime
 
@@ -115,3 +117,11 @@ class ProjectAssetCreateRequest(BaseModel):
     asset_id: str
     role: str = Field(pattern=r"^[a-z][a-z0-9_.-]*$", min_length=1, max_length=60)
     sort_order: int = Field(default=0, ge=0, le=10000)
+    display_name: str | None = Field(default=None, min_length=1, max_length=255)
+    is_default: bool = False
+
+
+class ProjectAssetUpdateRequest(BaseModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=255)
+    is_default: bool | None = None
+    sort_order: int | None = Field(default=None, ge=0, le=10000)

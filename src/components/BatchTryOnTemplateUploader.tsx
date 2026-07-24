@@ -10,9 +10,10 @@ interface Props {
   onUpload: (files: File[]) => void
   onRemove: () => void
   onView: () => void
+  sourceLabel?: string
 }
 
-export default function BatchTryOnTemplateUploader({ imageId, fileName, width, height, disabled, onUpload, onRemove, onView }: Props) {
+export default function BatchTryOnTemplateUploader({ imageId, fileName, width, height, disabled, onUpload, onRemove, onView, sourceLabel }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
 
@@ -46,6 +47,7 @@ export default function BatchTryOnTemplateUploader({ imageId, fileName, width, h
               <div>
                 <div className="truncate text-sm font-semibold text-gray-800 dark:text-gray-100" title={fileName}>{fileName || '模特模板图'}</div>
                 <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">{width && height ? `${width} × ${height}` : '正在读取图片尺寸'}</div>
+                {sourceLabel && <div className="mt-1 inline-flex rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-200">来源：{sourceLabel}</div>}
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" disabled={disabled} onClick={() => inputRef.current?.click()} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[0.1] dark:text-gray-200 dark:hover:bg-white/[0.06]">替换图片</button>

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UuidPrimaryKeyMixin
@@ -109,6 +109,8 @@ class ProjectAsset(UuidPrimaryKeyMixin, Base):
     asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False)
     role: Mapped[str] = mapped_column(String(60), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -136,5 +138,24 @@ class GeneratedOutput(UuidPrimaryKeyMixin, Base):
     output_type: Mapped[str] = mapped_column(String(60), nullable=False)
     module_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
     metadata_json: Mapped[dict[str, object] | None] = mapped_column("metadata", JSON, nullable=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ListingOutputTransfer(UuidPrimaryKeyMixin, Base):
+    __tablename__ = "listing_output_transfers"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "idempotency_key", name="uq_listing_transfer_org_idempotency"),
+        Index("ix_listing_transfer_org_output", "organization_id", "listing_output_id", "created_at"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    listing_output_id: Mapped[str] = mapped_column(ForeignKey("generated_outputs.id", ondelete="RESTRICT"), nullable=False)
+    source_asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False)
+    target_project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id", ondelete="RESTRICT"), nullable=True)
+    idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    template_replaced: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_project: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

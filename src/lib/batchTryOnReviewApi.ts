@@ -7,6 +7,9 @@ export type BatchTryOnRetryMode = 'direct' | 'with_review_notes'
 export interface BatchTryOnReviewAsset {
   id: string
   filename: string
+  display_filename: string
+  download_filename: string
+  download_url: string
   preview_url: string
   width: number
   height: number
@@ -20,6 +23,10 @@ export interface BatchTryOnReviewVersion {
   parent_version_id: string | null
   generated_asset_id: string | null
   task_id: string | null
+  source_filename: string | null
+  display_filename: string | null
+  download_filename: string | null
+  output_format: string | null
   prompt_snapshot: string
   review_notes: string | null
   retry_mode: string
@@ -41,6 +48,9 @@ export interface BatchTryOnReviewDetail {
   current_version_id: string | null
   approved_version_id: string | null
   regeneration_count: number
+  template_name: string | null
+  preset_summary: string | null
+  preset_codes: Record<string, unknown> | null
   garment_asset: BatchTryOnReviewAsset
   model_asset: BatchTryOnReviewAsset
   current_version: BatchTryOnReviewVersion | null
@@ -52,8 +62,8 @@ export interface BatchTryOnRegenerateResponse {
   job: ServerJob
 }
 
-export function getBatchTryOnReviewDetail(itemId: string) {
-  return authenticatedFetch<BatchTryOnReviewDetail>(`/batch-tryon/items/${itemId}/review-detail`)
+export function getBatchTryOnReviewDetail(itemId: string, signal?: AbortSignal) {
+  return authenticatedFetch<BatchTryOnReviewDetail>(`/batch-tryon/items/${itemId}/review-detail`, { signal })
 }
 
 export function approveBatchTryOnVersion(itemId: string, sourceVersionId: string) {

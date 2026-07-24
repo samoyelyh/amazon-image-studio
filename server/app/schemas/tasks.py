@@ -252,6 +252,9 @@ class JobOutputResponse(BaseModel):
     id: str
     asset_id: str
     filename: str
+    display_filename: str
+    download_filename: str
+    download_url: str
     mime_type: str
     width: int
     height: int
@@ -292,7 +295,8 @@ class JobBatchSubmitRequest(BaseModel):
     idempotency_key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$", min_length=8, max_length=160)
     project_id: str | None = None
     concurrency: int = Field(default=2, ge=1, le=10)
-    items: list[BatchJobItemRequest] = Field(min_length=1, max_length=50)
+    admin_test_mode: bool = False
+    items: list[BatchJobItemRequest] = Field(min_length=1, max_length=500)
 
     @model_validator(mode="after")
     def validate_batch(self) -> "JobBatchSubmitRequest":
@@ -320,6 +324,7 @@ class JobBatchResponse(BaseModel):
     capability: str | None
     status: str
     concurrency: int
+    admin_test_mode: bool
     total_jobs: int
     succeeded_jobs: int
     failed_jobs: int
@@ -344,3 +349,31 @@ class JobBatchPage(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class JobBatchDiagnosticsResponse(BaseModel):
+    batch_id: str
+    status_counts: dict[str, int]
+    configured_concurrency: int
+    effective_concurrency: int
+    actual_max_concurrency: int
+    worker_concurrency: int
+    active_jobs: int
+    stale_jobs: int
+    queue_name: str
+    broker_queue_length: int
+    online_workers: list[str]
+    resource_pool_ids: list[str]
+    resource_key_capacity: int
+    resource_available_capacity: int
+    attempts: int
+    retries: int
+    http_status_counts: dict[str, int]
+    error_code_counts: dict[str, int]
+    average_queue_wait_ms: int | None
+    average_generation_ms: int | None
+    latest_completed_at: datetime | None
+    latest_error_code: str | None
+    latest_error_message: str | None
+    limitation_reasons: list[str] = Field(default_factory=list)
+    availability_reasons: list[str] = Field(default_factory=list)

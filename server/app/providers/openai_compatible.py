@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import PurePosixPath
 from urllib.parse import urlparse
 
@@ -83,7 +85,11 @@ class OpenAICompatibleProvider(BaseImageProvider):
         if response.status_code >= 400:
             message = _error_message(response)
             retryable = response.status_code in {408, 409, 429} or response.status_code >= 500
-            raise ProviderError("provider.rate_limited" if response.status_code == 429 else "provider.upstream_error", message, http_status=response.status_code, retryable=retryable)
+            raise ProviderError(
+                "provider.rate_limited" if response.status_code == 429 else "provider.upstream_error",
+                message, http_status=response.status_code, retryable=retryable,
+                retry_after_seconds=_retry_after_seconds(response),
+            )
         try:
             body = response.json()
             items = body["data"]
@@ -149,6 +155,7 @@ class OpenAICompatibleProvider(BaseImageProvider):
             raise ProviderError(
                 "provider.rate_limited" if response.status_code == 429 else "provider.upstream_error",
                 _error_message(response), http_status=response.status_code, retryable=retryable,
+                retry_after_seconds=_retry_after_seconds(response),
             )
         try:
             body = response.json()
@@ -205,3 +212,19 @@ def _error_message(response: httpx.Response) -> str:
     except ValueError:
         pass
     return f"Upstream provider returned HTTP {response.status_code}"
+
+
+def _retry_after_seconds(response: httpx.Response) -> int | None:
+    value = response.headers.get("retry-after")
+    if not value:
+        return None
+    try:
+        return max(1, min(3600, int(float(value))))
+    except ValueError:
+        try:
+            target = parsedate_to_datetime(value)
+            if target.tzinfo is None:
+                target = target.replace(tzinfo=timezone.utc)
+            return max(1, min(3600, int((target - datetime.now(timezone.utc)).total_seconds())))
+        except (TypeError, ValueError, OverflowError):
+            return None

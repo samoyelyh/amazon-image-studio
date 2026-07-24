@@ -9,7 +9,7 @@ from app.models.identity import (
     RolePermission,
     User,
 )
-from app.models.content import Asset, GeneratedOutput, Project, ProjectAsset, ProjectVersion
+from app.models.content import Asset, GeneratedOutput, ListingOutputTransfer, Project, ProjectAsset, ProjectVersion
 from app.models.quota import QuotaAccount, QuotaPackage, QuotaReservation, QuotaRule, QuotaTransaction
 from app.models.tasks import (
     ApiKey, ApiKeyUsageStat, BatchTryOnReviewItem, BatchTryOnVersion, Job, JobAttempt,
@@ -28,6 +28,7 @@ __all__ = [
     "User",
     "Asset",
     "GeneratedOutput",
+    "ListingOutputTransfer",
     "Project",
     "ProjectAsset",
     "ProjectVersion",

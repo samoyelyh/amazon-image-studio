@@ -39,7 +39,9 @@ async def get_review_detail(
     session: AsyncSession = Depends(get_db_session),
     principal: Principal = Depends(require_permissions("jobs.read")),
 ) -> BatchTryOnReviewDetailResponse:
-    return await review_detail(session, organization_id(principal), item_id)
+    detail = await review_detail(session, organization_id(principal), item_id)
+    await session.commit()
+    return detail
 
 
 @router.post("/{item_id}/approve", response_model=BatchTryOnReviewDetailResponse)

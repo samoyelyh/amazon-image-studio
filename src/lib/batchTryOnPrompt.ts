@@ -1,3 +1,6 @@
+import type { BatchTryOnPresetSelection } from '../types'
+import { buildBatchTryOnPresetPrompt } from './batchTryOnPresets'
+
 export const BATCH_TRY_ON_BASE_PROMPT = `You are performing a high-fidelity apparel virtual try-on image edit.
 
 REFERENCE IMAGE ORDER:
@@ -71,6 +74,8 @@ FINAL PRIORITY:
 export interface BuildBatchTryOnPromptOptions {
   garmentFileName: string
   outputSize: string
+  templateName?: string
+  presetSelection?: BatchTryOnPresetSelection
   extraRequirements?: string
   reviewNotes?: string
   retryMode?: 'direct' | 'with_review_notes'
@@ -79,8 +84,11 @@ export interface BuildBatchTryOnPromptOptions {
 export function buildBatchTryOnPrompt(options: BuildBatchTryOnPromptOptions): string {
   const sections = [
     BATCH_TRY_ON_BASE_PROMPT,
-    `CURRENT TASK:\n* Garment file name: ${options.garmentFileName.trim() || 'unnamed garment'}\n* Expected output size: ${options.outputSize.trim() || 'follow the model template image'}\n* Reference Image 1 is the model template. Reference Image 2 is the garment for this task. Keep this order unchanged.`,
+    `CURRENT TASK:\n* Template name: ${options.templateName?.trim() || 'unnamed model template'}\n* Garment file name: ${options.garmentFileName.trim() || 'unnamed garment'}\n* Expected output size: ${options.outputSize.trim() || 'follow the model template image'}\n* Reference Image 1 is the model template. Reference Image 2 is the garment for this task. Keep this order unchanged.`,
   ]
+
+  const presetPrompt = options.presetSelection ? buildBatchTryOnPresetPrompt(options.presetSelection) : ''
+  if (presetPrompt) sections.push(presetPrompt)
 
   const extraRequirements = options.extraRequirements?.trim()
   if (extraRequirements) {

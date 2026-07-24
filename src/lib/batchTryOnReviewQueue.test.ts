@@ -28,4 +28,15 @@ describe('batch try-on review queue navigation', () => {
     expect(findAdjacentReviewItem(items, 'review-2', 1)?.serverReviewItemId).toBe('review-3')
     expect(items[1].serverReviewStatus).toBe('generation_failed')
   })
+
+  it('does not wrap before the first or after the last review item', () => {
+    const items = [item('1', 'done', 'pending'), item('2', 'done', 'pending'), item('3', 'done', 'pending')]
+    expect(findAdjacentReviewItem(items, 'review-1', -1)).toBeNull()
+    expect(findAdjacentReviewItem(items, 'review-3', 1)).toBeNull()
+  })
+
+  it('uses stable review ids rather than a queue index', () => {
+    const items = [item('9', 'done', 'pending'), item('2', 'done', 'pending')]
+    expect(findAdjacentReviewItem(items, 'review-9', 1)?.serverReviewItemId).toBe('review-2')
+  })
 })

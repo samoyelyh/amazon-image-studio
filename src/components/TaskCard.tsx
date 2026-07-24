@@ -18,6 +18,9 @@ interface Props {
   onClick: (e: React.MouseEvent | React.TouchEvent) => void
   isSelected?: boolean
   disableSwipe?: boolean
+  showSendToBatchTryOn?: boolean
+  sendToBatchTryOnDisabledReason?: string
+  onSendToBatchTryOn?: () => void
 }
 
 const TASK_SIZE_PATTERN = /^\s*(\d+)\s*[xX×]\s*(\d+)\s*$/
@@ -88,6 +91,9 @@ export default function TaskCard({
   onClick,
   isSelected,
   disableSwipe,
+  showSendToBatchTryOn,
+  sendToBatchTryOnDisabledReason,
+  onSendToBatchTryOn,
 }: Props) {
   const [thumbSrc, setThumbSrc] = useState<string>('')
   const [coverRatio, setCoverRatio] = useState<string>('')
@@ -538,7 +544,7 @@ export default function TaskCard({
           {/* 生成耗时只从 Provider 开始计算；终态固定显示服务端持久化值。 */}
           <div className="absolute top-1.5 left-1.5 flex max-w-[calc(100%-0.75rem)] flex-wrap items-center gap-1">
             {waitingForGeneration ? (
-              <span className="bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm">等待中</span>
+              <span className="bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm">等待队列中</span>
             ) : durationMs != null ? (
               <span className="flex items-center gap-1 bg-black/50 text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -672,6 +678,18 @@ export default function TaskCard({
               onTouchEnd={(e) => e.stopPropagation()}
               onTouchCancel={(e) => e.stopPropagation()}
             >
+              {showSendToBatchTryOn && (
+                <TaskActionButton
+                  tooltip={sendToBatchTryOnDisabledReason || '批量套图'}
+                  onClick={onSendToBatchTryOn}
+                  disabled={Boolean(sendToBatchTryOnDisabledReason)}
+                  className="p-1.5 rounded-md hover:bg-blue-50 dark:hover:bg-blue-950/30 text-gray-400 hover:text-blue-500 transition disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 15V6a2 2 0 012-2h9a2 2 0 012 2v1M8 20h10a2 2 0 002-2v-8a2 2 0 00-2-2H8a2 2 0 00-2 2v8a2 2 0 002 2zm1-3l2.5-2.5a1 1 0 011.414 0L15 16.586l1-1a1 1 0 011.414 0L19 17.172M10 11.5h.01" />
+                  </svg>
+                </TaskActionButton>
+              )}
               {((task.status === 'error' && !isFalReconnecting) || settings.alwaysShowRetryButton) && (
                 <TaskActionButton
                   tooltip="重试任务"

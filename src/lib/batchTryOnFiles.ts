@@ -7,35 +7,43 @@ const MIME_EXTENSION: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
 }
+const WINDOWS_RESERVED = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i
 
 export interface BatchTryOnDownloadItem {
   imageId: string
   garmentFileName: string
+  templateName?: string
   index: number
 }
 
 export function sanitizeBatchTryOnFileBase(fileName: string) {
   const withoutExtension = fileName.replace(/\.[^.]+$/, '')
-  return withoutExtension
+  const sanitized = withoutExtension
     .normalize('NFKC')
-    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_')
-    .replace(/[. ]+$/g, '')
+    .replace(/[<>:"/\\|?*\u0000-\u001F]+/g, '-')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*-\s*/g, '-')
+    .replace(/-{2,}/g, '-')
     .trim()
-    .slice(0, 100) || 'garment'
+    .replace(/^[. ]+|[. ]+$/g, '')
+    .slice(0, 180) || 'batch-tryon-output'
+  return WINDOWS_RESERVED.test(sanitized) ? `${sanitized}-file` : sanitized
 }
 
 export function createBatchTryOnFileNames(
-  items: Array<Pick<BatchTryOnDownloadItem, 'garmentFileName' | 'index'>>,
+  items: Array<Pick<BatchTryOnDownloadItem, 'garmentFileName' | 'templateName' | 'index'>>,
   extensions: string[] = [],
 ) {
   const used = new Set<string>()
   return items.map((item, itemIndex) => {
-    const base = `${sanitizeBatchTryOnFileBase(item.garmentFileName)}_tryon_${String(item.index + 1).padStart(3, '0')}`
+    const garmentBase = sanitizeBatchTryOnFileBase(item.garmentFileName)
+    const templateBase = item.templateName ? sanitizeBatchTryOnFileBase(item.templateName) : ''
+    const base = templateBase ? `${templateBase}__${garmentBase}` : garmentBase
     const extension = extensions[itemIndex] || 'jpg'
     let candidate = `${base}.${extension}`
     let duplicateIndex = 2
     while (used.has(candidate.toLowerCase())) {
-      candidate = `${base}_${duplicateIndex}.${extension}`
+      candidate = `${base}-${duplicateIndex}.${extension}`
       duplicateIndex++
     }
     used.add(candidate.toLowerCase())

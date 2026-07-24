@@ -158,8 +158,12 @@ export interface TaskRecord {
   id: string
   /** 多人模式服务端统一任务 ID；standalone 任务不设置。 */
   serverJobId?: string
+  /** 多人模式服务端任务所属工作台，用于准确识别历史任务来源。 */
+  serverWorkspaceType?: 'listing' | 'batch_tryon' | 'aplus'
   /** 多人模式输出在素材中心对应的 Asset ID。 */
   serverOutputAssetIds?: string[]
+  /** 多人模式输出对应的 GeneratedOutput ID，用于精确选择当前结果版本。 */
+  serverGeneratedOutputIds?: string[]
   prompt: string
   params: TaskParams
   /** 生成时使用的 Provider 类型 */
@@ -255,21 +259,68 @@ export interface TaskRecord {
 
 // ===== 批量套图 =====
 
-export type BatchTryOnItemStatus = 'pending' | 'running' | 'done' | 'error' | 'stopped'
+export type BatchTryOnItemStatus = 'pending' | 'queued' | 'retry_waiting' | 'running' | 'done' | 'error' | 'stopped'
 export type BatchTryOnReviewStatus = 'pending' | 'approved' | 'rejected' | 'regenerating' | 'generation_failed'
 /** `template` or any positive width:height ratio selected by the user. */
 export type BatchTryOnAspectRatio = string
 
-export interface BatchTryOnItem {
+export interface BatchTryOnTemplate {
+  id: string
+  imageId: string
+  serverAssetId?: string
+  projectAssetLinkId?: string
+  fileName: string
+  displayName: string
+  width?: number
+  height?: number
+  selected: boolean
+  isDefault: boolean
+  sourceType?: 'listing_generated_output' | 'upload'
+  sourceId?: string
+}
+
+export interface BatchTryOnGarment {
   id: string
   batchId: string
   garmentImageId: string
+  serverAssetId?: string
+  projectAssetLinkId?: string
   garmentFileName: string
+  index: number
+  selected: boolean
+  createdAt: number
+}
+
+export interface BatchTryOnPresetSelection {
+  targetAudience?: string
+  replacementMode?: string
+  backgroundStyle?: string
+  backgroundAdaptationMode?: string
+}
+
+export interface BatchTryOnItem {
+  id: string
+  batchId: string
+  templateId?: string
+  templateImageId?: string
+  templateServerAssetId?: string
+  templateName?: string
+  garmentId?: string
+  garmentImageId: string
+  garmentServerAssetId?: string
+  garmentFileName: string
+  presetSelection?: BatchTryOnPresetSelection
+  presetSummary?: string
   index: number
   taskId?: string
   outputImageId?: string
   /** 本地缓存的结果对应哪个服务端 Job，防止新版本完成后继续显示旧图。 */
   outputTaskId?: string
+  serverOutputAssetId?: string
+  serverOutputFilename?: string
+  serverOutputDownloadFilename?: string
+  serverOutputDownloadUrl?: string
+  serverVersionNumber?: number
   serverReviewItemId?: string
   serverReviewStatus?: BatchTryOnReviewStatus
   serverCurrentVersionId?: string
@@ -284,16 +335,26 @@ export interface BatchTryOnItem {
 
 export interface BatchTryOnBatch {
   id: string
+  /** 当前绑定的服务端批量套图项目。 */
+  serverProjectId?: string
+  serverProjectName?: string
   /** 多人模式服务端批次 ID；用于刷新恢复、暂停、取消和重试。 */
   serverBatchId?: string
   templateImageId: string | null
+  templateServerAssetId?: string
+  templateSourceType?: 'listing_generated_output' | 'upload'
+  templateSourceId?: string
   templateFileName?: string
   templateWidth?: number
   templateHeight?: number
+  templates: BatchTryOnTemplate[]
+  garments: BatchTryOnGarment[]
   items: BatchTryOnItem[]
+  presetSelection: BatchTryOnPresetSelection
   extraRequirements: string
   aspectRatio: BatchTryOnAspectRatio
-  concurrency: 1 | 2 | 3
+  concurrency: 1 | 2 | 3 | 5 | 10
+  adminTestMode: boolean
   params: TaskParams
   queuePaused: boolean
   createdAt: number

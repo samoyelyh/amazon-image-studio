@@ -41,13 +41,17 @@ x-backend-environment: &backend-environment
   BOOTSTRAP_QUOTA_BALANCE: ${BOOTSTRAP_QUOTA_BALANCE:-10000}
   QUOTA_RESERVATION_TTL_MINUTES: ${QUOTA_RESERVATION_TTL_MINUTES:-60}
   API_KEY_ENCRYPTION_KEY: ${API_KEY_ENCRYPTION_KEY:-bG9jYWwtZGV2ZWxvcG1lbnQta2V5LTMyLWJ5dGVzISE=}
-  RESOURCE_LEASE_TTL_SECONDS: ${RESOURCE_LEASE_TTL_SECONDS:-900}
+  RESOURCE_LEASE_TTL_SECONDS: ${RESOURCE_LEASE_TTL_SECONDS:-300}
   RESOURCE_KEY_COOLDOWN_SECONDS: ${RESOURCE_KEY_COOLDOWN_SECONDS:-60}
-  PROVIDER_REQUEST_TIMEOUT_SECONDS: ${PROVIDER_REQUEST_TIMEOUT_SECONDS:-120}
+  PROVIDER_REQUEST_TIMEOUT_SECONDS: ${PROVIDER_REQUEST_TIMEOUT_SECONDS:-180}
   PROVIDER_OUTPUT_MAX_BYTES: ${PROVIDER_OUTPUT_MAX_BYTES:-26214400}
   JOB_TIMEOUT_SECONDS: ${JOB_TIMEOUT_SECONDS:-600}
   JOB_HEARTBEAT_TIMEOUT_SECONDS: ${JOB_HEARTBEAT_TIMEOUT_SECONDS:-180}
   JOB_MAX_ATTEMPTS: ${JOB_MAX_ATTEMPTS:-3}
+  CELERY_WORKER_CONCURRENCY: ${CELERY_WORKER_CONCURRENCY:-10}
+  JOB_SYSTEM_MAX_CONCURRENCY: ${JOB_SYSTEM_MAX_CONCURRENCY:-10}
+  JOB_ORGANIZATION_MAX_CONCURRENCY: ${JOB_ORGANIZATION_MAX_CONCURRENCY:-10}
+  JOB_USER_MAX_CONCURRENCY: ${JOB_USER_MAX_CONCURRENCY:-10}
 
 services:
   frontend:
@@ -102,7 +106,7 @@ services:
     build:
       context: server
       dockerfile: Dockerfile
-    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=INFO", "--queues=default,maintenance,planning_queue,listing_queue,batch_tryon_queue,aplus_queue,retry_queue", "--concurrency=2"]
+    command: ["sh", "-c", "celery -A app.workers.celery_app:celery_app worker --loglevel=INFO --queues=default,planning_queue,listing_queue,batch_tryon_queue,aplus_queue,retry_queue --concurrency=$${CELERY_WORKER_CONCURRENCY}"]
     environment: *backend-environment
     depends_on:
       mysql:
@@ -111,6 +115,20 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+    restart: unless-stopped
+    networks: [platform]
+
+  maintenance-worker:
+    build:
+      context: server
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=INFO", "--queues=maintenance", "--concurrency=1"]
+    environment: *backend-environment
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     networks: [platform]
 

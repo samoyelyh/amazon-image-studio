@@ -13,6 +13,9 @@ RetryMode = Literal["direct", "with_review_notes"]
 class ReviewAssetResponse(BaseModel):
     id: str
     filename: str
+    display_filename: str
+    download_filename: str
+    download_url: str
     preview_url: str
     width: int
     height: int
@@ -26,6 +29,10 @@ class BatchTryOnVersionResponse(BaseModel):
     parent_version_id: str | None
     generated_asset_id: str | None
     task_id: str | None
+    source_filename: str | None
+    display_filename: str | None
+    download_filename: str | None
+    output_format: str | None
     prompt_snapshot: str
     review_notes: str | None
     retry_mode: str
@@ -47,6 +54,9 @@ class BatchTryOnReviewDetailResponse(BaseModel):
     current_version_id: str | None
     approved_version_id: str | None
     regeneration_count: int
+    template_name: str | None = None
+    preset_summary: str | None = None
+    preset_codes: dict[str, object] | None = None
     garment_asset: ReviewAssetResponse
     model_asset: ReviewAssetResponse
     current_version: BatchTryOnVersionResponse | None

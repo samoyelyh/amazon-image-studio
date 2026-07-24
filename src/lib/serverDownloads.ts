@@ -1,6 +1,7 @@
 import { zipSync } from 'fflate'
 import type { JobOutput } from './jobsApi'
 import { fetchAssetBlob } from './contentApi'
+import { authenticatedFetchResponse } from './authApi'
 
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
@@ -14,7 +15,21 @@ function saveBlob(blob: Blob, filename: string) {
 }
 
 export async function downloadServerOutput(output: JobOutput) {
-  saveBlob(await fetchAssetBlob(output.url), output.filename)
+  saveBlob(
+    await fetchAssetBlob(output.download_url || output.url),
+    output.download_filename || output.filename,
+  )
+}
+
+export async function downloadAuthenticatedFile(url: string, filename: string) {
+  saveBlob(await (await authenticatedFetchResponse(url)).blob(), filename)
+}
+
+export async function downloadBatchTryOnResultsZip(batchId: string) {
+  await downloadAuthenticatedFile(
+    `/job-batches/${batchId}/batch-tryon-results.zip`,
+    'batch-tryon-results.zip',
+  )
 }
 
 export async function downloadServerOutputZip(outputs: JobOutput[], filename: string) {

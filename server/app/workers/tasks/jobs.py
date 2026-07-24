@@ -1,24 +1,34 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import asyncio
+from contextlib import suppress
+from datetime import datetime, timedelta, timezone
 import logging
 import socket
 from time import monotonic
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import get_settings
+from app.core.errors import AppError
 from app.db.session import get_engine
 from app.infrastructure.redis import get_redis_client
 from app.models.content import Asset, GeneratedOutput
-from app.models.tasks import ApiKeyUsageStat, JobAttempt, JobStatus
+from app.models.quota import QuotaReservation, QuotaReservationStatus
+from app.models.tasks import ApiKeyUsageStat, Job, JobAttempt, JobStatus
 from app.providers.base import ProviderError
 from app.providers.registry import get_provider_adapter
 from app.services.asset_service import create_asset, get_asset
 from app.services.billing_service import settle_reservation
-from app.services.batch_tryon_review_service import sync_batch_try_on_version_for_job
+from app.services.batch_tryon_review_service import (
+    prepare_batch_try_on_output_filename,
+    sync_batch_try_on_version_for_job,
+)
 from app.services.image_delivery_service import delivery_transform, image_dimensions, reinforce_delivery_prompt, render_delivery_output
-from app.services.resource_pool_service import acquire_resource, cool_down_key, mark_key_success, release_resource
+from app.services.resource_pool_service import (
+    acquire_resource, cool_down_key, mark_key_success, release_resource, renew_resource_lease,
+)
 from app.services.storage_service import get_storage_service
 from app.services.task_service import claim_job, create_attempt, finalize_cancelled_job, get_job, refresh_batch_status, schedule_retry_or_fail
 from app.workers.celery_app import celery_app
@@ -49,9 +59,12 @@ async def _execute_job(job_id: str) -> dict[str, object]:
 
         excluded: set[str] = set()
         while job.attempts < job.max_attempts:
+            current_job_id = job.id
+            current_organization_id = job.organization_id
             lease = None
             attempt = None
             provider_started: float | None = None
+            heartbeat_task: asyncio.Task[None] | None = None
             try:
                 lease = await acquire_resource(
                     session, redis, settings, organization_id=job.organization_id,
@@ -67,7 +80,9 @@ async def _execute_job(job_id: str) -> dict[str, object]:
                     await session.commit()
                     return {"job_id": job.id, "status": job.status}
                 job.started_at = datetime.now(UTC)
-                attempt = create_attempt(job, provider_id=lease.provider_id, pool_id=lease.pool_id, key_id=lease.key_id)
+                attempt = await create_attempt(
+                    session, job, provider_id=lease.provider_id, pool_id=lease.pool_id, key_id=lease.key_id,
+                )
                 attempt.model_id = lease.model_id
                 attempt.worker_name = socket.gethostname()
                 attempt.normalized_base_url = lease.base_url
@@ -75,6 +90,16 @@ async def _execute_job(job_id: str) -> dict[str, object]:
                 job.selected_pool_id = lease.pool_id
                 job.selected_key_id = lease.key_id
                 await session.commit()
+                heartbeat_task = asyncio.create_task(
+                    _job_heartbeat_loop(
+                        session_factory,
+                        redis,
+                        settings,
+                        job_id=current_job_id,
+                        reservation_id=job.quota_reservation_id,
+                        lease=lease,
+                    )
+                )
 
                 logger.info(
                     "provider_request job_id=%s operation_code=%s resource_pool_id=%s provider_id=%s "
@@ -84,13 +109,25 @@ async def _execute_job(job_id: str) -> dict[str, object]:
                 )
 
                 adapter = get_provider_adapter(lease.provider_type, settings)
+                input_started = monotonic()
                 provider_payload = await _provider_payload(session, storage=get_storage_service(), job=job)
+                attempt.phase_timings_json = {
+                    **(attempt.phase_timings_json or {}),
+                    "input_download_ms": max(0, int((monotonic() - input_started) * 1000)),
+                }
                 provider_started = monotonic()
+                attempt.provider_requested_at = datetime.now(UTC)
                 result = await adapter.execute(
                     base_url=lease.base_url, api_key=lease.api_key, upstream_model=lease.upstream_model,
                     capability=job.capability, payload=provider_payload,
                     config={**lease.provider_config, **lease.model_config},
                 )
+                attempt.provider_responded_at = datetime.now(UTC)
+                attempt.phase_timings_json = {
+                    **(attempt.phase_timings_json or {}),
+                    "provider_ms": max(0, int((monotonic() - provider_started) * 1000)),
+                }
+                postprocess_started = monotonic()
                 stored = []
                 provider_dimensions: list[tuple[int, int]] = []
                 created_records: list[tuple[Asset, GeneratedOutput]] = []
@@ -98,11 +135,14 @@ async def _execute_job(job_id: str) -> dict[str, object]:
                 for index, output in enumerate(result.outputs):
                     provider_dimensions.append(await run_in_threadpool(image_dimensions, output.content))
                     output = await run_in_threadpool(render_delivery_output, output, job.input_json)
+                    friendly_filename = await prepare_batch_try_on_output_filename(
+                        session, job, output.mime_type,
+                    ) or output.filename
                     category = {"listing": "listing_output", "batch_tryon": "batch_tryon_output", "aplus": "aplus_output"}[job.workspace_type]
                     metadata = job.input_json.get("metadata") if isinstance(job.input_json.get("metadata"), dict) else {}
                     asset = await create_asset(
                         session, storage, settings, organization_id=job.organization_id, user_id=job.created_by,
-                        category=category, filename=output.filename, declared_mime=output.mime_type, data=output.content,
+                        category=category, filename=friendly_filename, declared_mime=output.mime_type, data=output.content,
                         max_bytes=settings.generated_asset_max_bytes,
                     )
                     generated = GeneratedOutput(
@@ -114,6 +154,9 @@ async def _execute_job(job_id: str) -> dict[str, object]:
                             "client_item_id": job.client_item_id,
                             "batch_tryon_review_item_id": metadata.get("batch_tryon_review_item_id"),
                             "batch_tryon_version_id": metadata.get("batch_tryon_version_id"),
+                            "source_filename": metadata.get("source_filename"),
+                            "display_filename": friendly_filename,
+                            "output_format": asset.mime_type,
                         },
                         created_by=job.created_by, created_at=datetime.now(UTC),
                     )
@@ -125,6 +168,12 @@ async def _execute_job(job_id: str) -> dict[str, object]:
                         "mime_type": asset.mime_type, "size": asset.size, "sha256": asset.sha256,
                         "width": asset.width, "height": asset.height,
                     })
+                attempt.phase_timings_json = {
+                    **(attempt.phase_timings_json or {}),
+                    "postprocess_and_storage_ms": max(
+                        0, int((monotonic() - postprocess_started) * 1000)
+                    ),
+                }
 
                 job = await get_job(session, job.organization_id, job.id, lock=True)
                 now = datetime.now(UTC)
@@ -206,6 +255,7 @@ async def _execute_job(job_id: str) -> dict[str, object]:
                     job.generation_duration_ms = int(job.generation_duration_ms or 0) + attempt_duration_ms
                     attempt.status = "failed"
                     attempt.http_status = error.http_status
+                    attempt.retry_after_seconds = error.retry_after_seconds
                     attempt.error_code = error.code
                     attempt.error_message = error.message[:1000]
                     attempt.finished_at = now
@@ -229,7 +279,13 @@ async def _execute_job(job_id: str) -> dict[str, object]:
                 if not error.retryable:
                     job = await get_job(session, job.organization_id, job.id, lock=True)
                     job.attempts = job.max_attempts
-                    await schedule_retry_or_fail(session, job, code=error.code, message=error.message)
+                    await schedule_retry_or_fail(
+                        session,
+                        job,
+                        code=error.code,
+                        message=error.message,
+                        retry_delay_seconds=error.retry_after_seconds,
+                    )
                     await sync_batch_try_on_version_for_job(session, job)
                     if job.batch_id:
                         await refresh_batch_status(session, job.batch_id)
@@ -237,26 +293,44 @@ async def _execute_job(job_id: str) -> dict[str, object]:
                     return {"job_id": job.id, "status": job.status, "error": error.code}
                 continue
             except Exception as error:
+                attempt_id = attempt.id if attempt is not None else None
                 await session.rollback()
-                job = await get_job(session, job.organization_id, job.id, lock=True)
-                if attempt is None:
-                    attempt = create_attempt(job)
-                    session.add(attempt)
-                else:
-                    attempt = await session.get(JobAttempt, attempt.id, with_for_update=True)
-                attempt.status = "failed"
-                attempt.error_code = getattr(error, "code", "job.execution_error")
-                attempt.error_message = str(error)[:1000]
-                attempt.finished_at = datetime.now(UTC)
-                if provider_started is not None and attempt.provider_id:
+                job = await get_job(session, current_organization_id, current_job_id, lock=True)
+                persisted_attempt = (
+                    await session.get(JobAttempt, attempt_id, with_for_update=True)
+                    if attempt_id else None
+                )
+                error_code = error.code if isinstance(error, AppError) else "job.execution_error"
+                error_message = (
+                    "等待队列中，系统将自动继续生成"
+                    if error_code == "resource_pool.no_available_key"
+                    else str(error)[:1000]
+                )
+                if persisted_attempt is not None:
+                    persisted_attempt.status = "failed"
+                    persisted_attempt.error_code = error_code
+                    persisted_attempt.error_message = error_message
+                    persisted_attempt.finished_at = datetime.now(UTC)
+                if provider_started is not None and persisted_attempt is not None and persisted_attempt.provider_id:
                     job.generation_duration_ms = int(job.generation_duration_ms or 0) + max(0, int((monotonic() - provider_started) * 1000))
-                await schedule_retry_or_fail(session, job, code=attempt.error_code, message=attempt.error_message)
+                await schedule_retry_or_fail(
+                    session,
+                    job,
+                    code=error_code,
+                    message=error_message,
+                    retry_delay_seconds=60 if isinstance(error, AppError)
+                    and error.code == "resource_pool.no_available_key" else None,
+                )
                 await sync_batch_try_on_version_for_job(session, job)
                 if job.batch_id:
                     await refresh_batch_status(session, job.batch_id)
                 await session.commit()
-                return {"job_id": job.id, "status": job.status, "error": attempt.error_code}
+                return {"job_id": job.id, "status": job.status, "error": error_code}
             finally:
+                if heartbeat_task:
+                    heartbeat_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await heartbeat_task
                 if lease:
                     await release_resource(redis, lease)
 
@@ -286,3 +360,43 @@ async def _provider_payload(session: AsyncSession, *, storage, job) -> dict[str,
             "content": await run_in_threadpool(storage.download, mask.storage_key), "filename": mask.filename, "mime_type": mask.mime_type,
         }
     return reinforce_delivery_prompt(payload)
+
+
+async def _job_heartbeat_loop(
+    session_factory,
+    redis,
+    settings,
+    *,
+    job_id: str,
+    reservation_id: str,
+    lease,
+) -> None:
+    interval = max(10, min(30, settings.job_heartbeat_timeout_seconds // 3))
+    while True:
+        try:
+            now = datetime.now(UTC)
+            await redis.set(f"worker:heartbeat:{socket.gethostname()}", now.isoformat(), ex=180)
+            async with session_factory() as heartbeat_session:
+                await heartbeat_session.execute(
+                    update(Job)
+                    .where(Job.id == job_id, Job.status == JobStatus.RUNNING.value)
+                    .values(heartbeat_at=now)
+                )
+                await heartbeat_session.execute(
+                    update(QuotaReservation)
+                    .where(
+                        QuotaReservation.id == reservation_id,
+                        QuotaReservation.status == QuotaReservationStatus.RESERVED.value,
+                    )
+                    .values(expires_at=now + timedelta(minutes=settings.quota_reservation_ttl_minutes))
+                )
+                await heartbeat_session.commit()
+            await renew_resource_lease(redis, settings, lease)
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            logger.warning(
+                "job_heartbeat_failed job_id=%s worker_name=%s error_type=%s",
+                job_id, socket.gethostname(), type(error).__name__,
+            )
+        await asyncio.sleep(interval)

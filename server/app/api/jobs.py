@@ -5,12 +5,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError
 from app.db.session import get_db_session
-from app.schemas.tasks import JobBatchPage, JobBatchResponse, JobBatchSubmitRequest, JobPage, JobResponse, JobSubmitRequest
+from app.schemas.tasks import (
+    JobBatchDiagnosticsResponse, JobBatchPage, JobBatchResponse, JobBatchSubmitRequest,
+    JobPage, JobResponse, JobSubmitRequest,
+)
 from app.security.principal import Principal, require_permissions
 from app.services.audit_service import add_audit_log
+from app.services.asset_service import content_disposition_header
 from app.services.storage_service import StorageService, get_storage_service
+from app.services.job_diagnostics_service import batch_diagnostics
 from app.services.task_service import (
-    cancel_job, dispatch_job, get_batch, get_job, job_response, list_jobs,
+    cancel_job, dispatch_job, due_jobs, effective_batch_jobs, get_batch, get_job, job_response, list_jobs,
     refresh_batch_status, submit_batch, submit_job,
 )
 from app.models.tasks import Job, JobBatch
@@ -42,19 +47,18 @@ async def add_job(
                   metadata={"operation_code": job.operation_code, "created": created})
     await session.commit()
     if created:
-        try:
-            dispatch_job(job)
-            await session.commit()
-        except Exception as error:
-            await session.rollback()
-            job = await get_job(session, org_id, job.id, lock=True)
-            job.status = "queued"
-            job.error_code = "job.dispatch_failed"
-            job.error_message = "任务队列暂时不可用，系统将自动重试"
-            job.dispatched_at = None
-            job.celery_task_id = None
-            await session.commit()
-            logger.error("job_dispatch_failed job_id=%s queue_name=%s error_type=%s", job.id, job.queue_name, type(error).__name__)
+        for due in await due_jobs(session, settings, limit=1):
+            try:
+                dispatch_job(due)
+                await session.commit()
+            except Exception as error:
+                await session.rollback()
+                logger.error(
+                    "job_dispatch_failed job_id=%s queue_name=%s error_type=%s",
+                    due.id,
+                    due.queue_name,
+                    type(error).__name__,
+                )
     else:
         response.status_code = status.HTTP_200_OK
     return await job_response(session, storage, settings, await get_job(session, org_id, job.id))
@@ -104,14 +108,19 @@ async def _batch_response(
     if batch.workspace_type == "batch_tryon":
         from app.services.batch_tryon_review_service import ensure_batch_try_on_review_records
 
+        batch_id = batch.id
+        organization_id = batch.organization_id
         await ensure_batch_try_on_review_records(session, batch)
+        await refresh_batch_status(session, batch.id)
         await session.commit()
-    jobs = list((await session.scalars(select(Job).where(Job.batch_id == batch.id).order_by(Job.created_at))).all())
+        batch = await get_batch(session, organization_id, batch_id)
+    jobs, _ = await effective_batch_jobs(session, batch)
     return JobBatchResponse(
         id=batch.id, organization_id=batch.organization_id, project_id=batch.project_id,
         workspace_type=batch.workspace_type, operation_code=batch.operation_code, name=batch.name,
         model_code=batch.model_code, capability=batch.capability, status=batch.status,
-        concurrency=batch.concurrency, total_jobs=batch.total_jobs, succeeded_jobs=batch.succeeded_jobs,
+        concurrency=batch.concurrency, admin_test_mode=batch.admin_test_mode,
+        total_jobs=batch.total_jobs, succeeded_jobs=batch.succeeded_jobs,
         failed_jobs=batch.failed_jobs, cancelled_jobs=batch.cancelled_jobs, error_message=batch.error_message,
         started_at=batch.started_at, finished_at=batch.finished_at, created_at=batch.created_at,
         updated_at=batch.updated_at,
@@ -127,15 +136,24 @@ async def add_job_batch(
     principal: Principal = Depends(require_permissions("jobs.submit")),
 ) -> JobBatchResponse:
     org_id = organization_id(principal)
+    is_admin = bool(principal.role_codes.intersection({"platform_admin", "organization_admin"}))
+    if payload.admin_test_mode and not is_admin:
+        raise AppError("job.admin_concurrency_forbidden", "只有管理员可以启用高级并发测试模式", 403)
+    if payload.workspace_type == "batch_tryon" and payload.concurrency > 3 and not payload.admin_test_mode:
+        raise AppError("job.admin_concurrency_required", "批量套图并发超过 3 时必须启用管理员测试模式", 422)
     batch, jobs, created = await submit_batch(
         session, settings, organization_id=org_id, user_id=principal.user.id, payload=payload,
     )
     add_audit_log(session, request=request, actor_user_id=principal.user.id, organization_id=org_id,
                   action="job_batch.submit", resource_type="job_batch", resource_id=batch.id,
-                  metadata={"jobs": len(jobs), "created": created})
+                  metadata={
+                      "jobs": len(jobs), "created": created,
+                      "concurrency": payload.concurrency,
+                      "admin_test_mode": payload.admin_test_mode,
+                  })
     await session.commit()
     if created:
-        for job in jobs:
+        for job in await due_jobs(session, settings, limit=len(jobs), batch_id=batch.id):
             try:
                 dispatch_job(job)
             except Exception as error:
@@ -177,6 +195,43 @@ async def get_job_batch_detail(
 ) -> JobBatchResponse:
     batch = await get_batch(session, organization_id(principal), batch_id)
     return await _batch_response(session, storage, settings, batch)
+
+
+@batch_router.get("/{batch_id}/diagnostics", response_model=JobBatchDiagnosticsResponse)
+async def get_job_batch_diagnostics(
+    batch_id: str,
+    session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.read", "audit.read")),
+) -> JobBatchDiagnosticsResponse:
+    batch = await get_batch(session, organization_id(principal), batch_id)
+    return await batch_diagnostics(session, settings, batch=batch)
+
+
+@batch_router.get("/{batch_id}/batch-tryon-results.zip")
+async def download_batch_try_on_results(
+    batch_id: str,
+    session: AsyncSession = Depends(get_db_session),
+    storage: StorageService = Depends(get_storage_service),
+    principal: Principal = Depends(require_permissions("jobs.read", "assets.read")),
+) -> Response:
+    from app.services.batch_tryon_export_service import build_batch_try_on_results_zip
+
+    batch = await get_batch(session, organization_id(principal), batch_id)
+    content, success_count, skipped_count = await build_batch_try_on_results_zip(
+        session, storage, batch=batch,
+    )
+    await session.commit()
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": content_disposition_header("batch-tryon-results.zip"),
+            "Cache-Control": "private, no-store",
+            "X-Batch-Try-On-Exported": str(success_count),
+            "X-Batch-Try-On-Skipped": str(skipped_count),
+        },
+    )
 
 
 @batch_router.post("/{batch_id}/cancel", response_model=JobBatchResponse)
@@ -227,7 +282,7 @@ async def resume_job_batch(
             Job.batch_id == batch.id,
             Job.status.in_(["queued", "dispatching", "retry_waiting"]),
         ))).all())
-        for job in jobs:
+        for job in await due_jobs(session, settings, limit=batch.concurrency, batch_id=batch.id):
             job.dispatched_at = None
             job.celery_task_id = None
             if job.status == "dispatching":

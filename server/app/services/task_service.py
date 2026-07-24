@@ -1,19 +1,23 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from uuid import uuid4
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.models.content import Asset, GeneratedOutput, Project
-from app.models.tasks import BatchStatus, BatchTryOnReviewItem, BatchTryOnVersion, Job, JobAttempt, JobBatch, JobStatus
+from app.models.tasks import (
+    ApiKey, ApiKeyStatus, BatchStatus, BatchTryOnReviewItem, BatchTryOnVersion, Job, JobAttempt,
+    JobBatch, JobStatus, OperationResourcePool, ProviderModel, ResourcePool, ResourcePoolKey,
+)
 from app.schemas.tasks import JobBatchSubmitRequest, JobOutputResponse, JobPage, JobResponse, JobSubmitRequest
-from app.services.billing_service import release_reservation, reserve_quota
+from app.services.billing_service import reactivate_job_reservation, release_reservation, reserve_quota
 from app.services.asset_service import signed_asset_response
 from app.services.storage_service import StorageService
 from app.services.resource_pool_service import validate_operation_binding
@@ -21,7 +25,9 @@ from app.services.image_size_service import validate_submission_dimensions
 
 
 UTC = timezone.utc
+logger = logging.getLogger(__name__)
 TERMINAL_JOB_STATUSES = {JobStatus.SUCCEEDED.value, JobStatus.FAILED.value, JobStatus.CANCELLED.value}
+ACTIVE_SLOT_STATUSES = {JobStatus.DISPATCHING.value, JobStatus.RUNNING.value}
 
 
 def request_hash(payload: JobSubmitRequest) -> str:
@@ -109,7 +115,9 @@ async def job_response(
     for generated, asset in rows:
         signed = await signed_asset_response(asset, storage, settings)
         outputs.append(JobOutputResponse(
-            id=generated.id, asset_id=asset.id, filename=asset.filename, mime_type=asset.mime_type,
+            id=generated.id, asset_id=asset.id, filename=asset.filename,
+            display_filename=asset.filename, download_filename=asset.filename,
+            download_url=f"/api/v1/assets/{asset.id}/download", mime_type=asset.mime_type,
             width=asset.width, height=asset.height, size=asset.size,
             sequence_number=generated.sequence_number, url=signed.url or "",
             url_expires_at=signed.url_expires_at,
@@ -129,6 +137,24 @@ async def job_response(
                 BatchTryOnVersion.item_id == review_item.id,
                 BatchTryOnVersion.task_id == job.id,
             ))
+            if review_version and rows:
+                from app.services.batch_tryon_review_service import ensure_batch_try_on_version_filenames
+
+                _, display_filename, _, _ = await ensure_batch_try_on_version_filenames(
+                    session,
+                    review_item,
+                    review_version,
+                    job=job,
+                    generated_asset=rows[0][1],
+                )
+                outputs = [
+                    output.model_copy(update={
+                        "filename": display_filename,
+                        "display_filename": display_filename,
+                        "download_filename": display_filename,
+                    })
+                    for output in outputs
+                ]
     actual_width = outputs[0].width if outputs else None
     actual_height = outputs[0].height if outputs else None
     requested_width = snapshot.get("requested_width")
@@ -182,7 +208,8 @@ async def submit_batch(
         workspace_type=payload.workspace_type, operation_code=payload.operation_code,
         name=payload.name.strip(), model_code=payload.model_code, capability=payload.capability,
         idempotency_key=payload.idempotency_key, request_hash=fingerprint,
-        concurrency=payload.concurrency, status=BatchStatus.QUEUED.value,
+        concurrency=payload.concurrency, admin_test_mode=payload.admin_test_mode,
+        status=BatchStatus.QUEUED.value,
         total_jobs=len(payload.items), created_by=user_id, updated_by=user_id,
     )
     session.add(batch)
@@ -228,36 +255,72 @@ async def get_batch(session: AsyncSession, organization_id: str, batch_id: str, 
     return batch
 
 
+async def effective_batch_jobs(session: AsyncSession, batch: JobBatch) -> tuple[list[Job], int]:
+    """Return the jobs that represent the batch's current business items.
+
+    Batch try-on regeneration creates immutable historical jobs. Those jobs remain
+    available through the review/version APIs, but must not increase task-center
+    totals or keep a completed batch open.
+    """
+    if batch.workspace_type == "batch_tryon":
+        item_count = int(await session.scalar(
+            select(func.count()).select_from(BatchTryOnReviewItem).where(
+                BatchTryOnReviewItem.batch_id == batch.id,
+            )
+        ) or 0)
+        if item_count:
+            jobs = list((await session.scalars(
+                select(Job)
+                .join(BatchTryOnVersion, BatchTryOnVersion.task_id == Job.id)
+                .join(
+                    BatchTryOnReviewItem,
+                    (BatchTryOnReviewItem.id == BatchTryOnVersion.item_id)
+                    & (BatchTryOnReviewItem.current_version_id == BatchTryOnVersion.id),
+                )
+                .where(BatchTryOnReviewItem.batch_id == batch.id)
+                .order_by(Job.created_at, Job.id)
+            )).all())
+            return jobs, item_count
+
+    jobs = list((await session.scalars(
+        select(Job).where(Job.batch_id == batch.id).order_by(Job.created_at, Job.id)
+    )).all())
+    return jobs, len(jobs)
+
+
 async def refresh_batch_status(session: AsyncSession, batch_id: str) -> JobBatch | None:
     batch = await session.get(JobBatch, batch_id, with_for_update=True)
     if batch is None:
         return None
-    jobs = list((await session.scalars(select(Job).where(Job.batch_id == batch.id))).all())
-    batch.total_jobs = len(jobs)
+    jobs, total_jobs = await effective_batch_jobs(session, batch)
+    batch.total_jobs = total_jobs
     batch.succeeded_jobs = sum(item.status == JobStatus.SUCCEEDED.value for item in jobs)
     batch.failed_jobs = sum(item.status == JobStatus.FAILED.value for item in jobs)
     batch.cancelled_jobs = sum(item.status == JobStatus.CANCELLED.value for item in jobs)
     terminal = batch.succeeded_jobs + batch.failed_jobs + batch.cancelled_jobs
     was_paused = batch.status == BatchStatus.PAUSED.value
-    if terminal == len(jobs) and batch.succeeded_jobs == len(jobs):
+    if total_jobs > 0 and terminal == total_jobs and batch.succeeded_jobs == total_jobs:
         batch.status = BatchStatus.SUCCEEDED.value
         batch.finished_at = datetime.now(UTC)
-    elif terminal == len(jobs) and batch.cancelled_jobs == len(jobs):
+    elif total_jobs > 0 and terminal == total_jobs and batch.cancelled_jobs == total_jobs:
         batch.status = BatchStatus.CANCELLED.value
         batch.finished_at = datetime.now(UTC)
-    elif terminal == len(jobs) and batch.succeeded_jobs:
+    elif total_jobs > 0 and terminal == total_jobs and batch.succeeded_jobs:
         batch.status = BatchStatus.PARTIALLY_SUCCEEDED.value
         batch.finished_at = datetime.now(UTC)
-    elif terminal == len(jobs):
+    elif total_jobs > 0 and terminal == total_jobs:
         batch.status = BatchStatus.FAILED.value
         batch.finished_at = datetime.now(UTC)
     elif was_paused:
         batch.status = BatchStatus.PAUSED.value
+        batch.finished_at = None
     elif any(item.status == JobStatus.RUNNING.value for item in jobs):
         batch.status = BatchStatus.RUNNING.value
         batch.started_at = batch.started_at or datetime.now(UTC)
+        batch.finished_at = None
     else:
         batch.status = BatchStatus.QUEUED.value
+        batch.finished_at = None
     await session.flush()
     return batch
 
@@ -312,10 +375,7 @@ async def finalize_cancelled_job(session: AsyncSession, job: Job) -> None:
     job.finished_at = datetime.now(UTC)
     job.next_retry_at = None
     job.dispatched_at = None
-    await release_reservation(
-        session, organization_id=job.organization_id, reservation_id=job.quota_reservation_id,
-        user_id=job.updated_by, idempotency_key=f"job-cancel:{job.id}",
-    )
+    await _release_job_reservation(session, job, idempotency_key=f"job-cancel:{job.id}")
     from app.services.batch_tryon_review_service import sync_batch_try_on_version_for_job
 
     await sync_batch_try_on_version_for_job(session, job)
@@ -352,26 +412,45 @@ async def claim_job(session: AsyncSession, settings: Settings, job_id: str) -> J
     heartbeat = _aware(job.heartbeat_at)
     if job.status == JobStatus.RUNNING.value and heartbeat and heartbeat > now - timedelta(seconds=settings.job_heartbeat_timeout_seconds):
         return None
+    await reactivate_job_reservation(session, settings, job=job)
     job.status = JobStatus.RUNNING.value
     job.progress = max(job.progress, 1)
     job.heartbeat_at = now
     job.error_code = None
     job.error_message = None
+    job.next_retry_at = None
     await session.flush()
     return job
 
 
-def create_attempt(job: Job, *, provider_id: str | None = None, pool_id: str | None = None, key_id: str | None = None) -> JobAttempt:
+async def create_attempt(
+    session: AsyncSession,
+    job: Job,
+    *,
+    provider_id: str | None = None,
+    pool_id: str | None = None,
+    key_id: str | None = None,
+) -> JobAttempt:
     job.attempts += 1
     job.heartbeat_at = datetime.now(UTC)
+    historical_attempt = int(await session.scalar(select(func.max(JobAttempt.attempt_number)).where(
+        JobAttempt.job_id == job.id,
+    )) or 0)
     return JobAttempt(
-        organization_id=job.organization_id, job_id=job.id, attempt_number=job.attempts,
+        organization_id=job.organization_id, job_id=job.id, attempt_number=historical_attempt + 1,
         provider_id=provider_id, resource_pool_id=pool_id, api_key_id=key_id,
         status="running", started_at=datetime.now(UTC),
     )
 
 
-async def schedule_retry_or_fail(session: AsyncSession, job: Job, *, code: str, message: str) -> None:
+async def schedule_retry_or_fail(
+    session: AsyncSession,
+    job: Job,
+    *,
+    code: str,
+    message: str,
+    retry_delay_seconds: int | None = None,
+) -> None:
     if job.cancel_requested_at:
         await finalize_cancelled_job(session, job)
         return
@@ -382,14 +461,12 @@ async def schedule_retry_or_fail(session: AsyncSession, job: Job, *, code: str, 
     job.celery_task_id = None
     if job.attempts < job.max_attempts and not job.cancel_requested_at:
         job.status = JobStatus.RETRY_WAITING.value
-        job.next_retry_at = datetime.now(UTC) + timedelta(seconds=min(300, 2 ** max(job.attempts, 1) * 5))
+        delay = retry_delay_seconds if retry_delay_seconds is not None else min(300, 2 ** max(job.attempts, 1) * 5)
+        job.next_retry_at = datetime.now(UTC) + timedelta(seconds=max(1, min(900, delay)))
     else:
         job.status = JobStatus.FAILED.value
         job.finished_at = datetime.now(UTC)
-        await release_reservation(
-            session, organization_id=job.organization_id, reservation_id=job.quota_reservation_id,
-            user_id=job.updated_by, idempotency_key=f"job-failed:{job.id}",
-        )
+        await _release_job_reservation(session, job, idempotency_key=f"job-failed:{job.id}")
     await session.flush()
 
 
@@ -402,14 +479,36 @@ async def recover_stale_jobs(session: AsyncSession, settings: Settings) -> int:
             (Job.status == JobStatus.DISPATCHING.value) & (Job.dispatched_at < threshold),
         ),
     ).with_for_update())).all())
+    recovered = 0
     for job in jobs:
-        await schedule_retry_or_fail(session, job, code="job.worker_lost", message="Worker heartbeat expired; job recovered")
-    return len(jobs)
+        try:
+            async with session.begin_nested():
+                await schedule_retry_or_fail(
+                    session, job, code="job.worker_lost", message="Worker heartbeat expired; job recovered",
+                )
+                from app.services.batch_tryon_review_service import sync_batch_try_on_version_for_job
+
+                await sync_batch_try_on_version_for_job(session, job)
+                if job.batch_id:
+                    await refresh_batch_status(session, job.batch_id)
+            recovered += 1
+        except Exception as error:
+            logger.exception(
+                "stale_job_recovery_failed job_id=%s error_type=%s",
+                job.id, type(error).__name__,
+            )
+    return recovered
 
 
-async def due_jobs(session: AsyncSession, limit: int = 100) -> list[Job]:
+async def due_jobs(
+    session: AsyncSession,
+    settings: Settings,
+    limit: int = 100,
+    *,
+    batch_id: str | None = None,
+) -> list[Job]:
     now = datetime.now(UTC)
-    return list((await session.scalars(select(Job).where(
+    candidate_filters = [
         Job.dispatched_at.is_(None),
         ~select(JobBatch.id).where(
             JobBatch.id == Job.batch_id,
@@ -417,7 +516,112 @@ async def due_jobs(session: AsyncSession, limit: int = 100) -> list[Job]:
         ).exists(),
         or_(Job.status == JobStatus.QUEUED.value,
             (Job.status == JobStatus.RETRY_WAITING.value) & (Job.next_retry_at <= now)),
-    ).order_by(Job.created_at).limit(limit).with_for_update(skip_locked=True))).all())
+    ]
+    if batch_id:
+        candidate_filters.append(Job.batch_id == batch_id)
+    candidates = list((await session.scalars(
+        select(Job).where(*candidate_filters).order_by(
+            case((Job.status == JobStatus.QUEUED.value, 0), else_=1),
+            Job.attempts,
+            Job.created_at,
+        ).limit(max(limit * 5, 100))
+        .with_for_update(skip_locked=True)
+    )).all())
+    if not candidates:
+        return []
+
+    active_rows = (await session.execute(select(
+        Job.organization_id, Job.created_by, Job.batch_id,
+        Job.operation_code, Job.model_code, Job.capability,
+    ).where(Job.status.in_(ACTIVE_SLOT_STATUSES)))).all()
+    system_active = len(active_rows)
+    organization_active: dict[str, int] = {}
+    user_active: dict[str, int] = {}
+    batch_active: dict[str, int] = {}
+    resource_active: dict[tuple[str, str, str, str], int] = {}
+    for (
+        organization_id, user_id, active_batch_id, operation_code, model_code, capability,
+    ) in active_rows:
+        organization_active[organization_id] = organization_active.get(organization_id, 0) + 1
+        user_active[user_id] = user_active.get(user_id, 0) + 1
+        if active_batch_id:
+            batch_active[active_batch_id] = batch_active.get(active_batch_id, 0) + 1
+        resource_key = (organization_id, operation_code, model_code, capability)
+        resource_active[resource_key] = resource_active.get(resource_key, 0) + 1
+
+    batch_ids = {job.batch_id for job in candidates if job.batch_id}
+    batches = {
+        item.id: item
+        for item in (await session.scalars(select(JobBatch).where(JobBatch.id.in_(batch_ids)))).all()
+    } if batch_ids else {}
+    resource_capacity: dict[tuple[str, str, str, str], int] = {}
+    selected: list[Job] = []
+    for job in candidates:
+        if len(selected) >= limit or system_active >= settings.job_system_max_concurrency:
+            break
+        if organization_active.get(job.organization_id, 0) >= settings.job_organization_max_concurrency:
+            continue
+        if user_active.get(job.created_by, 0) >= settings.job_user_max_concurrency:
+            continue
+        if job.batch_id:
+            batch = batches.get(job.batch_id)
+            if batch and batch_active.get(job.batch_id, 0) >= batch.concurrency:
+                continue
+        resource_key = (job.organization_id, job.operation_code, job.model_code, job.capability)
+        if resource_key not in resource_capacity:
+            rows = (await session.execute(
+                select(ApiKey.id, ApiKey.max_concurrency)
+                .select_from(OperationResourcePool)
+                .join(ResourcePool, OperationResourcePool.resource_pool_id == ResourcePool.id)
+                .join(ProviderModel, ResourcePool.model_id == ProviderModel.id)
+                .join(ResourcePoolKey, ResourcePoolKey.resource_pool_id == ResourcePool.id)
+                .join(ApiKey, ResourcePoolKey.api_key_id == ApiKey.id)
+                .where(
+                    OperationResourcePool.operation_code == job.operation_code,
+                    OperationResourcePool.required_capability == job.capability,
+                    OperationResourcePool.enabled.is_(True),
+                    ResourcePool.enabled.is_(True),
+                    ResourcePoolKey.enabled.is_(True),
+                    ProviderModel.enabled.is_(True),
+                    ProviderModel.code == job.model_code,
+                    ApiKey.enabled.is_(True),
+                    ApiKey.status != ApiKeyStatus.DISABLED.value,
+                    or_(ApiKey.cooldown_until.is_(None), ApiKey.cooldown_until <= now),
+                    or_(ApiKey.remaining_balance.is_(None), ApiKey.remaining_balance > 0),
+                    or_(
+                        OperationResourcePool.organization_id == job.organization_id,
+                        OperationResourcePool.organization_id.is_(None),
+                    ),
+                    or_(ResourcePool.organization_id == job.organization_id, ResourcePool.organization_id.is_(None)),
+                    or_(ApiKey.organization_id == job.organization_id, ApiKey.organization_id.is_(None)),
+                )
+            )).all()
+            resource_capacity[resource_key] = sum(dict(rows).values())
+        capacity = resource_capacity[resource_key]
+        if capacity < 1 or resource_active.get(resource_key, 0) >= capacity:
+            continue
+        selected.append(job)
+        system_active += 1
+        organization_active[job.organization_id] = organization_active.get(job.organization_id, 0) + 1
+        user_active[job.created_by] = user_active.get(job.created_by, 0) + 1
+        if job.batch_id:
+            batch_active[job.batch_id] = batch_active.get(job.batch_id, 0) + 1
+        resource_active[resource_key] = resource_active.get(resource_key, 0) + 1
+    return selected
+
+
+async def _release_job_reservation(session: AsyncSession, job: Job, *, idempotency_key: str) -> None:
+    try:
+        await release_reservation(
+            session,
+            organization_id=job.organization_id,
+            reservation_id=job.quota_reservation_id,
+            user_id=job.updated_by or job.created_by,
+            idempotency_key=idempotency_key,
+        )
+    except AppError as error:
+        if error.code != "quota.reservation_already_settled":
+            raise
 
 
 def _aware(value: datetime | None) -> datetime | None:
