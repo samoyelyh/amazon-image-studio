@@ -1,6 +1,6 @@
 import { dataUrlToBlob } from './canvasImage'
 import { storeImage } from './db'
-import { fetchAssetBlob, uploadAsset, type Asset, type UploadAssetCategory } from './contentApi'
+import { fetchAssetBlob, uploadAsset, uploadGarmentReference, type Asset, type UploadAssetCategory } from './contentApi'
 import type { JobOutput } from './jobsApi'
 
 function extensionForMime(mime: string) {
@@ -19,6 +19,18 @@ export async function uploadDataUrlAsset(
   const resolvedFilename = /\.(?:png|jpe?g|webp)$/i.test(filename) ? filename : `${filename}.${extension}`
   const file = new File([blob], resolvedFilename, { type: blob.type || `image/${extension}` })
   return uploadAsset(file, category)
+}
+
+export async function uploadGarmentReferenceDataUrl(
+  dataUrl: string,
+  filename: string,
+  input: Parameters<typeof uploadGarmentReference>[1],
+): Promise<Asset> {
+  const blob = await dataUrlToBlob(dataUrl)
+  const extension = extensionForMime(blob.type)
+  const stem = filename.replace(/\.(?:png|jpe?g|webp)$/i, '') || 'garment-reference'
+  const file = new File([blob], `${stem}-${input.garmentView}.png`, { type: 'image/png' })
+  return uploadGarmentReference(file, input)
 }
 
 export async function importServerOutput(output: JobOutput): Promise<string> {

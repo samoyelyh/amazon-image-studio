@@ -1,4 +1,5 @@
 import { useRef, useState, type DragEvent } from 'react'
+import { useImagePaste } from '../hooks/useImagePaste'
 import { BatchTryOnImage } from './BatchTryOnImage'
 
 interface Props {
@@ -16,6 +17,11 @@ interface Props {
 export default function BatchTryOnTemplateUploader({ imageId, fileName, width, height, disabled, onUpload, onRemove, onView, sourceLabel }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
+  const pasteZoneProps = useImagePaste({
+    disabled: Boolean(disabled),
+    maxFiles: 1,
+    onPasteFiles: (files) => onUpload(files.slice(0, 1)),
+  })
 
   const receiveDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -32,11 +38,12 @@ export default function BatchTryOnTemplateUploader({ imageId, fileName, width, h
         </p>
       </div>
       <div
+        {...pasteZoneProps}
         onDragEnter={(event) => { event.preventDefault(); if (!disabled) setDragging(true) }}
         onDragOver={(event) => event.preventDefault()}
         onDragLeave={() => setDragging(false)}
         onDrop={receiveDrop}
-        className={`relative overflow-hidden rounded-xl border border-dashed transition ${dragging ? 'border-blue-400 bg-blue-50 dark:bg-blue-500/10' : 'border-gray-300 bg-gray-50 dark:border-white/[0.12] dark:bg-white/[0.03]'}`}
+        className={`relative overflow-hidden rounded-xl border border-dashed outline-none transition focus:ring-2 focus:ring-blue-500/20 ${dragging ? 'border-blue-400 bg-blue-50 dark:bg-blue-500/10' : 'border-gray-300 bg-gray-50 dark:border-white/[0.12] dark:bg-white/[0.03]'}`}
       >
         {imageId ? (
           <div className="grid gap-3 p-3 sm:grid-cols-[160px_minmax(0,1fr)]">
@@ -59,7 +66,7 @@ export default function BatchTryOnTemplateUploader({ imageId, fileName, width, h
           <button type="button" disabled={disabled} onClick={() => inputRef.current?.click()} className="flex min-h-48 w-full flex-col items-center justify-center px-5 text-center disabled:cursor-not-allowed disabled:opacity-50">
             <svg className="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 16l4-4a3 3 0 014 0l1 1 2-2a3 3 0 014 0l1 1M8 8h.01M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
             <span className="mt-3 text-sm font-semibold text-gray-700 dark:text-gray-200">点击或拖拽上传模特模板图</span>
-            <span className="mt-1 text-xs text-gray-400">PNG、JPG、JPEG、WEBP</span>
+            <span className="mt-1 text-xs text-gray-400">PNG、JPG、JPEG、WEBP · 点击后可 Ctrl/⌘+V 粘贴</span>
           </button>
         )}
       </div>

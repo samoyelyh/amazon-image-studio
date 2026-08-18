@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { useAuth } from '../app/AuthContext'
 import UserManagementPanel from '../components/admin/UserManagementPanel'
+import CategoryListingManagementPanel from '../components/admin/CategoryListingManagementPanel'
 import {
   adjustAdminQuota,
   attachApiKey,
@@ -17,6 +18,7 @@ import {
   getAdminOverview,
   getAdminQueues,
   getAdminResources,
+  getGenerationResourceDiagnostics,
   testAdminProvider,
   toggleAdminResource,
   updateAdminOrganization,
@@ -27,13 +29,15 @@ import {
 import { randomUuid } from '../lib/randomUuid'
 import { formatDuration } from '../lib/taskDuration'
 
-type Tab = 'overview' | 'users' | 'organizations' | 'resources' | 'tasks' | 'audits'
+type Tab = 'overview' | 'users' | 'organizations' | 'categories' | 'resources' | 'diagnostics' | 'tasks' | 'audits'
 
 const tabs: Array<{ id: Tab; label: string }> = [
   { id: 'overview', label: '总览' },
   { id: 'users', label: '用户' },
   { id: 'organizations', label: '团队与额度' },
+  { id: 'categories', label: '品类与 Skill' },
   { id: 'resources', label: 'API 与资源池' },
+  { id: 'diagnostics', label: '生成资源诊断' },
   { id: 'tasks', label: '队列与任务' },
   { id: 'audits', label: '系统日志' },
 ]
@@ -45,6 +49,42 @@ const secondaryButton = 'rounded-xl border border-gray-200 px-3 py-2 text-xs fon
 
 function time(value: string | null) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—' }
 function number(value: number) { return new Intl.NumberFormat('zh-CN').format(value) }
+
+function useCurrentTime() {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  return now
+}
+
+function countdown(until: string | null, now: number) {
+  if (!until) return '—'
+  const seconds = Math.max(0, Math.ceil((new Date(until).getTime() - now) / 1_000))
+  const minutes = Math.floor(seconds / 60)
+  const remainder = seconds % 60
+  return minutes > 0 ? `${minutes}分${String(remainder).padStart(2, '0')}秒` : `${remainder}秒`
+}
+
+const recoveryLabels = {
+  healthy: '健康',
+  cooling: '冷却中',
+  waiting_probe: '等待探测',
+  probing: '探测中',
+  disabled: '已停用',
+} as const
+
+function RecoveryBadge({ state }: { state: keyof typeof recoveryLabels }) {
+  const classes = {
+    healthy: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200',
+    cooling: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200',
+    waiting_probe: 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-200',
+    probing: 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-200',
+    disabled: 'bg-gray-100 text-gray-600 dark:bg-white/[0.08] dark:text-gray-300',
+  } as const
+  return <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${classes[state]}`}>{recoveryLabels[state]}</span>
+}
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : '操作失败，请稍后重试' }
 
 function Section({ title, description, children, action }: { title: string; description?: string; children: ReactNode; action?: ReactNode }) {
@@ -189,10 +229,112 @@ function TasksTab() {
   const queues = useQuery({ queryKey: ['admin', 'queues'], queryFn: getAdminQueues, refetchInterval: 5_000 })
   const jobs = useQuery({ queryKey: ['admin', 'jobs'], queryFn: getAdminJobs, refetchInterval: 5_000 })
   return <div className="space-y-5"><Section title="Celery 队列" description="队列深度来自 Redis，任务状态来自统一任务表；服务重启后仍可恢复。" action={queues.data && <StatusPill active={queues.data.redis_ok}>{queues.data.redis_ok ? 'Redis 正常' : 'Redis 不可用'}</StatusPill>}>
-    {!queues.data ? <LoadingOrError loading={queues.isLoading} error={queues.error} /> : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{queues.data.items.map((queue) => <div key={queue.name} className="rounded-xl bg-gray-50 p-3 dark:bg-gray-950"><div className="text-sm font-bold dark:text-white">{queue.name}</div><div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500"><span>Broker {queue.broker_depth}</span><span>排队 {queue.queued_jobs}</span><span>运行 {queue.running_jobs}</span><span>重试 {queue.retry_waiting_jobs}</span></div>{queue.failed_jobs > 0 && <div className="mt-2 text-xs font-semibold text-red-600">失败 {queue.failed_jobs}</div>}</div>)}</div>}
+    {!queues.data ? <LoadingOrError loading={queues.isLoading} error={queues.error} /> : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{queues.data.items.map((queue) => <div key={queue.name} className="rounded-xl bg-gray-50 p-3 dark:bg-gray-950"><div className="text-sm font-bold dark:text-white">{queue.name}</div><div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500"><span>Broker {queue.broker_depth}</span><span>排队 {queue.queued_jobs}</span><span>等待通道 {queue.waiting_for_resource_jobs}</span><span>运行 {queue.running_jobs}</span><span>技术重试 {queue.retry_waiting_jobs}</span></div>{queue.failed_jobs > 0 && <div className="mt-2 text-xs font-semibold text-red-600">失败 {queue.failed_jobs}</div>}</div>)}</div>}
   </Section><Section title="全平台任务" description="显示最近 100 个任务，用于定位上游限流、超时、Worker 异常和部分失败。">
     {!jobs.data ? <LoadingOrError loading={jobs.isLoading} error={jobs.error} /> : <div className="overflow-x-auto"><table className="w-full min-w-[1320px] text-left text-sm"><thead className="text-xs text-gray-500"><tr><th className="pb-3">任务</th><th className="pb-3">团队</th><th className="pb-3">队列/模型</th><th className="pb-3">状态/耗时</th><th className="pb-3">尺寸诊断</th><th className="pb-3">Worker/上游</th><th className="pb-3">错误</th><th className="pb-3">创建时间</th></tr></thead><tbody className="divide-y divide-gray-100 dark:divide-white/[0.06]">{jobs.data.items.map((job) => <tr key={job.id}><td className="py-3 pr-4"><div className="font-semibold dark:text-white">{job.operation_code}</div><div className="mt-1 max-w-[180px] truncate text-xs text-gray-500">{job.id}</div></td><td className="py-3 pr-4 text-xs dark:text-gray-300">{job.organization_name}</td><td className="py-3 pr-4 text-xs text-gray-500">{job.queue_name}<br />{job.model_code}</td><td className="py-3 pr-4"><StatusPill active={job.status === 'succeeded'}>{job.status} · {Math.round(job.progress)}%</StatusPill><div className="mt-1 font-mono text-xs text-gray-500">{formatDuration(job.generation_duration_ms)}</div></td><td className="max-w-[300px] py-3 pr-4 text-xs text-gray-500"><div>用户：{job.requested_aspect_ratio ?? '—'} · {job.requested_width && job.requested_height ? `${job.requested_width}×${job.requested_height}` : 'auto'}</div><div className="mt-1">上游：{job.submitted_dimension_field ? `${job.submitted_dimension_field}=${job.submitted_dimension_value}` : job.resolved_provider_size ?? '—'}</div><div className={`mt-1 ${job.size_mismatch ? 'font-semibold text-amber-600' : ''}`}>实际：{job.actual_width && job.actual_height ? `${job.actual_width}×${job.actual_height}` : '—'}{job.size_mismatch ? ' · 尺寸不一致' : ''}</div></td><td className="max-w-[220px] py-3 pr-4 text-xs text-gray-500"><div className="truncate">{job.worker_name ?? '—'}</div><div className="mt-1 truncate" title={job.upstream_request_id ?? ''}>{job.upstream_request_id ?? '无 request id'}</div></td><td className="max-w-[260px] py-3 pr-4 text-xs text-red-600">{job.error_code ? `${job.error_code}: ${job.error_message ?? ''}` : '—'}</td><td className="py-3 text-xs text-gray-500">{time(job.created_at)}</td></tr>)}</tbody></table></div>}
   </Section></div>
+}
+
+function GenerationDiagnosticsTab() {
+  const now = useCurrentTime()
+  const diagnostics = useQuery({
+    queryKey: ['admin', 'generation-resources'],
+    queryFn: getGenerationResourceDiagnostics,
+    refetchInterval: 5_000,
+  })
+  if (!diagnostics.data) return <LoadingOrError loading={diagnostics.isLoading} error={diagnostics.error} />
+  const { system, resource_pools: pools, providers, keys } = diagnostics.data
+  const rate = (value: number | null) => value === null ? '—' : `${value.toFixed(1)}%`
+  const latency = (value: number | null) => value === null ? '—' : formatDuration(value)
+  const systemCards = [
+    ['真实上游请求', system.true_active_requests, `系统上限 ${system.configured_concurrency}`],
+    ['数据库运行', system.database_running, `派发中 ${system.database_dispatching}`],
+    ['Redis 槽位', system.redis_inflight, system.slot_mismatch ? '三方计数不一致' : '计数一致'],
+    ['等待生成通道', system.waiting_for_resource, `普通排队 ${system.queued}`],
+    ['技术重试', system.retry_waiting, `剩余 ${system.remaining_jobs}`],
+    ['最近一小时成功', system.recent_hour_successes, system.eta_minutes === null ? '暂时无法估算 ETA' : `预计剩余 ${system.eta_minutes} 分钟`],
+  ] as const
+  return <div className="space-y-5">
+    <Section
+      title="系统并发总览"
+      description="“真实上游请求”只统计已经发出且尚未结束的 HTTP 生图请求；等待资源不会计为失败或重试。"
+      action={<StatusPill active={!system.slot_mismatch}>{system.slot_mismatch ? '槽位需要对账' : '槽位一致'}</StatusPill>}
+    >
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{systemCards.map(([label, value, detail]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-gray-950"><div className="text-xs text-gray-500">{label}</div><div className="mt-1 text-2xl font-black dark:text-white">{value}</div><div className={`mt-1 text-xs ${detail.includes('不一致') ? 'text-amber-600' : 'text-gray-500'}`}>{detail}</div></div>)}</div>
+      <div className="mt-3 text-xs text-gray-500">在线 Worker：{system.worker_names.join('、') || '未检测到心跳'} · 数据每 5 秒刷新</div>
+    </Section>
+    <Section title="Provider 节点" description="统计窗口为最近 60 分钟；平台无法读取 New API 内部的 Codex 账号分配明细。">
+      <div className="grid gap-3 xl:grid-cols-2">{providers.map((provider) => <div key={provider.id} className="rounded-xl border border-gray-200 p-4 dark:border-white/[0.08]"><div className="flex items-start justify-between gap-3"><div><div className="font-bold dark:text-white">{provider.name}</div><div className="mt-1 text-xs text-gray-500">{provider.code} · {provider.base_url}</div></div><StatusPill active={provider.enabled}>{provider.enabled ? '启用' : '停用'}</StatusPill></div><div className="mt-4 grid grid-cols-3 gap-2 text-xs"><span>并发 {provider.active}/{provider.configured_capacity}</span><span>空闲 {provider.idle}</span><span>冷却 Key {provider.cooling_keys}</span><span>成功 {provider.successes}/{provider.requests}</span><span>成功率 {rate(provider.success_rate)}</span><span>每小时 {provider.hourly_successes}</span><span>平均 {latency(provider.average_latency_ms)}</span><span>P90 {latency(provider.p90_latency_ms)}</span><span>524 {provider.http_524}</span><span>429 {provider.http_429}</span><span>5xx {provider.http_5xx}</span><span>超时 {provider.timeouts}</span></div><div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">{provider.account_visibility}</div></div>)}</div>
+    </Section>
+    <Section title="通道恢复状态" description="倒计时每秒更新；冷却结束后先放行一个探测任务，探测成功才恢复完整并发。">
+      <div className="grid gap-3 xl:grid-cols-2">
+        {providers.map((provider) => (
+          <div key={provider.id} className="rounded-xl border border-gray-200 p-4 dark:border-white/[0.08]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-bold text-gray-950 dark:text-white">{provider.name}</div>
+                <div className="mt-1 text-xs text-gray-500">{provider.code}</div>
+              </div>
+              <RecoveryBadge state={provider.recovery_state} />
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-300 sm:grid-cols-3">
+              <span>配置并发 {provider.configured_capacity}</span>
+              <span>当前有效 {provider.effective_capacity}</span>
+              <span>正在请求 {provider.active}</span>
+              <span>Redis 槽位 {provider.redis_active}</span>
+              <span>恢复中 Key {provider.recovering_keys}</span>
+              <span>探测任务 {provider.probe_active}</span>
+              <span>最近 524 {provider.http_524}</span>
+            </div>
+            {provider.recovery_state === 'cooling' && (
+              <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:bg-amber-500/10 dark:text-amber-100">
+                距离下次探测：{countdown(provider.next_probe_at, now)}
+                <span className="ml-2 text-xs font-normal">({time(provider.next_probe_at)})</span>
+              </div>
+            )}
+            {provider.recovery_state === 'waiting_probe' && (
+              <div className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-800 dark:bg-blue-500/10 dark:text-blue-100">
+                冷却结束，正在等待调度探测任务
+              </div>
+            )}
+            {provider.recovery_state === 'probing' && (
+              <div className="mt-3 rounded-lg bg-violet-50 px-3 py-2 text-sm font-bold text-violet-800 dark:bg-violet-500/10 dark:text-violet-100">
+                探测请求正在生成；成功后自动恢复 {provider.configured_capacity} 并发
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {keys.map((key) => (
+          <div key={key.id} className="rounded-xl bg-gray-50 p-3 text-xs dark:bg-gray-950">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-semibold text-gray-900 dark:text-white">{key.label} · {key.masked_secret}</span>
+              <RecoveryBadge state={key.recovery_state} />
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-gray-600 dark:text-gray-300">
+              <span>有效并发 {key.effective_capacity}/{key.configured_capacity}</span>
+              <span>当前请求 {key.active}</span>
+              <span>Redis 槽位 {key.redis_active}</span>
+              <span>连续失败 {key.consecutive_failures}</span>
+              <span>{key.probe_active ? '探测请求运行中' : '无探测请求'}</span>
+            </div>
+            {key.recovery_state === 'cooling' && (
+              <div className="mt-2 font-bold text-amber-700 dark:text-amber-200">
+                下次探测倒计时 {countdown(key.next_probe_at, now)}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </Section>
+    <Section title="Resource Pool 明细" description="Resource Pool 将业务 operation_code 绑定到模型与一个或多个 API Key。">
+      <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-left text-xs"><thead className="text-gray-500"><tr><th className="pb-3">资源池</th><th className="pb-3">操作/模型</th><th className="pb-3">并发</th><th className="pb-3">等待</th><th className="pb-3">成功率</th><th className="pb-3">吞吐</th><th className="pb-3">耗时</th><th className="pb-3">错误</th></tr></thead><tbody className="divide-y divide-gray-100 dark:divide-white/[0.06]">{pools.map((pool) => <tr key={pool.id}><td className="py-3 pr-4"><div className="font-semibold dark:text-white">{pool.name}</div><div className="text-gray-500">{pool.code}</div></td><td className="py-3 pr-4 text-gray-500">{pool.operation_codes.join('、') || '未绑定'}<br />{pool.model_code ?? '—'}</td><td className="py-3 pr-4">{pool.active}/{pool.configured_capacity}</td><td className="py-3 pr-4">{pool.waiting_jobs}</td><td className="py-3 pr-4">{rate(pool.success_rate)}</td><td className="py-3 pr-4">{pool.hourly_successes}/小时</td><td className="py-3 pr-4">平均 {latency(pool.average_latency_ms)}<br />P90 {latency(pool.p90_latency_ms)}</td><td className="py-3 pr-4 text-gray-500">429 {pool.http_429} · 524 {pool.http_524}<br />超时 {pool.timeouts}</td></tr>)}</tbody></table></div>
+    </Section>
+    <Section title="Key / 渠道明细" description="只显示掩码，不返回完整 API Key、Authorization 或上游认证文件。">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{keys.map((key) => <div key={key.id} className="rounded-xl border border-gray-200 p-3 text-xs dark:border-white/[0.08]"><div className="font-semibold dark:text-white">{key.label} · {key.masked_secret}</div><div className="mt-1 text-gray-500">{key.provider_name ?? key.provider_id}</div><div className="mt-3 grid grid-cols-2 gap-2"><span>并发 {key.active}/{key.configured_capacity}</span><span>状态 {key.status}</span><span>成功 {key.successes}</span><span>失败 {key.failures}</span><span>429 {key.http_429}</span><span>524 {key.http_524}</span></div><div className="mt-2 text-gray-500">冷却至 {time(key.cooldown_until)}</div></div>)}</div>
+    </Section>
+  </div>
 }
 
 function AuditsTab() {
@@ -210,7 +352,9 @@ export default function AdminPage() {
   const content = useMemo(() => {
     if (tab === 'users') return <UsersTab notify={setMessage} />
     if (tab === 'organizations') return <OrganizationsTab notify={setMessage} />
+    if (tab === 'categories') return <CategoryListingManagementPanel notify={setMessage} />
     if (tab === 'resources') return <ResourcesTab notify={setMessage} />
+    if (tab === 'diagnostics') return <GenerationDiagnosticsTab />
     if (tab === 'tasks') return <TasksTab />
     if (tab === 'audits') return <AuditsTab />
     return <OverviewTab />

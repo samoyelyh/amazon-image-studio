@@ -15,7 +15,7 @@ MODEL_CAPABILITIES = Literal[
     "multi_image_reference", "mask_edit", "custom_aspect_ratio", "transparent_background",
 ]
 QUEUES = Literal["planning_queue", "listing_queue", "batch_tryon_queue", "aplus_queue"]
-WORKSPACES = Literal["listing", "batch_tryon", "aplus"]
+WORKSPACES = Literal["listing", "batch_tryon", "aplus", "material_extract", "print_design"]
 
 
 class ProviderCreateRequest(BaseModel):
@@ -149,15 +149,27 @@ class JobSubmitRequest(BaseModel):
     def validate_queue(self) -> "JobSubmitRequest":
         expected = {
             "listing": "listing_queue", "batch_tryon": "batch_tryon_queue", "aplus": "aplus_queue",
+            "material_extract": "listing_queue",
+            "print_design": "batch_tryon_queue",
         }[self.workspace_type]
         if self.queue_name not in {expected, "planning_queue"}:
             raise ValueError(f"queue_name must be {expected} or planning_queue for this workspace")
         expected_operation = {
             "listing": "listing.plan" if self.capability == "text_generation" else "listing.generate",
-            "batch_tryon": "batch_tryon.generate",
+            "batch_tryon": "batch_tryon.style_analyze" if self.capability == "text_generation" else "batch_tryon.generate",
             "aplus": "aplus.plan" if self.capability == "text_generation" else "aplus.generate",
+            "material_extract": "asset.extract",
+            "print_design": "print_design.replace" if self.capability == "mask_edit" else "print_design.blend",
         }[self.workspace_type]
-        if self.operation_code != expected_operation:
+        allowed_operations = {expected_operation}
+        if self.workspace_type == "batch_tryon" and self.capability == "text_generation":
+            allowed_operations.add("batch_tryon.prompt_analyze")
+            allowed_operations.add("batch_tryon.prompt_analyze_detailed")
+        if self.workspace_type == "batch_tryon" and self.capability == "mask_edit":
+            allowed_operations.add("batch_tryon.region_replace")
+        if self.workspace_type == "print_design" and self.capability == "mask_edit":
+            allowed_operations.update({"print_design.replace", "print_design.blend"})
+        if self.operation_code not in allowed_operations:
             raise ValueError(f"operation_code must be {expected_operation} for this workspace and capability")
         image_capabilities = {"image_generation", "image_edit", "multi_image_reference", "mask_edit"}
         if self.capability in image_capabilities and not str(self.input.get("prompt", "")).strip():
@@ -210,12 +222,15 @@ class JobResponse(BaseModel):
     progress: int
     result_json: dict[str, object] | None
     attempts: int
+    technical_retry_count: int = 0
     max_attempts: int
     error_code: str | None
     error_message: str | None
     cancel_requested_at: datetime | None
     started_at: datetime | None
     heartbeat_at: datetime | None
+    next_retry_at: datetime | None = None
+    next_dispatch_at: datetime | None = None
     finished_at: datetime | None
     generation_duration_ms: int | None = None
     requested_aspect_ratio: str | None = None
@@ -238,7 +253,8 @@ class JobResponse(BaseModel):
     outputs: list["JobOutputResponse"] = Field(default_factory=list)
 
     @field_serializer(
-        "cancel_requested_at", "started_at", "heartbeat_at", "finished_at", "created_at", "updated_at",
+        "cancel_requested_at", "started_at", "heartbeat_at", "next_retry_at", "next_dispatch_at",
+        "finished_at", "created_at", "updated_at",
         when_used="json",
     )
     def serialize_utc_datetime(self, value: datetime | None) -> str | None:
@@ -246,6 +262,18 @@ class JobResponse(BaseModel):
             return None
         aware = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
         return aware.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+class JobBatchStatusRequest(BaseModel):
+    job_ids: list[str] = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_job_ids(self) -> "JobBatchStatusRequest":
+        if any(len(job_id) < 1 or len(job_id) > 36 for job_id in self.job_ids):
+            raise ValueError("job_ids contains an invalid job id")
+        if len(self.job_ids) != len(set(self.job_ids)):
+            raise ValueError("job_ids contains duplicates")
+        return self
 
 
 class JobOutputResponse(BaseModel):
@@ -294,7 +322,7 @@ class JobBatchSubmitRequest(BaseModel):
     model_code: str = Field(min_length=1, max_length=120)
     idempotency_key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$", min_length=8, max_length=160)
     project_id: str | None = None
-    concurrency: int = Field(default=2, ge=1, le=10)
+    concurrency: int = Field(default=2, ge=1, le=12)
     admin_test_mode: bool = False
     items: list[BatchJobItemRequest] = Field(min_length=1, max_length=500)
 
@@ -302,6 +330,8 @@ class JobBatchSubmitRequest(BaseModel):
     def validate_batch(self) -> "JobBatchSubmitRequest":
         expected_operation = {
             "listing": "listing.generate", "batch_tryon": "batch_tryon.generate", "aplus": "aplus.generate",
+            "material_extract": "asset.extract",
+            "print_design": "print_design.blend",
         }[self.workspace_type]
         if self.operation_code != expected_operation:
             raise ValueError(f"operation_code must be {expected_operation}")
@@ -313,6 +343,22 @@ class JobBatchSubmitRequest(BaseModel):
         return self
 
 
+class BatchGarmentStyleProfileResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    batch_id: str
+    source_sample_asset_id: str
+    profile_key: str
+    category: str
+    structure_json: dict[str, object]
+    view_rules_json: dict[str, object]
+    preservation_rules_json: dict[str, object]
+    covered_garment_asset_ids_json: list[str]
+    first_sample_observation_json: dict[str, object] | None
+    analysis_model: str | None
+    analysis_version: str
+
+
 class JobBatchResponse(BaseModel):
     id: str
     organization_id: str
@@ -320,6 +366,8 @@ class JobBatchResponse(BaseModel):
     workspace_type: str
     operation_code: str
     name: str | None
+    parent_batch_id: str | None = None
+    batch_kind: str | None = None
     model_code: str | None
     capability: str | None
     status: str
@@ -329,12 +377,14 @@ class JobBatchResponse(BaseModel):
     succeeded_jobs: int
     failed_jobs: int
     cancelled_jobs: int
+    cancel_requested_jobs: int = 0
     error_message: str | None
     started_at: datetime | None
     finished_at: datetime | None
     created_at: datetime
     updated_at: datetime
     jobs: list[JobResponse] = Field(default_factory=list)
+    style_profiles: list[BatchGarmentStyleProfileResponse] = Field(default_factory=list)
 
     @field_serializer("started_at", "finished_at", "created_at", "updated_at", when_used="json")
     def serialize_utc_datetime(self, value: datetime | None) -> str | None:
@@ -349,6 +399,33 @@ class JobBatchPage(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class JobBatchHardDeleteResponse(BaseModel):
+    deleted_batches: int
+    deleted_jobs: int
+    deleted_outputs: int
+    deleted_assets: int
+    retained_shared_assets: int
+    storage_delete_failures: int
+
+
+
+
+class ResourceChannelDiagnostics(BaseModel):
+    provider_id: str
+    provider_name: str
+    provider_code: str
+    key_id: str
+    key_label: str
+    recovery_state: Literal["healthy", "cooling", "waiting_probe", "probing", "disabled"]
+    configured_capacity: int
+    effective_capacity: int
+    active: int
+    consecutive_failures: int
+    cooldown_until: datetime | None
+    cooldown_remaining_seconds: int
+    probe_active: bool
 
 
 class JobBatchDiagnosticsResponse(BaseModel):
@@ -377,3 +454,4 @@ class JobBatchDiagnosticsResponse(BaseModel):
     latest_error_message: str | None
     limitation_reasons: list[str] = Field(default_factory=list)
     availability_reasons: list[str] = Field(default_factory=list)
+    resource_channels: list[ResourceChannelDiagnostics] = Field(default_factory=list)

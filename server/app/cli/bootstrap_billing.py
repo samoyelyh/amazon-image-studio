@@ -18,8 +18,15 @@ DEFAULT_RULES = {
     "listing.plan": ("Listing AI 策划", 10),
     "listing.generate": ("Listing 图片生成", 10),
     "batch_tryon.generate": ("批量套图生成", 10),
+    "batch_tryon.style_analyze": ("批量套图款式分析", 1),
+    "batch_tryon.prompt_analyze": ("批量套图提示词分析", 1),
+    "batch_tryon.prompt_analyze_detailed": ("批量套图逐图精细提示词分析", 1),
+    "batch_tryon.region_replace": ("批量套图区域涂抹替换", 10),
+    "print_design.replace": ("印花局部替换", 10),
+    "print_design.blend": ("印花边缘融合", 10),
     "aplus.plan": ("A+ AI 策划", 10),
     "aplus.generate": ("A+ 模块生成", 10),
+    "asset.extract": ("素材提取", 10),
 }
 DEFAULT_PACKAGES = (
     ("starter-1000", "入门额度包", 1000, Decimal("99.00")),

@@ -4,7 +4,9 @@ import { listServerJobs, type JobOutput } from '../lib/jobsApi'
 import { downloadServerOutput, downloadServerOutputZip } from '../lib/serverDownloads'
 import AuthenticatedImage from '../components/AuthenticatedImage'
 
-const workspaceLabel: Record<string, string> = { listing: 'Listing 图', batch_tryon: '批量套图', aplus: 'A+ 图' }
+const workspaceLabel: Record<string, string> = {
+  listing: 'Listing 图', batch_tryon: '批量套图', aplus: 'A+ 图', material_extract: '素材提取',
+}
 
 export default function HistoryPage() {
   const [message, setMessage] = useState('')

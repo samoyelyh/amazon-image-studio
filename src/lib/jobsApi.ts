@@ -1,6 +1,6 @@
 import { authenticatedFetch } from './authApi'
 
-export type JobWorkspace = 'listing' | 'batch_tryon' | 'aplus'
+export type JobWorkspace = 'listing' | 'batch_tryon' | 'aplus' | 'material_extract' | 'print_design'
 export type JobCapability = 'text_generation' | 'image_generation' | 'image_edit' | 'multi_image_reference' | 'mask_edit'
 
 export interface JobOutput {
@@ -35,12 +35,15 @@ export interface ServerJob {
   progress: number
   result_json: Record<string, unknown> | null
   attempts: number
+  technical_retry_count: number
   max_attempts: number
   error_code: string | null
   error_message: string | null
   cancel_requested_at: string | null
   started_at: string | null
   heartbeat_at: string | null
+  next_retry_at: string | null
+  next_dispatch_at: string | null
   finished_at: string | null
   generation_duration_ms: number | null
   requested_aspect_ratio: string | null
@@ -72,6 +75,8 @@ export interface ServerJobBatch {
   workspace_type: JobWorkspace
   operation_code: string
   name: string | null
+  parent_batch_id?: string | null
+  batch_kind?: string | null
   model_code: string | null
   capability: JobCapability | null
   status: string
@@ -81,12 +86,36 @@ export interface ServerJobBatch {
   succeeded_jobs: number
   failed_jobs: number
   cancelled_jobs: number
+  cancel_requested_jobs?: number
   error_message: string | null
   started_at: string | null
   finished_at: string | null
   created_at: string
   updated_at: string
   jobs: ServerJob[]
+  style_profiles?: Array<{
+    id: string
+    batch_id: string
+    source_sample_asset_id: string
+    profile_key: string
+    category: string
+    structure_json: Record<string, unknown>
+    view_rules_json: Record<string, unknown>
+    preservation_rules_json: Record<string, unknown>
+    covered_garment_asset_ids_json: string[]
+    first_sample_observation_json: Record<string, unknown> | null
+    analysis_model: string | null
+    analysis_version: string
+  }>
+}
+
+export interface JobBatchHardDeleteResult {
+  deleted_batches: number
+  deleted_jobs: number
+  deleted_outputs: number
+  deleted_assets: number
+  retained_shared_assets: number
+  storage_delete_failures: number
 }
 
 export interface ServerJobBatchPage { items: ServerJobBatch[]; total: number; limit: number; offset: number }
@@ -117,6 +146,21 @@ export interface ServerJobBatchDiagnostics {
   latest_error_message: string | null
   limitation_reasons: string[]
   availability_reasons: string[]
+  resource_channels: Array<{
+    provider_id: string
+    provider_name: string
+    provider_code: string
+    key_id: string
+    key_label: string
+    recovery_state: 'healthy' | 'cooling' | 'waiting_probe' | 'probing' | 'disabled'
+    configured_capacity: number
+    effective_capacity: number
+    active: number
+    consecutive_failures: number
+    cooldown_until: string | null
+    cooldown_remaining_seconds: number
+    probe_active: boolean
+  }>
 }
 
 export interface ResourcePoolSummary {
@@ -168,7 +212,7 @@ export interface JobBatchSubmitInput {
   }>
 }
 
-function query(values: Record<string, string | number | undefined>) {
+function query(values: Record<string, string | number | boolean | undefined>) {
   const params = new URLSearchParams()
   Object.entries(values).forEach(([key, value]) => { if (value !== undefined && value !== '') params.set(key, String(value)) })
   const encoded = params.toString()
@@ -202,6 +246,13 @@ export function getServerJob(jobId: string) {
   return authenticatedFetch<ServerJob>(`/jobs/${jobId}`)
 }
 
+export function getServerJobsByIds(jobIds: string[]) {
+  return authenticatedFetch<ServerJob[]>('/jobs/batch-status', {
+    method: 'POST',
+    body: JSON.stringify({ job_ids: jobIds }),
+  })
+}
+
 export function cancelServerJob(jobId: string) {
   return authenticatedFetch<ServerJob>(`/jobs/${jobId}/cancel`, { method: 'POST' })
 }
@@ -210,7 +261,15 @@ export function submitServerBatch(input: JobBatchSubmitInput) {
   return authenticatedFetch<ServerJobBatch>('/job-batches', { method: 'POST', body: JSON.stringify(input) })
 }
 
-export function listServerBatches(options: { status?: string; limit?: number; offset?: number } = {}) {
+export function listServerBatches(options: {
+  status?: string
+  workspace_type?: JobWorkspace
+  operation_code?: string
+  project_id?: string
+  include_jobs?: boolean
+  limit?: number
+  offset?: number
+} = {}) {
   return authenticatedFetch<ServerJobBatchPage>(`/job-batches${query(options)}`)
 }
 
@@ -236,4 +295,21 @@ export function resumeServerBatch(batchId: string) {
 
 export function isServerJobTerminal(status: string) {
   return status === 'succeeded' || status === 'failed' || status === 'cancelled'
+}
+
+export function hardDeleteServerBatch(batchId: string) {
+  return authenticatedFetch<JobBatchHardDeleteResult>(
+    `/job-batches/${batchId}/hard?confirmation=PERMANENT_DELETE`,
+    { method: 'DELETE' },
+  )
+}
+
+export function isWorkspaceShellBatch(batch: Pick<ServerJobBatch, 'batch_kind'>) {
+  return batch.batch_kind === 'workspace'
+}
+
+export function isServerBatchCancelling(
+  batch: Pick<ServerJobBatch, 'status' | 'cancel_requested_jobs'>,
+) {
+  return !isServerJobTerminal(batch.status) && Number(batch.cancel_requested_jobs || 0) > 0
 }

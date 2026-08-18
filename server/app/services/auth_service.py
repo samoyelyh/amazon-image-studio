@@ -104,11 +104,42 @@ class AuthService:
 
         now = datetime.now(UTC)
         if token.revoked_at is not None:
-            await session.execute(
-                update(RefreshToken)
-                .where(RefreshToken.family_id == token.family_id, RefreshToken.revoked_at.is_(None))
-                .values(revoked_at=now)
+            is_same_client_rotation_race = (
+                token.replaced_by_token_id is not None
+                and now - _as_utc(token.revoked_at) <= timedelta(seconds=5)
+                and token.created_ip == client_ip(request)
+                and token.user_agent == user_agent(request)
             )
+            if is_same_client_rotation_race:
+                add_login_audit(
+                    session,
+                    request=request,
+                    event="refresh_race",
+                    outcome="failure",
+                    user_id=token.user_id,
+                    organization_id=token.organization_id,
+                    detail="concurrent_rotation_retry",
+                )
+                await session.commit()
+                raise AppError(
+                    "auth.refresh_race",
+                    "登录状态已在另一个页面更新，正在重试。",
+                    409,
+                )
+            # The first replay revokes the active descendants. Later requests from stale tabs
+            # must not keep issuing an UPDATE against the same family: those writes can contend
+            # with a legitimate login and cause MySQL deadlocks during refresh-token insertion.
+            active_family_token_id = await session.scalar(
+                select(RefreshToken.id)
+                .where(RefreshToken.family_id == token.family_id, RefreshToken.revoked_at.is_(None))
+                .limit(1)
+            )
+            if active_family_token_id is not None:
+                await session.execute(
+                    update(RefreshToken)
+                    .where(RefreshToken.family_id == token.family_id, RefreshToken.revoked_at.is_(None))
+                    .values(revoked_at=now)
+                )
             add_login_audit(
                 session,
                 request=request,

@@ -21,8 +21,11 @@ from app.services.storage_service import StorageService
 
 
 UTC = timezone.utc
+ACCOUNT_PRIVATE_ASSET_CATEGORIES = {"batch_tryon_output"}
 ASSET_CONTENT_PREFIX = "/api/v1/assets"
-GENERATED_ASSET_CATEGORIES = ("listing_output", "batch_tryon_output", "aplus_output")
+GENERATED_ASSET_CATEGORIES = (
+    "listing_output", "batch_tryon_output", "aplus_output", "material_extract_output",
+)
 FORMAT_DETAILS = {
     "JPEG": ("image/jpeg", "jpg"),
     "PNG": ("image/png", "png"),
@@ -116,14 +119,16 @@ async def create_asset(
     declared_mime: str | None,
     data: bytes,
     max_bytes: int | None = None,
+    source_asset_id: str | None = None,
+    metadata_json: dict[str, object] | None = None,
 ) -> Asset:
     mime_type, extension, width, height, digest = validate_image(
         data, declared_mime, settings, max_bytes=max_bytes,
     )
     asset_id = str(uuid4())
     category_segment = category if category in {
-        "product_reference", "model_template", "garment", "style_reference",
-        "listing_output", "batch_tryon_output", "aplus_output", "temporary",
+        "product_reference", "model_template", "garment", "garment_reference", "style_reference",
+        "listing_output", "batch_tryon_output", "aplus_output", "material_extract_output", "temporary",
     } else "uncategorized"
     storage_key = (
         f"organizations/{organization_id}/assets/{category_segment}/"
@@ -151,6 +156,8 @@ async def create_asset(
         width=width,
         height=height,
         sha256=digest,
+        source_asset_id=source_asset_id,
+        metadata_json=metadata_json,
         created_by=user_id,
         updated_by=user_id,
     )
@@ -167,7 +174,10 @@ async def create_asset(
     return asset
 
 
-async def get_asset(session: AsyncSession, organization_id: str, asset_id: str, *, lock: bool = False) -> Asset:
+async def get_asset(
+    session: AsyncSession, organization_id: str, asset_id: str, *, lock: bool = False,
+    owner_user_id: str | None = None,
+) -> Asset:
     statement = select(Asset).where(
         Asset.id == asset_id,
         Asset.organization_id == organization_id,
@@ -176,7 +186,11 @@ async def get_asset(session: AsyncSession, organization_id: str, asset_id: str, 
     if lock:
         statement = statement.with_for_update()
     asset = await session.scalar(statement)
-    if asset is None:
+    if asset is None or (
+        owner_user_id
+        and asset.category in ACCOUNT_PRIVATE_ASSET_CATEGORIES
+        and asset.created_by != owner_user_id
+    ):
         raise AppError("asset.not_found", "Asset was not found", 404)
     return asset
 
@@ -222,6 +236,7 @@ async def list_assets(
     search: str | None,
     limit: int,
     offset: int,
+    owner_user_id: str | None = None,
 ) -> AssetPage:
     generated_output_exists = select(GeneratedOutput.id).where(
         GeneratedOutput.organization_id == organization_id,
@@ -235,6 +250,11 @@ async def list_assets(
     ]
     if category:
         filters.append(Asset.category == category)
+    if owner_user_id:
+        filters.append(or_(
+            Asset.category.not_in(ACCOUNT_PRIVATE_ASSET_CATEGORIES),
+            Asset.created_by == owner_user_id,
+        ))
     if search:
         term = f"%{search.strip()}%"
         filters.append(or_(Asset.filename.like(term), Asset.sha256.like(term)))
@@ -254,7 +274,9 @@ async def delete_asset(
     asset_id: str,
     user_id: str,
 ) -> Asset:
-    asset = await get_asset(session, organization_id, asset_id, lock=True)
+    asset = await get_asset(
+        session, organization_id, asset_id, lock=True, owner_user_id=user_id,
+    )
     project_link = await session.scalar(select(ProjectAsset.id).where(ProjectAsset.asset_id == asset.id).limit(1))
     generated_link = await session.scalar(select(GeneratedOutput.id).where(GeneratedOutput.asset_id == asset.id).limit(1))
     if project_link or generated_link:

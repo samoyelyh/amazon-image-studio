@@ -6,6 +6,7 @@ const base = { status: 'running', createdAt: 1_000, startedAt: 2_000, finishedAt
 describe('task duration', () => {
   it('does not count queued time as generation time', () => {
     expect(calculateTaskDuration({ ...base, serverJobId: 'job', serverJobStatus: 'queued' }, 10_000)).toBeNull()
+    expect(calculateTaskDuration({ ...base, serverJobId: 'job', serverJobStatus: 'waiting_for_resource' }, 10_000)).toBeNull()
   })
 
   it('grows from startedAt only while the task is running', () => {

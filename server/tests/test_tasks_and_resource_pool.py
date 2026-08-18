@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.models.quota import QuotaAccount, QuotaReservation
-from app.models.tasks import ApiKey, BatchStatus, Job, JobBatch, JobStatus, ModelCapability, OperationResourcePool, Provider, ProviderModel, ResourcePool, ResourcePoolKey
+from app.models.tasks import ApiKey, BatchStatus, Job, JobBatch, JobStatus, JobStatusEvent, ModelCapability, OperationResourcePool, Provider, ProviderModel, ResourcePool, ResourcePoolKey
 from app.providers.base import ProviderError, ProviderOutput, ProviderResult
 from app.schemas.tasks import JobSubmitRequest
 from app.services.resource_pool_service import (
@@ -16,6 +16,7 @@ from app.services.resource_pool_service import (
 from app.services.billing_service import release_reservation, settle_reservation
 from app.services.task_service import (
     claim_job, due_jobs, recover_stale_jobs, refresh_batch_status, schedule_retry_or_fail, submit_job,
+    wait_for_resource,
 )
 
 
@@ -71,7 +72,7 @@ async def test_platform_key_is_encrypted_masked_and_never_returned(identity_test
         "code": "newapi", "name": "Relay", "provider_type": "new_api", "base_url": "https://relay.example/v1",
     })
     assert provider.status_code == 201, provider.text
-    secret = "sk-super-secret-relay-value"
+    secret = "test-api-key-value"
     created = await client.post("/api/v1/resource-pools/keys", headers=headers, json={
         "provider_id": provider.json()["id"], "label": "Main relay", "secret": secret, "max_concurrency": 2,
     })
@@ -143,6 +144,62 @@ async def test_resource_pool_enforces_capability_concurrency_and_cooldown(identi
                 model_code=model_code, capability="image_generation")
 
 
+async def test_recovering_key_uses_single_canary_slot(identity_test_context) -> None:
+    _, model_code, _, key_ids = await seed_pool(identity_test_context, max_concurrency=4)
+    settings = Settings(_env_file=None)
+    async with identity_test_context["session_factory"]() as session:
+        key = await session.get(ApiKey, key_ids[0])
+        key.consecutive_failures = 2
+        key.status = "active"
+        key.cooldown_until = None
+        await session.commit()
+
+        canary = await acquire_resource(
+            session, identity_test_context["redis"], settings,
+            organization_id=identity_test_context["first_org"],
+            operation_code="listing.generate", model_code=model_code,
+            capability="image_generation",
+        )
+        with pytest.raises(AppError) as unavailable:
+            await acquire_resource(
+                session, identity_test_context["redis"], settings,
+                organization_id=identity_test_context["first_org"],
+                operation_code="listing.generate", model_code=model_code,
+                capability="image_generation",
+            )
+        assert unavailable.value.code == "resource_pool.no_available_key"
+        await release_resource(identity_test_context["redis"], canary)
+
+
+async def test_repeated_failures_keep_fast_probe_cooldown_capped_at_ten_seconds(
+    identity_test_context,
+) -> None:
+    _, _, _, key_ids = await seed_pool(identity_test_context, max_concurrency=4)
+    settings = Settings(
+        _env_file=None,
+        resource_key_cooldown_seconds=10,
+        resource_key_cooldown_max_seconds=10,
+    )
+    async with identity_test_context["session_factory"]() as session:
+        key = await session.get(ApiKey, key_ids[0])
+        key.consecutive_failures = 8
+        await session.commit()
+
+        before = datetime.now(timezone.utc)
+        await cool_down_key(session, identity_test_context["redis"], settings, key.id)
+        await session.commit()
+        await session.refresh(key)
+
+        assert key.cooldown_until is not None
+        cooldown_until = (
+            key.cooldown_until.replace(tzinfo=timezone.utc)
+            if key.cooldown_until.tzinfo is None
+            else key.cooldown_until
+        )
+        assert 0 < (cooldown_until - before).total_seconds() <= 11
+        assert key.consecutive_failures == 9
+
+
 async def test_job_submission_is_idempotent_tenant_scoped_and_cancel_refunds(identity_test_context, monkeypatch) -> None:
     client = identity_test_context["client"]
     monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
@@ -193,6 +250,33 @@ async def test_batch_split_concurrency_partial_settlement_and_refresh_recovery(i
     assert created.status_code == 202, created.text
     repeated = await client.post("/api/v1/job-batches", headers=headers, json=payload)
     assert repeated.status_code == 200 and repeated.json()["id"] == created.json()["id"]
+    summary = await client.get(
+        "/api/v1/job-batches",
+        headers=headers,
+        params={
+            "workspace_type": "listing",
+            "operation_code": "listing.generate",
+            "include_jobs": "false",
+        },
+    )
+    assert summary.status_code == 200
+    assert summary.json()["total"] == 1
+    assert summary.json()["items"][0]["id"] == created.json()["id"]
+    assert summary.json()["items"][0]["jobs"] == []
+    unrelated = await client.get(
+        "/api/v1/job-batches",
+        headers=headers,
+        params={"workspace_type": "batch_tryon", "include_jobs": "false"},
+    )
+    assert unrelated.status_code == 200
+    assert unrelated.json()["total"] == 0
+    wrong_project = await client.get(
+        "/api/v1/job-batches",
+        headers=headers,
+        params={"project_id": "00000000-0000-0000-0000-000000000000", "include_jobs": "false"},
+    )
+    assert wrong_project.status_code == 200
+    assert wrong_project.json()["total"] == 0
     too_many = {
         **payload,
         "idempotency_key": "listing-batch-too-many-001",
@@ -256,10 +340,22 @@ async def test_duplicate_worker_claim_and_stale_recovery_are_idempotent(identity
         user_id = await session.scalar(select(User.id).where(User.email == "first-admin@example.com"))
         job, _ = await submit_job(session, settings, organization_id=identity_test_context["first_org"],
                                   user_id=user_id, payload=payload)
+        job.celery_task_id = "dispatch-token-current"
         await session.commit()
         job_id = job.id
     async with identity_test_context["session_factory"]() as session:
-        claimed = await claim_job(session, settings, job_id)
+        assert await claim_job(
+            session,
+            settings,
+            job_id,
+            "dispatch-token-stale",
+        ) is None
+        claimed = await claim_job(
+            session,
+            settings,
+            job_id,
+            "dispatch-token-current",
+        )
         assert claimed is not None
         await session.commit()
     async with identity_test_context["session_factory"]() as session:
@@ -272,6 +368,81 @@ async def test_duplicate_worker_claim_and_stale_recovery_are_idempotent(identity
         await session.commit()
         recovered = await session.get(Job, job_id)
         assert recovered.status == JobStatus.RETRY_WAITING.value
+
+
+async def test_resource_wait_does_not_consume_attempt_or_retry(identity_test_context) -> None:
+    settings = Settings(_env_file=None)
+    from app.models.identity import User
+
+    _, model_code, _, _ = await seed_pool(identity_test_context)
+    async with identity_test_context["session_factory"]() as session:
+        user_id = await session.scalar(select(User.id).where(User.email == "first-admin@example.com"))
+        job, _ = await submit_job(
+            session,
+            settings,
+            organization_id=identity_test_context["first_org"],
+            user_id=user_id,
+            payload=JobSubmitRequest(
+                operation_code="listing.generate",
+                workspace_type="listing",
+                queue_name="listing_queue",
+                capability="image_generation",
+                model_code=model_code,
+                idempotency_key="resource-wait-no-retry-001",
+                input={"prompt": "test", "size": "1024x1024"},
+            ),
+        )
+        claimed = await claim_job(session, settings, job.id)
+        assert claimed is not None
+        await wait_for_resource(session, claimed, delay_seconds=5)
+        await session.commit()
+        assert claimed.status == JobStatus.WAITING_FOR_RESOURCE.value
+        assert claimed.attempts == 0
+        assert claimed.technical_retry_count == 0
+        assert claimed.next_retry_at is None
+        assert claimed.next_dispatch_at is not None
+        events = list((await session.scalars(
+            select(JobStatusEvent).where(JobStatusEvent.job_id == claimed.id)
+        )).all())
+        assert any(event.to_status == JobStatus.WAITING_FOR_RESOURCE.value for event in events)
+
+
+async def test_technical_retry_uses_jitter_and_separate_counter(identity_test_context) -> None:
+    settings = Settings(_env_file=None)
+    from app.models.identity import User
+
+    _, model_code, _, _ = await seed_pool(identity_test_context)
+    async with identity_test_context["session_factory"]() as session:
+        user_id = await session.scalar(select(User.id).where(User.email == "first-admin@example.com"))
+        job, _ = await submit_job(
+            session,
+            settings,
+            organization_id=identity_test_context["first_org"],
+            user_id=user_id,
+            payload=JobSubmitRequest(
+                operation_code="listing.generate",
+                workspace_type="listing",
+                queue_name="listing_queue",
+                capability="image_generation",
+                model_code=model_code,
+                idempotency_key="technical-retry-jitter-001",
+                input={"prompt": "test", "size": "1024x1024"},
+            ),
+        )
+        job.attempts = 1
+        before = datetime.now(timezone.utc)
+        await schedule_retry_or_fail(
+            session,
+            job,
+            code="provider.timeout",
+            message="upstream timeout",
+        )
+        await session.commit()
+        retry_at = job.next_retry_at.replace(tzinfo=timezone.utc) if job.next_retry_at.tzinfo is None else job.next_retry_at
+        delay = (retry_at - before).total_seconds()
+        assert 14 <= delay <= 31
+        assert job.technical_retry_count == 1
+        assert job.last_error_type == "read_timeout"
 
 
 async def test_claim_reactivates_an_expired_zero_use_reservation(identity_test_context) -> None:
@@ -371,7 +542,7 @@ async def test_due_job_scheduler_respects_batch_concurrency_under_load(
     assert max(wave_sizes) == concurrency
 
 
-async def test_batch_try_on_ten_concurrency_requires_admin_test_mode(
+async def test_batch_try_on_high_concurrency_is_available_to_members(
     identity_test_context,
     monkeypatch,
 ) -> None:
@@ -419,13 +590,17 @@ async def test_batch_try_on_ten_concurrency_requires_admin_test_mode(
         await session.commit()
 
     member_headers = await auth_headers(client, "first-viewer@example.com", "viewer-password")
-    forbidden = await client.post(
+    member_accepted = await client.post(
         "/api/v1/job-batches",
         headers=member_headers,
-        json={**payload, "idempotency_key": "batch-tryon-member-ten"},
+        json={
+            **payload,
+            "idempotency_key": "batch-tryon-member-ten",
+            "admin_test_mode": False,
+        },
     )
-    assert forbidden.status_code == 403
-    assert forbidden.json()["error"]["code"] == "job.admin_concurrency_forbidden"
+    assert member_accepted.status_code == 202, member_accepted.text
+    assert member_accepted.json()["concurrency"] == 10
 
     no_test_mode = await client.post(
         "/api/v1/job-batches",
@@ -436,8 +611,8 @@ async def test_batch_try_on_ten_concurrency_requires_admin_test_mode(
             "admin_test_mode": False,
         },
     )
-    assert no_test_mode.status_code == 422
-    assert no_test_mode.json()["error"]["code"] == "job.admin_concurrency_required"
+    assert no_test_mode.status_code == 202, no_test_mode.text
+    assert no_test_mode.json()["concurrency"] == 10
 
 
 async def test_due_job_scheduler_prioritizes_new_work_and_skips_cooling_capacity(

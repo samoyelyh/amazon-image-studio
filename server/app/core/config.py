@@ -70,16 +70,20 @@ class Settings(BaseSettings):
     quota_reservation_ttl_minutes: int = 60
     api_key_encryption_key: SecretStr = SecretStr("bG9jYWwtZGV2ZWxvcG1lbnQta2V5LTMyLWJ5dGVzISE=")
     resource_lease_ttl_seconds: int = 900
-    resource_key_cooldown_seconds: int = 60
-    provider_request_timeout_seconds: float = 180.0
+    resource_key_cooldown_seconds: int = 10
+    resource_key_cooldown_max_seconds: int = 10
+    provider_connect_timeout_seconds: float = 15.0
+    provider_request_timeout_seconds: float = 480.0
     provider_output_max_bytes: int = 25 * 1024 * 1024
-    job_timeout_seconds: int = 600
+    job_timeout_seconds: int = 900
     job_heartbeat_timeout_seconds: int = 180
     job_max_attempts: int = 3
-    celery_worker_concurrency: int = 10
-    job_system_max_concurrency: int = 10
-    job_organization_max_concurrency: int = 10
-    job_user_max_concurrency: int = 10
+    celery_worker_concurrency: int = 12
+    job_system_max_concurrency: int = 12
+    job_organization_max_concurrency: int = 12
+    job_user_max_concurrency: int = 12
+    job_retry_recovery_per_tick_per_provider: int = 3
+    job_dispatch_interval_seconds: float = 2.0
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -121,11 +125,21 @@ class Settings(BaseSettings):
             raise ValueError("API_KEY_ENCRYPTION_KEY must be a valid Fernet key") from error
         if self.environment == "production" and self.api_key_encryption_key.get_secret_value() == "bG9jYWwtZGV2ZWxvcG1lbnQta2V5LTMyLWJ5dGVzISE=":
             raise ValueError("API_KEY_ENCRYPTION_KEY must be replaced in production")
-        if min(self.resource_lease_ttl_seconds, self.resource_key_cooldown_seconds, self.job_timeout_seconds,
+        if min(self.resource_lease_ttl_seconds, self.resource_key_cooldown_seconds,
+               self.resource_key_cooldown_max_seconds, self.job_timeout_seconds,
                self.job_heartbeat_timeout_seconds, self.job_max_attempts, self.provider_output_max_bytes,
                self.celery_worker_concurrency, self.job_system_max_concurrency,
-               self.job_organization_max_concurrency, self.job_user_max_concurrency) < 1:
+               self.job_organization_max_concurrency, self.job_user_max_concurrency,
+               self.job_retry_recovery_per_tick_per_provider) < 1:
             raise ValueError("Task and resource-pool limits must be positive")
+        if self.resource_key_cooldown_max_seconds < self.resource_key_cooldown_seconds:
+            raise ValueError("RESOURCE_KEY_COOLDOWN_MAX_SECONDS cannot be lower than RESOURCE_KEY_COOLDOWN_SECONDS")
+        if self.provider_connect_timeout_seconds < 1 or self.provider_request_timeout_seconds < 1:
+            raise ValueError("Provider timeouts must be positive")
+        if not 0.5 <= self.job_dispatch_interval_seconds <= 60:
+            raise ValueError("JOB_DISPATCH_INTERVAL_SECONDS must be between 0.5 and 60 seconds")
+        if self.job_timeout_seconds <= self.provider_request_timeout_seconds + 60:
+            raise ValueError("JOB_TIMEOUT_SECONDS must exceed provider request timeout by at least 60 seconds")
         return self
 
     @property

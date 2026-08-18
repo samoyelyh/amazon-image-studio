@@ -1,9 +1,9 @@
 import { authenticatedFetch, authenticatedFetchResponse } from './authApi'
 
-export type UploadAssetCategory = 'product_reference' | 'model_template' | 'garment' | 'style_reference' | 'temporary'
-export type GeneratedAssetCategory = 'listing_output' | 'batch_tryon_output' | 'aplus_output'
+export type UploadAssetCategory = 'product_reference' | 'model_template' | 'garment' | 'style_reference' | 'temporary' | 'print_asset'
+export type GeneratedAssetCategory = 'listing_output' | 'batch_tryon_output' | 'aplus_output' | 'material_extract_output' | 'print_design_output'
 export type AssetCategory = UploadAssetCategory | GeneratedAssetCategory
-export type ProjectType = 'listing' | 'batch_tryon' | 'aplus'
+export type ProjectType = 'listing' | 'batch_tryon' | 'aplus' | 'print_design'
 
 export interface Asset {
   id: string
@@ -14,6 +14,8 @@ export interface Asset {
   width: number
   height: number
   sha256: string
+  source_asset_id?: string | null
+  metadata_json?: Record<string, unknown> | null
   created_by: string
   created_at: string
   updated_at: string
@@ -30,6 +32,16 @@ export interface ProjectAsset {
   display_name: string | null
   is_default: boolean
   asset: Asset
+  created_at: string
+}
+export interface ProjectAssetLinkMutation {
+  id: string
+  project_id: string
+  asset_id: string
+  role: string
+  sort_order: number
+  display_name: string | null
+  is_default: boolean
   created_at: string
 }
 export interface Project {
@@ -58,11 +70,65 @@ export function listAssets(category?: GeneratedAssetCategory, search?: string) {
   return authenticatedFetch<AssetPage>(`/assets${params({ category, search })}`)
 }
 
+export function getAsset(assetId: string) {
+  return authenticatedFetch<Asset>(`/assets/${assetId}`)
+}
+
 export function uploadAsset(file: File, category: UploadAssetCategory) {
   const body = new FormData()
   body.append('file', file)
   body.append('category', category)
   return authenticatedFetch<Asset>('/assets', { method: 'POST', body })
+}
+
+export function uploadGarmentReference(
+  file: File,
+  input: {
+    sourceAssetId: string
+    garmentView: 'front' | 'back' | 'detail'
+    transformType: 'crop' | 'keep' | 'mask' | 'crop_mask'
+    transformMetadata: Record<string, unknown>
+  },
+) {
+  const body = new FormData()
+  body.append('file', file)
+  body.append('source_asset_id', input.sourceAssetId)
+  body.append('garment_view', input.garmentView)
+  body.append('transform_type', input.transformType)
+  body.append('transform_metadata', JSON.stringify(input.transformMetadata))
+  return authenticatedFetch<Asset>('/assets/garment-references', { method: 'POST', body })
+}
+
+export function uploadRegionReplaceReference(
+  file: File,
+  input: {
+    sourceAssetId: string
+    assetRole: 'target_edit_mask' | 'source_reference_mask' | 'reference_patch'
+    transformMetadata: Record<string, unknown>
+  },
+) {
+  const body = new FormData()
+  body.append('file', file)
+  body.append('source_asset_id', input.sourceAssetId)
+  body.append('asset_role', input.assetRole)
+  body.append('transform_metadata', JSON.stringify(input.transformMetadata))
+  return authenticatedFetch<Asset>('/assets/region-replace-references', { method: 'POST', body })
+}
+
+export function uploadPrintDesignReference(
+  file: File,
+  input: {
+    sourceAssetId: string
+    assetRole: 'composite_input' | 'asset_alpha_mask' | 'replacement_mask' | 'protect_mask' | 'blend_mask'
+    metadata?: Record<string, unknown>
+  },
+) {
+  const body = new FormData()
+  body.append('file', file)
+  body.append('source_asset_id', input.sourceAssetId)
+  body.append('asset_role', input.assetRole)
+  body.append('metadata', JSON.stringify(input.metadata ?? {}))
+  return authenticatedFetch<Asset>('/assets/print-design-references', { method: 'POST', body })
 }
 
 export function removeAsset(assetId: string) {
@@ -105,6 +171,26 @@ export function linkProjectAsset(
   isDefault = false,
 ) {
   return authenticatedFetch<Project>(`/projects/${projectId}/assets`, {
+    method: 'POST',
+    body: JSON.stringify({
+      asset_id: assetId,
+      role,
+      sort_order: sortOrder,
+      display_name: displayName,
+      is_default: isDefault,
+    }),
+  })
+}
+
+export function linkProjectAssetCompact(
+  projectId: string,
+  assetId: string,
+  role: string,
+  sortOrder = 0,
+  displayName?: string,
+  isDefault = false,
+) {
+  return authenticatedFetch<ProjectAssetLinkMutation>(`/projects/${projectId}/asset-links`, {
     method: 'POST',
     body: JSON.stringify({
       asset_id: assetId,

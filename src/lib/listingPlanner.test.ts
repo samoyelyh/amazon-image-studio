@@ -214,7 +214,7 @@ describe('A+ module helpers', () => {
     })
   })
 
-  it('keeps A+ module counts between 1 and 12', () => {
+  it('keeps A+ module counts between 1 and 16', () => {
     let specs = getAPlusModuleSpecs('mobile')
     for (let index = 0; index < 20; index += 1) {
       specs = insertAPlusModuleSpecAfter('mobile', specs, specs.length - 1)
@@ -826,6 +826,7 @@ describe('callAmazonPlannerApi', () => {
       }),
       mode: 'aplus',
       aPlusType: 'standard',
+      aPlusMode: 'standard',
       aPlusGenerationTier: '2K',
     })
 
@@ -838,6 +839,7 @@ describe('callAmazonPlannerApi', () => {
     expect(body.text.format.schema.required).toContain('seriesStyleGuide')
     expect(body.text.format.schema.required).not.toContain('visualSystem')
     expect(body.instructions).toContain('The application only fixes the module order, module type, upload size, and generation size')
+    expect(body.instructions).toContain('Selected A+ workflow mode: 标准 A+ (standard)')
     expect(body.instructions).toContain('Amazon A+ reference material for the planner')
     expect(body.instructions).toContain('Use product reference images only to identify product facts')
     expect(body.instructions).toContain('must avoid fixed non-product aesthetics')
@@ -918,6 +920,9 @@ describe('callAmazonPlannerApi', () => {
 
   it('uses custom A+ module specs in schema, prompts, chat guide, and result validation', async () => {
     const customSpecs = insertAPlusModuleSpecAfter('standard-large', getAPlusModuleSpecs('standard-large'), 4)
+      .map((spec, index) => index === 0
+        ? { ...spec, objective: 'Keep the product centered and emphasize the verified core benefit.' }
+        : spec)
     const customPayload = createAPlusPayloadFromSpecs(customSpecs, 'Custom A+ tumbler', 'ExampleBrand')
     const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify({
       output_text: JSON.stringify(customPayload),
@@ -938,6 +943,7 @@ describe('callAmazonPlannerApi', () => {
       }),
       mode: 'aplus',
       aPlusType: 'standard-large',
+      aPlusMode: 'standard',
       aPlusModuleSpecs: customSpecs,
       aPlusGenerationTier: '2K',
     })
@@ -947,6 +953,7 @@ describe('callAmazonPlannerApi', () => {
     expect(responseBody.text.format.schema.properties.aPlusPlans.maxItems).toBe(6)
     expect(responseBody.text.format.schema.properties.aPlusPlans.items.properties.slot.enum).toEqual(['A+L01', 'A+L02', 'A+L03', 'A+L04', 'A+L05', 'A+L06'])
     expect(responseBody.instructions).toContain('Return exactly 6 modules')
+    expect(responseBody.instructions).toContain('module objective: Keep the product centered and emphasize the verified core benefit.')
     expect(responseBody.instructions).toContain('A+L06 Single Image 5 970x600px')
     expect(responseBody.input[0].content[0].text).toContain('Use these A+ modules exactly: A+L01, A+L02, A+L03, A+L04, A+L05, A+L06.')
     expect(responseResult.aPlusPlans).toHaveLength(6)

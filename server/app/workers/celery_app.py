@@ -22,6 +22,9 @@ celery_app.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
     task_reject_on_worker_lost=True,
+    broker_transport_options={
+        "visibility_timeout": max(1800, settings.job_timeout_seconds * 2),
+    },
     task_time_limit=settings.job_timeout_seconds,
     task_soft_time_limit=max(1, settings.job_timeout_seconds - 15),
     result_expires=3600,
@@ -34,7 +37,18 @@ celery_app.conf.update(
             "task": "system.heartbeat",
             "schedule": 60.0,
         },
-        "dispatch-due-jobs": {"task": "system.dispatch_due_jobs", "schedule": 15.0},
+        "dispatch-due-jobs": {
+            "task": "system.dispatch_due_jobs",
+            "schedule": settings.job_dispatch_interval_seconds,
+        },
+        "continue-quick-listings": {
+            "task": "system.continue_quick_listings",
+            "schedule": 10.0,
+        },
+        "continue-batch-review-luna": {
+            "task": "system.continue_batch_review_luna",
+            "schedule": 30.0,
+        },
         "recover-stale-jobs": {"task": "system.recover_stale_jobs", "schedule": 60.0},
         "release-expired-reservations": {"task": "system.release_expired_reservations", "schedule": 300.0},
     },

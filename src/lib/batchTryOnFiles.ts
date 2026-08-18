@@ -13,6 +13,8 @@ export interface BatchTryOnDownloadItem {
   imageId: string
   garmentFileName: string
   templateName?: string
+  templateIndex?: number
+  templateCount?: number
   index: number
 }
 
@@ -31,14 +33,16 @@ export function sanitizeBatchTryOnFileBase(fileName: string) {
 }
 
 export function createBatchTryOnFileNames(
-  items: Array<Pick<BatchTryOnDownloadItem, 'garmentFileName' | 'templateName' | 'index'>>,
+  items: Array<Pick<BatchTryOnDownloadItem, 'garmentFileName' | 'templateName' | 'templateIndex' | 'templateCount' | 'index'>>,
   extensions: string[] = [],
 ) {
   const used = new Set<string>()
   return items.map((item, itemIndex) => {
     const garmentBase = sanitizeBatchTryOnFileBase(item.garmentFileName)
-    const templateBase = item.templateName ? sanitizeBatchTryOnFileBase(item.templateName) : ''
-    const base = templateBase ? `${templateBase}__${garmentBase}` : garmentBase
+    const templateBase = item.templateName
+      ? sanitizeBatchTryOnFileBase(item.templateName)
+      : item.templateIndex ? `template-${item.templateIndex}` : ''
+    const base = templateBase ? `${templateBase}-${garmentBase}` : garmentBase
     const extension = extensions[itemIndex] || 'jpg'
     let candidate = `${base}.${extension}`
     let duplicateIndex = 2

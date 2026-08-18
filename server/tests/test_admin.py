@@ -125,7 +125,7 @@ async def test_admin_resource_inventory_never_returns_secret(identity_test_conte
         "model_id": model.json()["id"], "code": "admin-pool", "name": "Admin Pool",
     })
     assert pool.status_code == 201, pool.text
-    secret = "sk-admin-resource-secret"
+    secret = "test-api-key-value"
     key = await client.post("/api/v1/resource-pools/keys", headers=platform, json={
         "provider_id": provider.json()["id"], "label": "Admin Key", "secret": secret,
         "max_concurrency": 2,
@@ -140,7 +140,7 @@ async def test_admin_resource_inventory_never_returns_secret(identity_test_conte
     inventory = await client.get("/api/v1/admin/resources", headers=platform)
     assert inventory.status_code == 200, inventory.text
     assert secret not in inventory.text
-    assert inventory.json()["keys"][0]["masked_secret"] == "****cret"
+    assert inventory.json()["keys"][0]["masked_secret"] == "****alue"
     assert inventory.json()["pools"][0]["key_ids"] == [key.json()["id"]]
 
     disabled = await client.patch(
@@ -158,11 +158,15 @@ async def test_admin_global_jobs_queues_and_login_audits(identity_test_context) 
 
     jobs = await client.get("/api/v1/admin/jobs", headers=platform)
     queues = await client.get("/api/v1/admin/queues", headers=platform)
+    diagnostics = await client.get("/api/v1/admin/generation-resources", headers=platform)
     logins = await client.get("/api/v1/admin/login-audits", headers=platform)
 
     assert jobs.status_code == 200
     assert jobs.json()["items"] == []
     assert queues.status_code == 200
+    assert diagnostics.status_code == 200, diagnostics.text
+    assert "system" in diagnostics.json()
+    assert "keys" in diagnostics.json()
     assert {item["name"] for item in queues.json()["items"]} == {
         "planning_queue", "listing_queue", "batch_tryon_queue", "aplus_queue", "maintenance",
     }
@@ -212,7 +216,7 @@ async def test_admin_provider_test_uses_encrypted_key_and_masks_response(identit
         "base_url": "https://relay.example/v1", "config": {},
     })
     assert provider.status_code == 201, provider.text
-    secret = "sk-provider-probe-secret"
+    secret = "test-api-key-value"
     key = await client.post("/api/v1/resource-pools/keys", headers=platform, json={
         "provider_id": provider.json()["id"], "label": "Probe Key", "secret": secret,
         "max_concurrency": 2,

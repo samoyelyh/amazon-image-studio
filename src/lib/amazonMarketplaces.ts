@@ -1,4 +1,4 @@
-export type AmazonMarketplaceId = 'us' | 'jp' | 'de' | 'fr' | 'it' | 'es'
+export type AmazonMarketplaceId = 'us' | 'uk' | 'jp' | 'de' | 'fr' | 'it' | 'es'
 
 export interface AmazonMarketplaceConfig {
   id: AmazonMarketplaceId
@@ -26,6 +26,20 @@ export const AMAZON_MARKETPLACES: AmazonMarketplaceConfig[] = [
     localGuidance: [
       'Use concise US-English customer-facing copy with natural American spelling, phrasing, and units.',
       'Avoid machine-translated phrasing, Chinese copy, and non-US marketplace wording in visible text.',
+    ],
+    allowsCjkVisibleCopy: false,
+  },
+  {
+    id: 'uk',
+    label: '英国站',
+    shortLabel: 'UK',
+    domain: 'Amazon.co.uk',
+    locale: 'en-GB',
+    copyLanguage: 'British English',
+    onImageCopyLanguage: 'British English',
+    localGuidance: [
+      'Use concise natural British English customer-facing copy suitable for Amazon.co.uk shoppers.',
+      'Use British spelling and metric units where relevant; avoid US-only wording, Chinese copy, and literal machine translation.',
     ],
     allowsCjkVisibleCopy: false,
   },

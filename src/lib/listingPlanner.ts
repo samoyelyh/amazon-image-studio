@@ -19,7 +19,7 @@ export type APlusModuleKind =
 
 export const A_PLUS_CONTENT_TYPES: APlusContentType[] = ['standard-large', 'standard', 'premium', 'mobile']
 export const MIN_A_PLUS_MODULE_COUNT = 1
-export const MAX_A_PLUS_MODULE_COUNT = 12
+export const MAX_A_PLUS_MODULE_COUNT = 16
 
 const A_PLUS_MODULE_KINDS: APlusModuleKind[] = [
   'header-banner',

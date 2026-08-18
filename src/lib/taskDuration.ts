@@ -1,4 +1,4 @@
-const SERVER_WAITING_STATUSES = new Set(['queued', 'dispatching', 'retry_waiting'])
+const SERVER_WAITING_STATUSES = new Set(['queued', 'dispatching', 'waiting_for_resource', 'retry_waiting'])
 
 export interface TaskDurationSource {
   status: string

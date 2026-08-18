@@ -9,12 +9,16 @@ const moduleFilters: Array<{ value: GeneratedAssetCategory | ''; label: string; 
   { value: 'listing_output', label: 'Listing 图', emptyLabel: '还没有 Listing 图生成素材' },
   { value: 'batch_tryon_output', label: '批量套图', emptyLabel: '还没有批量套图生成素材' },
   { value: 'aplus_output', label: 'A+ 图', emptyLabel: '还没有 A+ 图生成素材' },
+  { value: 'material_extract_output', label: '素材提取', emptyLabel: '还没有提取后的透明素材' },
+  { value: 'print_design_output', label: '印花编辑', emptyLabel: '还没有印花编辑输出' },
 ]
 
 const moduleLabels: Record<GeneratedAssetCategory, string> = {
   listing_output: 'Listing 图',
   batch_tryon_output: '批量套图',
   aplus_output: 'A+ 图',
+  material_extract_output: '素材提取',
+  print_design_output: '印花编辑',
 }
 
 export default function AssetsPage() {

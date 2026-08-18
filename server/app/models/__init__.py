@@ -11,10 +11,27 @@ from app.models.identity import (
 )
 from app.models.content import Asset, GeneratedOutput, ListingOutputTransfer, Project, ProjectAsset, ProjectVersion
 from app.models.quota import QuotaAccount, QuotaPackage, QuotaReservation, QuotaRule, QuotaTransaction
+from app.models.listing_workflow import (
+    APlusProject,
+    CategoryImageTemplate,
+    CategorySkill,
+    CategorySkillVersion,
+    ListingImageProject,
+    ListingImageTaskGroup,
+    ListingGenerationSession,
+    ListingVersion,
+    ImagePromptItem,
+    ImagePromptVersion,
+    ProductAnalysisResult,
+    ProductCategory,
+    PromptDebugConfig,
+)
 from app.models.tasks import (
-    ApiKey, ApiKeyUsageStat, BatchTryOnReviewItem, BatchTryOnVersion, Job, JobAttempt,
+    ApiKey, ApiKeyUsageStat, BatchGarmentStyleProfile, BatchTryOnPromptPreset, BatchTryOnReviewItem,
+    BatchTryOnTemplatePrompt, BatchTryOnVersion, Job, JobAttempt, JobStatusEvent,
     JobBatch, ModelCapability, Provider, ProviderModel, ResourcePool, ResourcePoolKey,
 )
+from app.models.print_design import PrintAssetGroup, PrintAssetLibraryItem, ProductPrintMapping
 
 __all__ = [
     "AuditLog",
@@ -37,7 +54,12 @@ __all__ = [
     "QuotaReservation",
     "QuotaRule",
     "QuotaTransaction",
+    "ProductCategory", "CategorySkill", "CategorySkillVersion", "CategoryImageTemplate", "ProductAnalysisResult",
+    "ListingGenerationSession", "ListingVersion", "ListingImageProject", "ListingImageTaskGroup", "APlusProject", "PromptDebugConfig",
+    "ImagePromptItem", "ImagePromptVersion",
     "Provider", "ProviderModel", "ModelCapability", "ResourcePool", "ResourcePoolKey",
-    "ApiKey", "ApiKeyUsageStat", "JobBatch", "Job", "JobAttempt",
+    "ApiKey", "ApiKeyUsageStat", "JobBatch", "Job", "JobAttempt", "JobStatusEvent",
+    "BatchGarmentStyleProfile", "BatchTryOnPromptPreset", "BatchTryOnTemplatePrompt",
     "BatchTryOnReviewItem", "BatchTryOnVersion",
+    "PrintAssetGroup", "PrintAssetLibraryItem", "ProductPrintMapping",
 ]

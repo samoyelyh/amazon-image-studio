@@ -5,10 +5,14 @@ import { cancelServerBatch, cancelServerJob, listServerBatches, listServerJobs, 
 import { downloadBatchTryOnResultsZip, downloadServerOutput, downloadServerOutputZip } from '../lib/serverDownloads'
 
 const statusLabel: Record<string, string> = {
-  pending: '等待队列中', dispatched: '等待队列中', running: '生成中', retry_waiting: '等待队列中',
+  pending: '等待队列中', dispatched: '等待队列中', waiting_for_resource: '等待生成通道',
+  running: '生成中', retry_waiting: '技术重试等待',
   succeeded: '已完成', failed: '失败', cancelled: '已取消', queued: '等待队列中', paused: '已暂停', partially_succeeded: '部分成功',
+  dispatching: '正在分发', waiting_resource: '等待生成通道', retrying: '技术重试中',
 }
-const workspaceLabel: Record<string, string> = { listing: 'Listing 图', batch_tryon: '批量套图', aplus: 'A+ 图' }
+const workspaceLabel: Record<string, string> = {
+  listing: 'Listing 图', batch_tryon: '批量套图', aplus: 'A+ 图', material_extract: '素材提取',
+}
 
 function time(value: string | null) {
   return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—'
@@ -85,7 +89,7 @@ export default function TasksPage() {
 
 function JobRow({ job, index, canCancel, onCancel, onMessage }: { job: ServerJob; index: number; canCancel: boolean; onCancel: () => void; onMessage: (value: string) => void }) {
   const active = !['succeeded', 'failed', 'cancelled'].includes(job.status)
-  const waiting = ['pending', 'queued', 'dispatched', 'retry_waiting'].includes(job.status)
-  const detail = waiting ? '等待队列中' : job.error_message || `进度 ${job.progress}%`
+  const waiting = ['pending', 'queued', 'dispatched', 'waiting_for_resource', 'retry_waiting'].includes(job.status)
+  const detail = waiting ? (statusLabel[job.status] ?? '等待队列中') : job.error_message || `进度 ${job.progress}%`
   return <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-white">#{index + 1} {job.client_item_id || job.operation_code}</span><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusClass(job.status)}`}>{statusLabel[job.status] ?? job.status}</span></div><div className="mt-1 text-xs text-gray-500">尝试 {job.attempts}/{job.max_attempts} · {detail}</div></div><div className="flex flex-wrap gap-2">{job.outputs.map((output) => <button key={output.id} onClick={() => void downloadServerOutput(output).catch((error) => onMessage(error.message))} className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-700 dark:border-white/[0.1] dark:text-gray-200">下载结果</button>)}{canCancel && active && <button onClick={onCancel} className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600">取消</button>}</div></div>
 }

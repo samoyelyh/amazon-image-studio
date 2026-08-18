@@ -29,6 +29,7 @@ import type { SizeTier } from './size'
 import { uploadDataUrlAsset } from './serverImageAssets'
 import { cancelServerJob, getServerJob, isServerJobTerminal, resolveModelCode, submitServerJob } from './jobsApi'
 import { randomUuid } from './randomUuid'
+import { A_PLUS_MODE_CONFIG, type APlusMode } from './aPlusWorkbenchModules'
 
 interface PlannerApiPayload {
   product?: {
@@ -553,9 +554,10 @@ function getAPlusPlannerTypeName(aPlusType: APlusContentType) {
   }
 }
 
-function buildAPlusPlannerInstructions(baseDraft: AmazonPromptDraft, aPlusType: APlusContentType, specs: AmazonAPlusModuleSpec[], marketplaceId?: AmazonMarketplaceId) {
+function buildAPlusPlannerInstructions(baseDraft: AmazonPromptDraft, aPlusType: APlusContentType, specs: AmazonAPlusModuleSpec[], marketplaceId?: AmazonMarketplaceId, aPlusMode?: APlusMode) {
   const typeLabel = getAPlusPlannerTypeName(aPlusType)
   const marketplace = getAmazonMarketplace(marketplaceId)
+  const modeConfig = aPlusMode ? A_PLUS_MODE_CONFIG[aPlusMode] : null
   const mobileGuidance = aPlusType === 'mobile'
     ? `For Mobile A+ modules, design every 600x450 image for compact mobile screens: one clear message per module, large product evidence, short mobile-readable ${marketplace.onImageCopyLanguage} copy, and no dense multi-column layouts.`
     : ''
@@ -563,7 +565,8 @@ function buildAPlusPlannerInstructions(baseDraft: AmazonPromptDraft, aPlusType: 
     'You are an Amazon A+ Content image-planning agent. The user provides listing copy, optional brand notes, and optional product reference images.',
     buildMarketplaceInstructionBlock(marketplaceId),
     `Create a ${typeLabel} image module plan. Do not generate images. Only return JSON matching the schema.`,
-    `Return exactly ${specs.length} modules in this order: ${specs.map((spec) => `${spec.slot} ${spec.label} ${getAPlusModuleUploadSize(spec)}px`).join('; ')}.`,
+    modeConfig ? `Selected A+ workflow mode: ${modeConfig.name} (${modeConfig.id}). ${modeConfig.promptStrategy}` : '',
+    `Return exactly ${specs.length} modules in this order: ${specs.map((spec) => `${spec.slot} ${spec.label} ${getAPlusModuleUploadSize(spec)}px${spec.objective ? `; module objective: ${spec.objective}` : ''}`).join('; ')}.`,
     'The application only fixes the module order, module type, upload size, and generation size. You must decide the strategy, composition, copy approach, visual treatment, prompt content, and negative prompt content.',
     'Use the Amazon A+ reference material below to improve compliance judgment. It is not a fixed module creative framework, and it must not replace the product facts from the listing and reference images.',
     formatAmazonAPlusReferenceMaterial(marketplaceId),
@@ -588,13 +591,13 @@ function buildPlannerInstructions(
   baseDraft: AmazonPromptDraft,
   mode: AmazonPlannerMode,
   aPlusType: APlusContentType,
-  options: { textOnlyReferenceGuard?: boolean; listingImageCount?: number; aPlusModuleSpecs?: AmazonAPlusModuleSpec[]; marketplaceId?: AmazonMarketplaceId } = {},
+  options: { textOnlyReferenceGuard?: boolean; listingImageCount?: number; aPlusModuleSpecs?: AmazonAPlusModuleSpec[]; marketplaceId?: AmazonMarketplaceId; aPlusMode?: APlusMode } = {},
 ) {
   const listingImageCount = normalizeListingImageCount(options.listingImageCount)
   const aPlusModuleSpecs = normalizeAPlusModuleSpecs(aPlusType, options.aPlusModuleSpecs)
   return [
     mode === 'aplus'
-    ? buildAPlusPlannerInstructions(baseDraft, aPlusType, aPlusModuleSpecs, options.marketplaceId)
+    ? buildAPlusPlannerInstructions(baseDraft, aPlusType, aPlusModuleSpecs, options.marketplaceId, options.aPlusMode)
     : buildListingPlannerInstructions(baseDraft, listingImageCount, options.marketplaceId),
     options.textOnlyReferenceGuard ? DEEPSEEK_TEXT_ONLY_PLANNER_GUARD : '',
   ].filter(Boolean).join('\n')
@@ -720,7 +723,7 @@ function buildChatPlannerSystemPrompt(
   baseDraft: AmazonPromptDraft,
   mode: AmazonPlannerMode,
   aPlusType: APlusContentType,
-  options: { textOnlyReferenceGuard?: boolean; listingImageCount?: number; aPlusModuleSpecs?: AmazonAPlusModuleSpec[]; marketplaceId?: AmazonMarketplaceId } = {},
+  options: { textOnlyReferenceGuard?: boolean; listingImageCount?: number; aPlusModuleSpecs?: AmazonAPlusModuleSpec[]; marketplaceId?: AmazonMarketplaceId; aPlusMode?: APlusMode } = {},
 ) {
   return [
     buildPlannerInstructions(baseDraft, mode, aPlusType, options),
@@ -743,6 +746,7 @@ export async function callAmazonPlannerApi(options: {
   marketplaceId?: AmazonMarketplaceId
   listingImageCount?: number
   aPlusType?: APlusContentType
+  aPlusMode?: APlusMode
   aPlusModuleSpecs?: Array<Partial<AmazonAPlusModuleSpec>>
   aPlusGenerationTier?: SizeTier
   signal?: AbortSignal
@@ -792,6 +796,7 @@ export async function callAmazonPlannerApi(options: {
                 listingImageCount,
                 aPlusModuleSpecs,
                 marketplaceId,
+                aPlusMode: options.aPlusMode,
               }),
             },
             {
@@ -809,6 +814,7 @@ export async function callAmazonPlannerApi(options: {
             listingImageCount,
             aPlusModuleSpecs,
             marketplaceId,
+            aPlusMode: options.aPlusMode,
           }),
           input: buildResponsesPlannerInput(inputText, referenceImageDataUrls),
           text: {
@@ -844,6 +850,7 @@ export async function callServerAmazonPlannerApi(options: {
   marketplaceId?: AmazonMarketplaceId
   listingImageCount?: number
   aPlusType?: APlusContentType
+  aPlusMode?: APlusMode
   aPlusModuleSpecs?: Array<Partial<AmazonAPlusModuleSpec>>
   aPlusGenerationTier?: SizeTier
   signal?: AbortSignal
@@ -868,6 +875,7 @@ export async function callServerAmazonPlannerApi(options: {
     listingImageCount,
     aPlusModuleSpecs,
     marketplaceId,
+    aPlusMode: options.aPlusMode,
   })
   const operationCode = mode === 'aplus' ? 'aplus.plan' : 'listing.plan'
   const modelCode = await resolveModelCode('text_generation', operationCode)
@@ -883,7 +891,7 @@ export async function callServerAmazonPlannerApi(options: {
       user_prompt: userPrompt,
       reference_asset_ids: referenceAssets.map((asset) => asset.id),
       temperature: 0.2,
-      metadata: { mode, marketplace_id: marketplaceId },
+      metadata: { mode, marketplace_id: marketplaceId, a_plus_mode: options.aPlusMode },
     },
     billing_factors: { quality: 'standard', resolution: 'text' },
   })

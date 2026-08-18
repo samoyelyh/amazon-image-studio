@@ -1,4 +1,7 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, Request, Response, status
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
@@ -16,6 +19,31 @@ from app.services.identity_views import current_identity_response
 
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
+
+
+def _is_mysql_deadlock(error: OperationalError) -> bool:
+    original = getattr(error, "orig", None)
+    args = getattr(original, "args", ())
+    return bool(args and args[0] == 1213)
+
+
+async def _login_with_deadlock_retry(
+    service: AuthService,
+    session: AsyncSession,
+    request: Request,
+    email: str,
+    password: str,
+    organization_id: str | None,
+) -> AuthSession:
+    for attempt in range(3):
+        try:
+            return await service.login(session, request, email, password, organization_id)
+        except OperationalError as error:
+            await session.rollback()
+            if not _is_mysql_deadlock(error) or attempt == 2:
+                raise
+            await asyncio.sleep(0.05 * (attempt + 1))
+    raise RuntimeError("unreachable")
 
 
 def _set_refresh_cookie(response: Response, settings: Settings, secret: str) -> None:
@@ -56,8 +84,9 @@ async def login(
     session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> AccessTokenResponse:
-    auth_session = await AuthService(settings).login(
-        session, request, str(payload.email), payload.password, payload.organization_id
+    auth_session = await _login_with_deadlock_retry(
+        AuthService(settings), session, request,
+        str(payload.email), payload.password, payload.organization_id,
     )
     _set_refresh_cookie(response, settings, auth_session.refresh_secret)
     return _token_response(auth_session)

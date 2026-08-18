@@ -151,6 +151,19 @@ function createNextSubmitTaskCategory(task: TaskRecord): NonNullable<TaskRecord[
   if (hasExplicitProductTitle || productTitle) category.productTitle = productTitle
   if (amazonSlot) category.amazonSlot = amazonSlot
   if (workflow === 'amazon-aplus' && aPlusType) category.aPlusType = aPlusType
+  if (workflow === 'amazon-aplus' && task.category?.aPlusMode) category.aPlusMode = task.category.aPlusMode
+  if (workflow === 'amazon-aplus') {
+    category.marketplaceLanguage = task.category?.marketplaceLanguage
+    category.aPlusModuleId = task.category?.aPlusModuleId
+    category.aPlusModuleType = task.category?.aPlusModuleType
+    category.aPlusModuleOrder = task.category?.aPlusModuleOrder
+    category.aPlusModuleCount = task.category?.aPlusModuleCount
+    category.aPlusModuleWidth = task.category?.aPlusModuleWidth
+    category.aPlusModuleHeight = task.category?.aPlusModuleHeight
+    category.generationQuality = task.category?.generationQuality
+    category.outputFormat = task.category?.outputFormat
+    category.outputCompression = task.category?.outputCompression
+  }
   category.marketplaceId = marketplaceId
   if (styleReferenceImageId && !(workflow === 'amazon-listing' && isAmazonListingMainSlot(amazonSlot))) {
     category.styleReferenceImageId = styleReferenceImageId
@@ -258,6 +271,11 @@ export async function ensureImageCached(id: string): Promise<string | undefined>
     return rec.dataUrl
   }
   return undefined
+}
+
+/** Keep a server-backed image available for the current session without writing it to IndexedDB. */
+export function cacheImageDataUrl(id: string, dataUrl: string) {
+  cacheImage(id, dataUrl)
 }
 
 export async function ensureImageThumbnailCached(id: string): Promise<{ dataUrl: string; width?: number; height?: number } | undefined> {
@@ -699,6 +717,18 @@ function normalizePersistedBatchTryOnBatch(value: unknown): BatchTryOnBatch | nu
     serverProjectId: typeof record.serverProjectId === 'string' ? record.serverProjectId : undefined,
     serverProjectName: typeof record.serverProjectName === 'string' ? record.serverProjectName : undefined,
     serverBatchId: typeof record.serverBatchId === 'string' ? record.serverBatchId : undefined,
+    serverBatchIds: Array.isArray(record.serverBatchIds)
+      ? [...new Set(record.serverBatchIds.filter((value): value is string => typeof value === 'string' && value.length > 0))]
+      : typeof record.serverBatchId === 'string' ? [record.serverBatchId] : [],
+    serverWorkflowId: typeof record.serverWorkflowId === 'string' ? record.serverWorkflowId : undefined,
+    queueClearedAt: typeof record.queueClearedAt === 'number' ? record.queueClearedAt : undefined,
+    serverWorkspaceId: typeof record.serverWorkspaceId === 'string' ? record.serverWorkspaceId : undefined,
+    sampleGarmentId: typeof record.sampleGarmentId === 'string' ? record.sampleGarmentId : undefined,
+    templatePromptConfigs: record.templatePromptConfigs && typeof record.templatePromptConfigs === 'object'
+      ? record.templatePromptConfigs
+      : {},
+    generationMode: record.generationMode === 'detail_tryon' ? 'detail_tryon' : 'normal_tryon',
+    combinationMode: record.combinationMode === 'one_to_one' ? 'one_to_one' : 'cartesian',
     templateImageId: typeof record.templateImageId === 'string' ? record.templateImageId : null,
     templateServerAssetId: typeof record.templateServerAssetId === 'string' ? record.templateServerAssetId : undefined,
     templateSourceType: record.templateSourceType === 'listing_generated_output' || record.templateSourceType === 'upload' ? record.templateSourceType : undefined,
@@ -708,6 +738,8 @@ function normalizePersistedBatchTryOnBatch(value: unknown): BatchTryOnBatch | nu
     templateHeight: typeof record.templateHeight === 'number' ? record.templateHeight : undefined,
     templates,
     garments,
+    fontReferenceOverrides: record.fontReferenceOverrides && typeof record.fontReferenceOverrides === 'object' ? record.fontReferenceOverrides : {},
+    styleProfiles: Array.isArray(record.styleProfiles) ? record.styleProfiles : [],
     items: items.map((item) => ({
       ...item,
       templateId: item.templateId || defaultTemplate?.id,
@@ -724,8 +756,8 @@ function normalizePersistedBatchTryOnBatch(value: unknown): BatchTryOnBatch | nu
       record.aspectRatio === 'template' || /^\d+(?:\.\d+)?:\d+(?:\.\d+)?$/.test(record.aspectRatio)
     ) ? record.aspectRatio : 'template',
     concurrency: record.concurrency === 1 || record.concurrency === 2 || record.concurrency === 3
-      || record.concurrency === 5 || record.concurrency === 10 ? record.concurrency : 2,
-    adminTestMode: Boolean(record.adminTestMode),
+      || record.concurrency === 5 || record.concurrency === 10 || record.concurrency === 12 ? record.concurrency : 12,
+    adminTestMode: false,
     params: normalizePersistedParams(record.params),
     queuePaused: runtimeConfig.isStandalone ? true : Boolean(record.queuePaused),
     createdAt: typeof record.createdAt === 'number' ? record.createdAt : now,
@@ -921,6 +953,7 @@ interface AppState {
   // Toast
   toast: { message: string; type: ToastType } | null
   showToast: (message: string, type?: ToastType) => void
+  dismissToast: () => void
 
   // Confirm dialog
   confirmDialog: {
@@ -957,7 +990,10 @@ function isImageReferencedByState(state: AppState, imageId: string) {
   if (Object.values(state.agentInputDrafts).some((draft) => draft.inputImages.some((img) => img.id === imageId))) return true
   if (
     state.batchTryOnBatch?.templateImageId === imageId ||
-    state.batchTryOnBatch?.items.some((item) => item.garmentImageId === imageId || item.outputImageId === imageId)
+    state.batchTryOnBatch?.templates.some((template) => template.imageId === imageId) ||
+    state.batchTryOnBatch?.items.some((item) => item.templateImageId === imageId || item.garmentImageId === imageId || item.outputImageId === imageId) ||
+    state.batchTryOnBatch?.garments.some((item) => item.fontReference?.imageId === imageId || Object.values(item.references || {}).some((reference) => reference?.imageId === imageId)) ||
+    Object.values(state.batchTryOnBatch?.fontReferenceOverrides || {}).some((item) => item.imageId === imageId)
   ) return true
   if (state.tasks.some((task) =>
     task.inputImageIds.includes(imageId) ||
@@ -1593,6 +1629,7 @@ export const useStore = create<AppState>()(
 
       // Toast
       toast: null,
+      dismissToast: () => set({ toast: null }),
       showToast: (message, type = 'info') => {
         const toastMessage = getToastMessage(message, type)
         const toast = { message: toastMessage, type }
@@ -2025,7 +2062,14 @@ export async function initStore() {
     for (const img of draft.inputImages) referencedIds.add(img.id)
   }
   if (batchTryOnBatch?.templateImageId) referencedIds.add(batchTryOnBatch.templateImageId)
+  for (const template of batchTryOnBatch?.templates ?? []) referencedIds.add(template.imageId)
+  for (const garment of batchTryOnBatch?.garments ?? []) {
+    if (garment.fontReference?.imageId) referencedIds.add(garment.fontReference.imageId)
+    for (const reference of Object.values(garment.references || {})) if (reference?.imageId) referencedIds.add(reference.imageId)
+  }
+  for (const reference of Object.values(batchTryOnBatch?.fontReferenceOverrides || {})) referencedIds.add(reference.imageId)
   for (const item of batchTryOnBatch?.items ?? []) {
+    if (item.templateImageId) referencedIds.add(item.templateImageId)
     referencedIds.add(item.garmentImageId)
     if (item.outputImageId) referencedIds.add(item.outputImageId)
   }
@@ -2867,7 +2911,14 @@ function addGalleryWorkspaceDraftReferencedImageIds(target: Set<string>, drafts:
 function addBatchTryOnReferencedImageIds(target: Set<string>, batch = useStore.getState().batchTryOnBatch) {
   if (!batch) return
   if (batch.templateImageId) target.add(batch.templateImageId)
+  for (const template of batch.templates) target.add(template.imageId)
+  for (const garment of batch.garments) {
+    if (garment.fontReference?.imageId) target.add(garment.fontReference.imageId)
+    for (const reference of Object.values(garment.references || {})) if (reference?.imageId) target.add(reference.imageId)
+  }
+  for (const reference of Object.values(batch.fontReferenceOverrides || {})) target.add(reference.imageId)
   for (const item of batch.items) {
+    if (item.templateImageId) target.add(item.templateImageId)
     target.add(item.garmentImageId)
     if (item.outputImageId) target.add(item.outputImageId)
   }
@@ -4127,6 +4178,7 @@ export interface RunBatchTryOnTaskOptions {
   index: number
   templateImageId: string
   garmentImageId: string
+  garmentReferenceImageIds?: string[]
   prompt: string
   params: TaskParams
   onTaskCreated?: (taskId: string) => void
@@ -4163,7 +4215,9 @@ export async function runBatchTryOnTask(options: RunBatchTryOnTaskOptions): Prom
   const profileError = getBatchTryOnProfileError(settings)
   if (profileError) throw new Error(profileError)
 
-  const inputImageIds = [options.templateImageId, options.garmentImageId]
+  const inputImageIds = [options.templateImageId, ...(options.garmentReferenceImageIds?.length
+    ? options.garmentReferenceImageIds
+    : [options.garmentImageId])]
   for (const imageId of inputImageIds) {
     if (!await ensureImageCached(imageId)) throw new Error('参考图读取失败，请重新上传后再试。')
   }

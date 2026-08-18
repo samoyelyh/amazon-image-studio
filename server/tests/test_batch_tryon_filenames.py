@@ -31,19 +31,26 @@ def test_batch_try_on_version_and_duplicate_names_do_not_overwrite() -> None:
     assert deduplicate_download_filename("shirt.png", used) == "shirt-3.png"
 
 
-def test_multi_template_output_filename_includes_template_name() -> None:
+def test_output_filename_combines_template_and_garment_names() -> None:
     assert build_batch_try_on_output_filename(
         "06-blue-jersey.webp",
         "png",
         template_name="欧美男模-01",
-    ) == "欧美男模-01__06-blue-jersey.png"
+        template_index=1,
+    ) == "欧美男模-01-06-blue-jersey.png"
     assert build_batch_try_on_output_filename(
         "06-blue-jersey.webp",
         "png",
         version_number=2,
         is_approved=False,
-        template_name="欧美男模-01",
-    ) == "欧美男模-01__06-blue-jersey-v2.png"
+        template_name="欧美男模-02",
+        template_index=2,
+    ) == "欧美男模-02-06-blue-jersey-v2.png"
+    assert build_batch_try_on_output_filename(
+        "06-blue-jersey.webp",
+        "png",
+        template_name="单模板名称",
+    ) == "单模板名称-06-blue-jersey.png"
 
 
 def test_utf8_content_disposition_has_ascii_and_rfc5987_filenames() -> None:

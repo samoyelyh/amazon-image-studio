@@ -13,6 +13,7 @@ class ProjectType(str, Enum):
     LISTING = "listing"
     BATCH_TRYON = "batch_tryon"
     APLUS = "aplus"
+    PRINT_DESIGN = "print_design"
 
 
 class ProjectStatus(str, Enum):
@@ -24,10 +25,14 @@ class AssetCategory(str, Enum):
     PRODUCT_REFERENCE = "product_reference"
     MODEL_TEMPLATE = "model_template"
     GARMENT = "garment"
+    GARMENT_REFERENCE = "garment_reference"
     STYLE_REFERENCE = "style_reference"
     LISTING_OUTPUT = "listing_output"
     BATCH_TRYON_OUTPUT = "batch_tryon_output"
     APLUS_OUTPUT = "aplus_output"
+    MATERIAL_EXTRACT_OUTPUT = "material_extract_output"
+    PRINT_ASSET = "print_asset"
+    PRINT_DESIGN_OUTPUT = "print_design_output"
     TEMPORARY = "temporary"
 
 
@@ -90,6 +95,10 @@ class Asset(UuidPrimaryKeyMixin, TimestampMixin, Base):
     width: Mapped[int] = mapped_column(Integer, nullable=False)
     height: Mapped[int] = mapped_column(Integer, nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_asset_id: Mapped[str | None] = mapped_column(
+        ForeignKey("assets.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    metadata_json: Mapped[dict[str, object] | None] = mapped_column("metadata", JSON, nullable=True)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

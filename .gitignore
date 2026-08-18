@@ -6,6 +6,8 @@ server/.pytest_cache/
 server/.mypy_cache/
 server/.ruff_cache/
 server/**/*.pyc
+**/__pycache__/
+*.py[cod]
 
 # Build output
 dist/
@@ -28,6 +30,7 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Test and tool output
+diagnostics/
 test-results/
 coverage/
 .cache/

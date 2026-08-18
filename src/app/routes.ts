@@ -4,8 +4,20 @@ export const appRoutes = {
   changePassword: '/change-password',
   dashboard: '/dashboard',
   listing: '/workspaces/listing',
+  listingQuick: '/workspaces/listing/quick',
+  listingQuickProgress: '/workspaces/listing/quick/:quickSessionId',
+  smartImageVariationHub: '/workspaces/listing/variations',
+  legacyListing: '/workspaces/listing/legacy',
+  listingWorkbench: '/listing-workbench/:sessionId',
+  listingOutputSelect: '/listing-workbench/:sessionId/select-output',
+  listingImageWorkbench: '/listing-image-workbench/:sessionId',
+  smartImageVariation: '/listing-image-workbench/:sessionId/variations',
+  categoryAPlusWorkbench: '/a-plus-workbench/:sessionId',
   batchTryOn: '/workspaces/batch-tryon',
+  batchTryOnRegionReplace: '/workspaces/batch-tryon/region-replace/:itemId',
   aplus: '/workspaces/aplus',
+  materialExtract: '/material-extract',
+  printDesign: '/workspaces/print-design',
   tasks: '/tasks',
   assets: '/assets',
   projects: '/projects',
@@ -13,6 +25,7 @@ export const appRoutes = {
   quota: '/quota',
   profile: '/profile',
   admin: '/admin',
+  categorySkillsAdmin: '/admin/category-skills',
 } as const
 
 export type AppRoutePath = (typeof appRoutes)[keyof typeof appRoutes]
@@ -37,9 +50,13 @@ export const navigationSections: NavigationSection[] = [
   {
     label: '图片工作台',
     items: [
-      { label: 'Listing 图', path: appRoutes.listing },
+      { label: '品类 Listing', path: appRoutes.listing },
+      { label: '原版 Listing 图', path: appRoutes.legacyListing },
+      { label: '自由图片裂变', path: appRoutes.smartImageVariationHub },
       { label: '批量套图', path: appRoutes.batchTryOn },
       { label: 'A+ 图', path: appRoutes.aplus },
+      { label: '素材提取', path: appRoutes.materialExtract },
+      { label: '印花编辑', path: appRoutes.printDesign },
     ],
   },
   {

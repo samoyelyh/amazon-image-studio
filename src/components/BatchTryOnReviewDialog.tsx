@@ -1,13 +1,24 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { copyTextToClipboard } from '../lib/clipboard'
 import { fetchAssetBlob } from '../lib/contentApi'
 import {
   approveBatchTryOnVersion,
+  analyzeBatchTryOnReviewVersion,
   getBatchTryOnReviewDetail,
   regenerateBatchTryOnVersion,
+  selectBatchTryOnReviewVersion,
   type BatchTryOnReviewAsset,
   type BatchTryOnReviewDetail,
+  type BatchTryOnManualErrorCode,
+  type BatchTryOnRetryMode,
 } from '../lib/batchTryOnReviewApi'
+import { getServerJob } from '../lib/jobsApi'
+import {
+  listBatchTryOnPromptPresets,
+  type BatchTryOnTemplateType,
+} from '../lib/batchTryOnWorkflowApi'
 import { randomUuid } from '../lib/randomUuid'
 import { downloadAuthenticatedFile } from '../lib/serverDownloads'
 import type { BatchTryOnItem } from '../types'
@@ -21,11 +32,19 @@ const REVIEW_LABEL: Record<string, string> = {
   pending: '待审核', approved: '已通过', rejected: '已打回', regenerating: '重新生成中', generation_failed: '生成失败',
 }
 const GENERATION_LABEL: Record<string, string> = {
-  queued: '排队中', dispatching: '排队中', running: '生成中', retry_waiting: '等待重试', succeeded: '生成成功', failed: '生成失败', cancelled: '已取消',
+  queued: '排队中', dispatching: '排队中', waiting_for_resource: '等待生成通道',
+  running: '生成中', retry_waiting: '技术重试等待', succeeded: '生成成功', failed: '生成失败', cancelled: '已取消',
 }
 const QUICK_NOTES = [
   '图案不一致', '颜色不一致', '文字错误', '数字错误', 'Logo错误', '衣领错误', '袖子错误',
   '下摆被遮挡', '版型不一致', '模特脸部改变', '姿势改变', '背景改变', '构图比例错误',
+]
+const MANUAL_ERROR_OPTIONS: Array<{ code: BatchTryOnManualErrorCode; label: string }> = [
+  { code: 'left_right_sleeve', label: '左右袖错误' },
+  { code: 'front_back', label: '正反面错误' },
+  { code: 'text_number', label: '文字/号码错误' },
+  { code: 'color', label: '颜色错误' },
+  { code: 'detail_composition', label: '细节构图错误' },
 ]
 
 interface Props {
@@ -33,6 +52,7 @@ interface Props {
   items: BatchTryOnItem[]
   canApprove: boolean
   canRegenerate: boolean
+  selectedItemIds: Set<string>
   onClose: () => void
   onSelectItem: (reviewItemId: string) => void
   onChanged: (detail: BatchTryOnReviewDetail, taskId?: string) => void
@@ -40,13 +60,22 @@ interface Props {
 }
 
 export default function BatchTryOnReviewDialog({
-  itemId, items, canApprove, canRegenerate, onClose, onSelectItem, onChanged, onAdvance,
+  itemId, items, canApprove, canRegenerate, selectedItemIds, onClose, onSelectItem, onChanged, onAdvance,
 }: Props) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const location = useLocation()
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
   const [showModel, setShowModel] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
   const [reviewNotes, setReviewNotes] = useState('')
+  const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false)
+  const [analysisPresetId, setAnalysisPresetId] = useState('__current__')
+  const [analysisTemplateType, setAnalysisTemplateType] = useState<BatchTryOnTemplateType>('pure_white')
+  const [analysisBasePrompt, setAnalysisBasePrompt] = useState('')
+  const [analysisJobId, setAnalysisJobId] = useState<string | null>(null)
+  const [analysisPrompt, setAnalysisPrompt] = useState('')
+  const [manualErrorCodes, setManualErrorCodes] = useState<BatchTryOnManualErrorCode[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [notice, setNotice] = useState<{ message: string; tone: ReviewShortcutNoticeTone } | null>(null)
@@ -56,12 +85,27 @@ export default function BatchTryOnReviewDialog({
   const submitLockRef = useRef(false)
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cancelConfirmationRef = useRef<(message?: string) => void>(() => undefined)
+  const appliedAnalysisJobRef = useRef<string | null>(null)
+  const analysisPresetInitializedRef = useRef(false)
   const detailQuery = useQuery({
     queryKey: ['batch-tryon-review', itemId],
     queryFn: ({ signal }) => getBatchTryOnReviewDetail(itemId, signal),
     refetchInterval: (query) => query.state.data?.review_status === 'regenerating' ? 2_000 : false,
   })
   const detail = detailQuery.data
+  const promptPresetsQuery = useQuery({
+    queryKey: ['batch-tryon-prompt-presets'],
+    queryFn: listBatchTryOnPromptPresets,
+  })
+  const analysisQuery = useQuery({
+    queryKey: ['batch-tryon-review-detailed-analysis', analysisJobId],
+    queryFn: () => getServerJob(analysisJobId!),
+    enabled: Boolean(analysisJobId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status && ['succeeded', 'failed', 'cancelled'].includes(status) ? false : 2_000
+    },
+  })
   const orderedReviewItems = useMemo(() => getReviewableQueueItems(items), [items])
   const localIndex = orderedReviewItems.findIndex((item) => item.serverReviewItemId === itemId)
 
@@ -70,11 +114,44 @@ export default function BatchTryOnReviewDialog({
     setShowModel(false)
     setShowNotes(false)
     setReviewNotes('')
+    setShowDetailedAnalysis(false)
+    setAnalysisPresetId('__current__')
+    setAnalysisTemplateType('pure_white')
+    setAnalysisBasePrompt('')
+    setAnalysisJobId(null)
+    setAnalysisPrompt('')
+    setManualErrorCodes([])
     setMessage('')
     setCompleted(false)
     setSharedZoom(1)
     submitLockRef.current = false
+    appliedAnalysisJobRef.current = null
+    analysisPresetInitializedRef.current = false
   }, [itemId])
+
+  useEffect(() => {
+    if (!detail || analysisPresetInitializedRef.current) return
+    analysisPresetInitializedRef.current = true
+    setAnalysisTemplateType(normalizeTemplateType(detail.template_type))
+    setAnalysisBasePrompt(detail.effective_prompt_snapshot || '')
+  }, [detail])
+
+  useEffect(() => {
+    const job = analysisQuery.data
+    if (!job || job.id === appliedAnalysisJobRef.current || job.status !== 'succeeded') return
+    const metadata = job.result_json?.metadata as Record<string, unknown> | undefined
+    const generated = metadata && typeof metadata.text === 'string'
+      ? metadata.text.trim()
+      : ''
+    appliedAnalysisJobRef.current = job.id
+    if (generated) {
+      setAnalysisPrompt(generated)
+      setMessage('')
+      showNotice('Luna 精细分析已完成，可编辑后用于当前图片重新生成。', 'success')
+    } else {
+      setMessage('Luna 精细分析已完成，但没有返回可用的纠错提示词。')
+    }
+  }, [analysisQuery.data])
 
   useEffect(() => {
     if (detail?.current_version_id) setSelectedVersionId(detail.current_version_id)
@@ -93,6 +170,14 @@ export default function BatchTryOnReviewDialog({
     ?? detail?.current_version
     ?? detail?.versions[0]
   const currentVersion = detail?.current_version
+  const submittedPrompt = selectedVersion?.prompt_snapshot?.trim()
+    || detail?.effective_prompt_snapshot?.trim()
+    || ''
+  const submittedPromptIsVersionSnapshot = Boolean(selectedVersion?.prompt_snapshot?.trim())
+  const reviewVersions = detail?.versions.filter((version) => (
+    version.retry_mode !== 'region_replace'
+    || (version.review_status === 'approved' && version.id === detail.current_version_id)
+  )) ?? []
   const reviewable = Boolean(
     canApprove
     && detail?.review_status === 'pending'
@@ -108,11 +193,31 @@ export default function BatchTryOnReviewDialog({
     && ['succeeded', 'failed', 'cancelled'].includes(currentVersion.generation_status)
     && currentVersion.id === selectedVersion?.id,
   )
+  const regionReplaceable = Boolean(
+    canRegenerate
+    && detail?.review_status === 'approved'
+    && detail?.approved_version_id === currentVersion?.id
+    && currentVersion?.review_status === 'approved'
+    && currentVersion
+    && currentVersion.generation_status === 'succeeded'
+    && currentVersion.generated_asset
+    && currentVersion.id === selectedVersion?.id,
+  )
 
   const showNotice = (noticeMessage: string, tone: ReviewShortcutNoticeTone = 'info') => {
     setNotice({ message: noticeMessage, tone })
     if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
     noticeTimerRef.current = setTimeout(() => setNotice(null), tone === 'warning' ? 3_500 : 2_000)
+  }
+
+  const copySubmittedPrompt = async () => {
+    if (!submittedPrompt) return
+    try {
+      await copyTextToClipboard(submittedPrompt)
+      showNotice('本任务提交提示词已复制。', 'success')
+    } catch {
+      showNotice('复制失败，当前浏览器未允许剪贴板写入。', 'warning')
+    }
   }
 
   const confirmUnsaved = () => !reviewNotes.trim() || window.confirm('当前修改要求尚未提交，确认离开吗？')
@@ -160,10 +265,30 @@ export default function BatchTryOnReviewDialog({
     }
   }
 
-  const regenerate = async (withNotes: boolean, skipDirectConfirmation = false) => {
+  const restoreSelectedVersion = async () => {
+    if (!selectedVersion || selectedVersion.generation_status !== 'succeeded' || busy) return
+    setBusy(true); setMessage('')
+    try {
+      const changed = await selectBatchTryOnReviewVersion(itemId, selectedVersion.id)
+      queryClient.setQueryData(['batch-tryon-review', itemId], changed)
+      onChanged(changed)
+      showNotice(`已切换到 v${selectedVersion.version_number}，后续可直接审核通过或继续处理。`, 'success')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '切换历史版本失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const regenerate = async (
+    withNotes: boolean,
+    skipDirectConfirmation = false,
+    overrideNotes?: string,
+    overrideRetryMode?: BatchTryOnRetryMode,
+  ) => {
     if (!currentVersion || !regeneratable || submitLockRef.current) return
-    const notes = reviewNotes.trim()
-    if (withNotes && !notes) {
+    const notes = (overrideNotes ?? reviewNotes).trim()
+    if (withNotes && !notes && !manualErrorCodes.length) {
       setMessage('请先填写本次修改要求。')
       return
     }
@@ -175,8 +300,9 @@ export default function BatchTryOnReviewDialog({
     try {
       const result = await regenerateBatchTryOnVersion(submittedItemId, {
         source_version_id: submittedVersionId,
-        retry_mode: withNotes ? 'with_review_notes' : 'direct',
+        retry_mode: overrideRetryMode ?? (withNotes ? 'with_review_notes' : 'direct'),
         review_notes: withNotes ? notes : null,
+        error_codes: withNotes ? manualErrorCodes : [],
         idempotency_key: `review:${randomUuid()}`,
       })
       const createdVersion = result.review.current_version
@@ -196,6 +322,52 @@ export default function BatchTryOnReviewDialog({
       submitLockRef.current = false
       setBusy(false)
     }
+  }
+
+  const runDetailedAnalysis = async () => {
+    if (!currentVersion || !regeneratable || busy) return
+    setBusy(true)
+    setMessage('')
+    setAnalysisPrompt('')
+    appliedAnalysisJobRef.current = null
+    try {
+      const job = await analyzeBatchTryOnReviewVersion(itemId, {
+        source_version_id: currentVersion.id,
+        focus_notes: null,
+        template_type: analysisTemplateType,
+        prompt_preset_id: analysisPresetId === '__current__' ? null : analysisPresetId,
+        template_prompt_override: analysisBasePrompt.trim() || null,
+        idempotency_key: `review-analysis:${randomUuid()}`,
+      })
+      setAnalysisJobId(job.id)
+      showNotice('已提交 Luna 精细逐图分析，分析完成前不会触发重新生成。')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '提交 Luna 精细分析失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const selectAnalysisPreset = (presetId: string) => {
+    analysisPresetInitializedRef.current = true
+    setAnalysisPresetId(presetId)
+    if (presetId === '__current__') {
+      setAnalysisTemplateType(normalizeTemplateType(detail?.template_type))
+      setAnalysisBasePrompt(detail?.effective_prompt_snapshot || '')
+      return
+    }
+    const preset = promptPresetsQuery.data?.find((item) => item.id === presetId)
+    if (!preset) return
+    setAnalysisTemplateType(preset.template_type)
+    setAnalysisBasePrompt(preset.analysis_prompt_template)
+  }
+
+  const useAnalysisAsReviewNotes = () => {
+    const prompt = analysisPrompt.trim()
+    if (!prompt) return
+    setReviewNotes(prompt)
+    setShowNotes(true)
+    showNotice('精细分析结果已填入本次修改要求。')
   }
 
   const approveUnavailableMessage = getApproveUnavailableMessage(detail)
@@ -240,7 +412,7 @@ export default function BatchTryOnReviewDialog({
                 <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700 dark:bg-white/[0.07] dark:text-gray-200">第 {Math.max(0, localIndex) + 1} 张 / 共 {orderedReviewItems.length} 张</span>
               </div>
               {detail && <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-                <span className="max-w-64 truncate" title={detail.template_name || detail.model_asset.filename}>模板：{detail.template_name || detail.model_asset.filename}</span>
+                <span className="max-w-64 truncate" title={detail.template_name || detail.model_asset.filename}>{detail.template_name || detail.model_asset.filename}</span>
                 <span className="max-w-64 truncate" title={detail.garment_asset.filename}>服装：{detail.garment_asset.filename}</span>
                 <span className="max-w-64 truncate" title={currentVersion?.display_filename ?? ''}>生成结果：{currentVersion?.display_filename ?? '—'}</span>
                 <span>生成：{GENERATION_LABEL[currentVersion?.generation_status ?? ''] ?? currentVersion?.generation_status ?? '—'}</span>
@@ -274,22 +446,94 @@ export default function BatchTryOnReviewDialog({
           {!completed && detail && <>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
-                {detail.versions.map((version) => <button key={version.id} type="button" onClick={() => {
+                {reviewVersions.map((version) => <button key={version.id} type="button" onClick={() => {
                   cancelDeleteConfirmation()
                   setSelectedVersionId(version.id)
                 }} className={`rounded-xl px-3 py-2 text-xs font-semibold ${selectedVersion?.id === version.id ? 'bg-blue-600 text-white' : 'border border-gray-200 bg-white text-gray-700 dark:border-white/[0.1] dark:bg-gray-900 dark:text-gray-200'}`}>v{version.version_number} · {GENERATION_LABEL[version.generation_status] ?? version.generation_status} · {REVIEW_LABEL[version.review_status] ?? version.review_status}</button>)}
               </div>
+              {selectedVersion && selectedVersion.id !== currentVersion?.id && selectedVersion.generation_status === 'succeeded' && (
+                <button type="button" disabled={busy || !canRegenerate} onClick={() => void restoreSelectedVersion()} className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 disabled:opacity-40 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200">选择此版本作为当前结果</button>
+              )}
               <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-300"><input type="checkbox" checked={syncZoom} onChange={(event) => setSyncZoom(event.target.checked)} />同步缩放</label>
             </div>
             <div className="grid gap-4 xl:grid-cols-2">
               <ReviewImageViewer key={`result-${selectedVersion?.generated_asset?.id ?? selectedVersion?.id}`} title="生成结果" asset={selectedVersion?.generated_asset ?? null} subtitle={selectedVersion ? `${selectedVersion.display_filename ?? '等待生成'} · v${selectedVersion.version_number}` : '暂无版本'} controlledZoom={syncZoom ? sharedZoom : undefined} onZoom={syncZoom ? setSharedZoom : undefined} allowDownload />
               <ReviewImageViewer key={`garment-${detail.garment_asset.id}`} title="服装原图" asset={detail.garment_asset} subtitle={detail.garment_asset.filename} controlledZoom={syncZoom ? sharedZoom : undefined} onZoom={syncZoom ? setSharedZoom : undefined} />
             </div>
+            <section className="mt-4 overflow-hidden rounded-2xl border border-blue-200 bg-white dark:border-blue-500/20 dark:bg-gray-900" aria-label="本任务提交提示词">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-blue-100 bg-blue-50/70 px-4 py-3 dark:border-blue-500/15 dark:bg-blue-500/[0.07]">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">本任务提交提示词</h3>
+                    <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 shadow-sm dark:bg-gray-950 dark:text-blue-200">当前查看 v{selectedVersion?.version_number ?? '—'}</span>
+                    {detail.prompt_version != null && <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-gray-600 shadow-sm dark:bg-gray-950 dark:text-gray-300">模板 Prompt V{detail.prompt_version}</span>}
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">这是服务端创建该图片版本时保存的实际 Prompt 快照；切换上方版本后，这里的内容也会同步切换。</p>
+                </div>
+                <button type="button" disabled={!submittedPrompt} onClick={() => void copySubmittedPrompt()} className="h-8 rounded-lg border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-700 disabled:opacity-40 dark:border-blue-500/30 dark:bg-gray-950 dark:text-blue-200">复制提示词</button>
+              </div>
+              <div className="p-4">
+                {submittedPrompt ? <div className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-xl bg-gray-50 px-3 py-3 text-xs leading-6 text-gray-700 dark:bg-gray-950 dark:text-gray-200">{submittedPrompt}</div> : <div className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-xs text-gray-500 dark:border-white/[0.1]">该历史任务没有保存提示词快照。</div>}
+                {!submittedPromptIsVersionSnapshot && submittedPrompt && <div className="mt-2 text-[11px] text-amber-600 dark:text-amber-300">当前为旧任务兼容数据，显示的是任务级有效 Prompt 快照。</div>}
+              </div>
+            </section>
             <section className="mt-4 rounded-2xl border border-gray-200 bg-white dark:border-white/[0.08] dark:bg-gray-900">
               <button type="button" onClick={() => setShowModel((value) => !value)} className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold text-gray-800 dark:text-gray-100"><span>查看模特底图</span><span>{showModel ? '收起' : '展开'}</span></button>
               {showModel && <div className="border-t border-gray-100 p-4 dark:border-white/[0.06]"><div className="mx-auto max-w-2xl"><ReviewImageViewer key={`model-${detail.model_asset.id}`} title="模特底图" asset={detail.model_asset} subtitle={detail.model_asset.filename} /></div></div>}
             </section>
+            {showDetailedAnalysis && <section className="mt-4 rounded-2xl border border-violet-200 bg-violet-50/50 p-4 dark:border-violet-500/20 dark:bg-violet-500/5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Luna 精细逐图分析</h3>
+                  <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-gray-300">Luna 只执行下方当前选中或编辑后的模板预设，不会追加通用分析规则、语言要求或审核包装文案。</p>
+                </div>
+                <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-200">gpt-5.6-luna</span>
+              </div>
+              <div className="mt-4 rounded-xl border border-violet-100 bg-white p-3 dark:border-violet-500/20 dark:bg-gray-950">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="font-semibold text-gray-800 dark:text-gray-100">本次分析基础预设</span>
+                  <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-white/[0.07] dark:text-gray-300">模板类型：{formatTemplateType(analysisTemplateType)}</span>
+                  {detail.prompt_version != null && <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-600 dark:bg-white/[0.07] dark:text-gray-300">提示词 v{detail.prompt_version}</span>}
+                  {detail.preset_summary && <span className="rounded-full bg-violet-100 px-2 py-1 text-violet-700 dark:bg-violet-500/15 dark:text-violet-200">{detail.preset_summary}</span>}
+                </div>
+                <label className="mt-3 block text-xs font-semibold text-gray-700 dark:text-gray-200">选择模板预设</label>
+                <select value={analysisPresetId} disabled={busy || analysisQuery.isFetching || promptPresetsQuery.isLoading} onChange={(event) => selectAnalysisPreset(event.target.value)} className="mt-2 h-10 w-full rounded-xl border border-violet-200 bg-white px-3 text-sm text-gray-800 outline-none focus:border-violet-400 disabled:opacity-60 dark:border-violet-500/30 dark:bg-gray-900 dark:text-gray-100">
+                  <option value="__current__">当前任务生成时的预设快照（推荐）</option>
+                  {(promptPresetsQuery.data || []).filter((preset) => preset.enabled).map((preset) => <option key={preset.id} value={preset.id}>{formatTemplateType(preset.template_type)} · {preset.label}{preset.is_system_preset ? '（系统）' : preset.scope === 'user' ? '（个人）' : '（团队）'}</option>)}
+                </select>
+                {promptPresetsQuery.isError && <div className="mt-2 text-xs text-red-600 dark:text-red-300">预设列表加载失败，请刷新后重试。</div>}
+                <label className="mt-3 block text-xs font-semibold text-gray-700 dark:text-gray-200">本次分析使用的模板预设（可编辑）</label>
+                <textarea value={analysisBasePrompt} disabled={busy || analysisQuery.isFetching} onChange={(event) => setAnalysisBasePrompt(event.target.value)} rows={8} className="mt-2 w-full resize-y rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-xs leading-5 text-gray-700 outline-none focus:border-violet-400 disabled:opacity-60 dark:border-violet-500/30 dark:bg-gray-900 dark:text-gray-200" />
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+                  <span>切换预设会复制内容到当前编辑框；修改只影响本次分析，不会覆盖系统、团队或个人预设。</span>
+                  <button type="button" onClick={() => selectAnalysisPreset(analysisPresetId)} disabled={busy || analysisQuery.isFetching} className="font-semibold text-violet-600 disabled:opacity-50 dark:text-violet-300">恢复所选预设</button>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button type="button" disabled={busy || analysisQuery.isFetching || !regeneratable || analysisBasePrompt.trim().length < 20} onClick={() => void runDetailedAnalysis()} className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{analysisQuery.isFetching ? 'Luna 分析中…' : analysisPrompt ? '重新精细分析' : '开始精细分析'}</button>
+                {analysisQuery.data && <span className="text-xs text-gray-500 dark:text-gray-400">任务状态：{formatAnalysisStatus(analysisQuery.data.status)}</span>}
+              </div>
+              {analysisQuery.data?.status === 'failed' && <div className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-500/10 dark:text-red-200">{analysisQuery.data.error_message || 'Luna 精细分析失败，请重试。'}</div>}
+              {analysisPrompt && <>
+                <label className="mt-4 block text-xs font-semibold text-gray-700 dark:text-gray-200">精细分析生成的完整换衣提示词（可编辑）</label>
+                <textarea value={analysisPrompt} onChange={(event) => setAnalysisPrompt(event.target.value)} className="mt-2 min-h-40 w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-violet-400 dark:border-violet-500/30 dark:bg-gray-950 dark:text-white" />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={useAnalysisAsReviewNotes} className="rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-700 dark:border-violet-500/30 dark:bg-gray-900 dark:text-violet-200">填入修改要求</button>
+                  <button type="button" disabled={busy || !regeneratable || !analysisPrompt.trim()} onClick={() => void regenerate(true, false, analysisPrompt, 'with_detailed_prompt')} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">使用分析结果重新生成</button>
+                </div>
+              </>}
+            </section>}
             {showNotes && <section className="mt-4 rounded-2xl border border-blue-200 bg-blue-50/50 p-4 dark:border-blue-500/20 dark:bg-blue-500/5">
+              <div className="mb-3">
+                <div className="text-xs font-semibold text-gray-600 dark:text-gray-300">结构化错误类型（服务端追加固定纠错约束）</div>
+                <div className="mt-2 flex flex-wrap gap-2">{MANUAL_ERROR_OPTIONS.map((option) => {
+                  const selected = manualErrorCodes.includes(option.code)
+                  return <button key={option.code} type="button" onClick={() => {
+                    setManualErrorCodes((current) => selected ? current.filter((code) => code !== option.code) : [...current, option.code])
+                    if (!selected) setReviewNotes((current) => current.trim() ? current : option.label)
+                  }} className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-blue-200 bg-white text-blue-700 dark:border-blue-500/30 dark:bg-gray-900 dark:text-blue-200'}`}>{option.label}</button>
+                })}</div>
+              </div>
               <label className="text-sm font-bold text-gray-900 dark:text-white">本次修改要求</label>
               <textarea value={reviewNotes} onChange={(event) => setReviewNotes(event.target.value)} className="mt-2 min-h-32 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 dark:border-white/[0.1] dark:bg-gray-950 dark:text-white" placeholder="请具体说明需要修正的问题，不能覆盖系统基础约束。" />
               <div className="mt-3 flex flex-wrap gap-2">{QUICK_NOTES.map((note) => <button key={note} type="button" onClick={() => addQuickNote(note)} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs text-blue-700 dark:border-blue-500/30 dark:bg-gray-900 dark:text-blue-200">{note}</button>)}</div>
@@ -321,6 +565,13 @@ export default function BatchTryOnReviewDialog({
             <button type="button" disabled={orderedReviewItems.length < 2 || busy} onClick={() => selectManual(-1)} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 disabled:opacity-40 dark:border-white/[0.1] dark:text-gray-200">上一张</button>
             <button type="button" disabled={!reviewable || busy} onClick={() => void approve()} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40">{busy ? '处理中…' : '审核通过'}</button>
             <button type="button" disabled={!regeneratable || busy} onClick={() => void regenerate(false)} className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 disabled:opacity-40 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">直接重新生成</button>
+            <button type="button" disabled={!regeneratable || busy} onClick={() => setShowDetailedAnalysis((value) => !value)} className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-700 disabled:opacity-40 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-200">Luna 精细分析</button>
+            <button type="button" disabled={!regionReplaceable || busy} title={!regionReplaceable ? '请先审核通过当前生成结果，再发送到区域替换画布。' : undefined} onClick={() => {
+              if (!detail) return
+              const projectId = new URLSearchParams(location.search).get('project_id')
+              const suffix = projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''
+              navigate(`/workspaces/batch-tryon/region-replace/${encodeURIComponent(detail.item_id)}${suffix}`)
+            }} className="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-2.5 text-sm font-semibold text-cyan-700 disabled:opacity-40 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-200">发送到区域涂抹替换</button>
             <button type="button" disabled={!regeneratable || busy} onClick={() => setShowNotes((value) => !value)} className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 disabled:opacity-40 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200">附加要求重新生成</button>
             <button type="button" disabled={orderedReviewItems.length < 2 || busy} onClick={() => selectManual(1)} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 disabled:opacity-40 dark:border-white/[0.1] dark:text-gray-200">下一张</button>
             {!canApprove && !canRegenerate && <span className="ml-2 text-xs text-gray-500">当前账号仅可查看，不能执行审核或重新生成。</span>}
@@ -430,7 +681,7 @@ function getApproveUnavailableMessage(detail?: BatchTryOnReviewDetail) {
 
 function getRegenerateUnavailableMessage(detail?: BatchTryOnReviewDetail) {
   if (!detail?.current_version) return '当前图片信息尚未加载完成，不能重新生成。'
-  if (['queued', 'dispatching', 'running', 'retry_waiting'].includes(detail.current_version.generation_status)) {
+  if (['queued', 'dispatching', 'waiting_for_resource', 'running', 'retry_waiting'].includes(detail.current_version.generation_status)) {
     return '当前图片仍在生成或排队中，暂时不能重新生成。'
   }
   return '当前版本不是最新版本，不能重新生成。'
@@ -444,4 +695,35 @@ function formatDuration(value?: number | null) {
   if (value == null) return '—'
   if (value < 1000) return `${value} ms`
   return `${Math.round(value / 100) / 10} 秒`
+}
+
+function formatAnalysisStatus(status: string) {
+  return ({
+    queued: '排队中',
+    dispatching: '正在分配 Luna 通道',
+    waiting_for_resource: '等待 Luna 通道',
+    running: '分析中',
+    retry_waiting: '等待重试',
+    succeeded: '分析完成',
+    failed: '分析失败',
+    cancelled: '已取消',
+  } as Record<string, string>)[status] ?? status
+}
+
+function formatTemplateType(value: string) {
+  return ({
+    pure_white: '纯白底图',
+    gift_scene: '礼品场景图',
+    stadium_scene: '观赛场景图',
+    detail_display: '细节展示图',
+    casual_scene: '休闲场景图',
+    custom_process: '定制信息流程图',
+  } as Record<string, string>)[value] ?? value
+}
+
+function normalizeTemplateType(value?: string | null): BatchTryOnTemplateType {
+  if (value && ['pure_white', 'gift_scene', 'stadium_scene', 'detail_display', 'casual_scene', 'custom_process'].includes(value)) {
+    return value as BatchTryOnTemplateType
+  }
+  return 'pure_white'
 }

@@ -170,10 +170,103 @@ export interface AdminQueue {
   name: string
   broker_depth: number
   queued_jobs: number
+  waiting_for_resource_jobs: number
   running_jobs: number
   retry_waiting_jobs: number
   failed_jobs: number
 }
+
+export interface GenerationResourceMetric {
+  requests: number
+  successes: number
+  failures: number
+  success_rate: number | null
+  average_latency_ms: number | null
+  p90_latency_ms: number | null
+  hourly_successes: number
+  http_429: number
+  http_524: number
+  http_5xx: number
+  timeouts: number
+  auth_errors: number
+  last_success_at: string | null
+  last_failure_at: string | null
+  latest_error: string | null
+}
+
+export interface GenerationResourceDiagnostics {
+  checked_at: string
+  system: {
+    configured_concurrency: number
+    true_active_requests: number
+    database_running: number
+    database_dispatching: number
+    redis_inflight: number
+    worker_active_estimate: number
+    worker_names: string[]
+    queued: number
+    waiting_for_resource: number
+    retry_waiting: number
+    recent_hour_successes: number
+    remaining_jobs: number
+    eta_minutes: number | null
+    slot_mismatch: boolean
+  }
+  resource_pools: Array<GenerationResourceMetric & {
+    id: string
+    name: string
+    code: string
+    operation_codes: string[]
+    model_code: string | null
+    configured_capacity: number
+    active: number
+    idle: number
+    waiting_jobs: number
+    enabled: boolean
+    health: string
+  }>
+  providers: Array<GenerationResourceMetric & {
+    id: string
+    name: string
+    code: string
+    base_url: string
+    enabled: boolean
+    configured_capacity: number
+    effective_capacity: number
+    active: number
+    redis_active: number
+    idle: number
+    cooling_keys: number
+    recovering_keys: number
+    probe_active: number
+    recovery_state: ResourceRecoveryState
+    next_probe_at: string | null
+    cooldown_remaining_seconds: number
+    account_visibility: string
+  }>
+  keys: Array<GenerationResourceMetric & {
+    id: string
+    provider_id: string
+    provider_name: string | null
+    label: string
+    masked_secret: string
+    enabled: boolean
+    status: string
+    configured_capacity: number
+    effective_capacity: number
+    active: number
+    redis_active: number
+    cooldown_until: string | null
+    cooldown_remaining_seconds: number
+    next_probe_at: string | null
+    consecutive_failures: number
+    recovery_state: ResourceRecoveryState
+    probe_active: boolean
+    last_used_at: string | null
+  }>
+}
+
+export type ResourceRecoveryState = 'healthy' | 'cooling' | 'waiting_probe' | 'probing' | 'disabled'
 
 export interface AdminAudit {
   id: string
@@ -210,6 +303,8 @@ export const getAdminOrganizations = () => authenticatedFetch<Page<AdminOrganiza
 export const getAdminResources = () => authenticatedFetch<AdminResources>('/admin/resources')
 export const getAdminJobs = () => authenticatedFetch<Page<AdminJob>>('/admin/jobs?limit=100')
 export const getAdminQueues = () => authenticatedFetch<{ items: AdminQueue[]; redis_ok: boolean; checked_at: string }>('/admin/queues')
+export const getGenerationResourceDiagnostics = () =>
+  authenticatedFetch<GenerationResourceDiagnostics>('/admin/generation-resources')
 export const getAdminAudits = () => authenticatedFetch<Page<AdminAudit>>('/admin/audit-logs?limit=100')
 export const getAdminLoginAudits = () => authenticatedFetch<Page<AdminLoginAudit>>('/admin/login-audits?limit=100')
 

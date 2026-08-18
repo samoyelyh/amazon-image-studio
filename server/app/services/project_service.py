@@ -86,7 +86,8 @@ def _project_load_options():
 
 
 async def get_project(
-    session: AsyncSession, organization_id: str, project_id: str, *, lock: bool = False
+    session: AsyncSession, organization_id: str, project_id: str, *, lock: bool = False,
+    owner_user_id: str | None = None,
 ) -> Project:
     statement = select(Project).options(*_project_load_options()).where(
         Project.id == project_id,
@@ -96,7 +97,11 @@ async def get_project(
     if lock:
         statement = statement.with_for_update()
     project = await session.scalar(statement)
-    if project is None:
+    if project is None or (
+        owner_user_id
+        and project.project_type == "batch_tryon"
+        and project.created_by != owner_user_id
+    ):
         raise AppError("project.not_found", "Project was not found", 404)
     return project
 
@@ -110,8 +115,14 @@ async def list_projects(
     search: str | None,
     limit: int,
     offset: int,
+    owner_user_id: str | None = None,
 ) -> ProjectPage:
     filters = [Project.organization_id == organization_id, Project.deleted_at.is_(None)]
+    if owner_user_id:
+        filters.append(or_(
+            Project.project_type != "batch_tryon",
+            Project.created_by == owner_user_id,
+        ))
     if project_type:
         filters.append(Project.project_type == project_type)
     if status:

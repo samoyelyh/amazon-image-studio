@@ -229,6 +229,7 @@ class AdminQueueResponse(BaseModel):
     name: str
     broker_depth: int
     queued_jobs: int
+    waiting_for_resource_jobs: int
     running_jobs: int
     retry_waiting_jobs: int
     failed_jobs: int

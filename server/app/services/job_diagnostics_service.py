@@ -2,15 +2,16 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 from redis.asyncio import Redis
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.models.tasks import (
     ApiKey, ApiKeyStatus, Job, JobAttempt, JobBatch, JobStatus,
-    OperationResourcePool, ProviderModel, ResourcePool, ResourcePoolKey,
+    OperationResourcePool, Provider, ProviderModel, ResourcePool, ResourcePoolKey,
 )
 from app.schemas.tasks import JobBatchDiagnosticsResponse
+from app.services.resource_pool_service import key_effective_capacity, key_recovery_state
 from app.services.task_service import effective_batch_jobs
 
 
@@ -134,6 +135,68 @@ async def batch_diagnostics(
     key_capacity, available_key_capacity, resource_pool_ids, availability_reasons = (
         _resource_capacity_summary(list(capacity_rows), now)
     )
+    channel_rows = (await session.execute(
+        select(Provider, ApiKey)
+        .select_from(OperationResourcePool)
+        .join(ResourcePool, OperationResourcePool.resource_pool_id == ResourcePool.id)
+        .join(ProviderModel, ResourcePool.model_id == ProviderModel.id)
+        .join(Provider, ProviderModel.provider_id == Provider.id)
+        .join(ResourcePoolKey, ResourcePoolKey.resource_pool_id == ResourcePool.id)
+        .join(ApiKey, ResourcePoolKey.api_key_id == ApiKey.id)
+        .where(
+            OperationResourcePool.operation_code == batch.operation_code,
+            OperationResourcePool.required_capability == batch.capability,
+            OperationResourcePool.enabled.is_(True),
+            ResourcePool.enabled.is_(True),
+            ResourcePoolKey.enabled.is_(True),
+            ProviderModel.enabled.is_(True),
+            ProviderModel.code == batch.model_code,
+            ApiKey.enabled.is_(True),
+            ApiKey.status != ApiKeyStatus.DISABLED.value,
+            or_(
+                OperationResourcePool.organization_id == batch.organization_id,
+                OperationResourcePool.organization_id.is_(None),
+            ),
+            or_(ResourcePool.organization_id == batch.organization_id, ResourcePool.organization_id.is_(None)),
+            or_(ApiKey.organization_id == batch.organization_id, ApiKey.organization_id.is_(None)),
+        )
+    )).all()
+    channels_by_key = {key.id: (provider, key) for provider, key in channel_rows}
+    active_by_key = dict((await session.execute(
+        select(JobAttempt.api_key_id, func.count())
+        .join(Job, Job.id == JobAttempt.job_id)
+        .where(
+            JobAttempt.api_key_id.in_(list(channels_by_key)),
+            JobAttempt.status == "running",
+            JobAttempt.provider_requested_at.is_not(None),
+            JobAttempt.finished_at.is_(None),
+            Job.status == JobStatus.RUNNING.value,
+        )
+        .group_by(JobAttempt.api_key_id)
+    )).all()) if channels_by_key else {}
+    resource_channels = []
+    for provider, key in channels_by_key.values():
+        active = int(active_by_key.get(key.id, 0))
+        state = key_recovery_state(key, active, now)
+        cooldown_until = _aware(key.cooldown_until)
+        resource_channels.append({
+            "provider_id": provider.id,
+            "provider_name": provider.name,
+            "provider_code": provider.code,
+            "key_id": key.id,
+            "key_label": key.label,
+            "recovery_state": state,
+            "configured_capacity": key.max_concurrency,
+            "effective_capacity": key_effective_capacity(key, active, now),
+            "active": active,
+            "consecutive_failures": key.consecutive_failures,
+            "cooldown_until": key.cooldown_until,
+            "cooldown_remaining_seconds": (
+                max(0, int((cooldown_until - now).total_seconds()))
+                if cooldown_until and cooldown_until > now else 0
+            ),
+            "probe_active": state == "probing",
+        })
 
     broker = Redis.from_url(settings.resolved_celery_broker_url, decode_responses=True)
     runtime_redis = Redis.from_url(settings.redis_url.get_secret_value(), decode_responses=True)
@@ -205,4 +268,5 @@ async def batch_diagnostics(
         latest_error_message=latest_error.error_message if latest_error else None,
         limitation_reasons=limitation_reasons,
         availability_reasons=availability_reasons,
+        resource_channels=resource_channels,
     )

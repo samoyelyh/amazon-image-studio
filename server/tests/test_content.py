@@ -89,6 +89,20 @@ async def test_asset_upload_list_and_authenticated_content(identity_test_context
     assert url.json()["url"] == asset["url"]
     assert url.json()["expires_at"] is None
 
+    async with identity_test_context["session_factory"]() as session:
+        stored_asset = await session.get(Asset, asset["id"])
+        stored_asset.category = "batch_tryon_output"
+        await session.commit()
+    viewer_generated = await client.get(
+        "/api/v1/assets?category=batch_tryon_output", headers=viewer,
+    )
+    assert viewer_generated.status_code == 200
+    assert viewer_generated.json()["total"] == 0
+    assert (await client.get(asset["url"], headers=viewer)).status_code == 404
+    assert (await client.get(
+        f"/api/v1/assets/{asset['id']}/download", headers=viewer,
+    )).status_code == 404
+
 
 async def test_invalid_image_and_viewer_write_permissions(identity_test_context) -> None:
     client = identity_test_context["client"]
@@ -105,6 +119,65 @@ async def test_invalid_image_and_viewer_write_permissions(identity_test_context)
     forbidden = await upload(client, viewer)
     assert forbidden.status_code == 403
     assert forbidden.json()["error"]["code"] == "auth.permission_denied"
+
+
+async def test_garment_reference_is_non_destructive_and_keeps_normalized_transform(identity_test_context) -> None:
+    client = identity_test_context["client"]
+    admin = await auth_headers(client, "first-admin@example.com", "correct-password")
+    source_response = await client.post(
+        "/api/v1/assets", headers=admin, data={"category": "garment"},
+        files={"file": ("front-back.png", PNG, "image/png")},
+    )
+    source = source_response.json()
+    transform = {
+        "coordinate_space": "normalized_0_1",
+        "crop": {"x": 0.0, "y": 0.0, "width": 0.5, "height": 1.0},
+        "transform": {"mode": "crop", "crop": {"x": 0.0, "y": 0.0, "width": 0.5, "height": 1.0}, "eraseStrokes": []},
+        "provider_edit_mask": False,
+    }
+    derived_response = await client.post(
+        "/api/v1/assets/garment-references", headers=admin,
+        data={
+            "source_asset_id": source["id"], "garment_view": "front", "transform_type": "crop",
+            "transform_metadata": __import__("json").dumps(transform),
+        },
+        files={"file": ("front-reference.png", PNG, "image/png")},
+    )
+    assert derived_response.status_code == 201, derived_response.text
+    derived = derived_response.json()
+    assert derived["category"] == "garment_reference"
+    assert derived["source_asset_id"] == source["id"]
+    assert derived["metadata_json"]["garment_view"] == "front"
+    assert derived["metadata_json"]["provider_edit_mask"] is False
+    assert (await client.get(f"/api/v1/assets/{source['id']}", headers=admin)).status_code == 200
+
+
+async def test_garment_reference_accepts_compact_erase_metadata_over_legacy_limit(identity_test_context) -> None:
+    client = identity_test_context["client"]
+    admin = await auth_headers(client, "first-admin@example.com", "correct-password")
+    source = (await client.post(
+        "/api/v1/assets", headers=admin, data={"category": "garment"},
+        files={"file": ("source.png", PNG, "image/png")},
+    )).json()
+    points = [{"x": round(index / 9000, 6), "y": round((index % 250) / 250, 6)} for index in range(9000)]
+    transform_json = __import__("json").dumps({
+        "coordinate_space": "normalized_0_1",
+        "transform_mode": "crop",
+        "crop": {"x": 0, "y": 0, "width": 1, "height": 1},
+        "erase_strokes": [{"radius": 0.025, "points": points}],
+        "provider_edit_mask": False,
+    })
+    assert 200000 < len(transform_json) < 1000000
+    response = await client.post(
+        "/api/v1/assets/garment-references", headers=admin,
+        data={
+            "source_asset_id": source["id"], "garment_view": "front", "transform_type": "crop_mask",
+            "transform_metadata": transform_json,
+        },
+        files={"file": ("front-reference.png", PNG, "image/png")},
+    )
+    assert response.status_code == 201, response.text
+    assert len(response.json()["metadata_json"]["erase_strokes"][0]["points"]) == 9000
 
 
 async def test_assets_are_tenant_isolated(identity_test_context) -> None:
@@ -232,6 +305,25 @@ async def test_project_asset_links_sort_mixed_datetimes_and_retry_idempotently(i
     assert retried.status_code == 201, retried.text
     assert len(retried.json()["assets"]) == 2
     assert retried.json()["assets"][0]["display_name"] == "模板一（重试）"
+
+
+async def test_compact_project_asset_link_does_not_serialize_entire_project(identity_test_context) -> None:
+    client = identity_test_context["client"]
+    headers = await auth_headers(client, "first-admin@example.com", "correct-password")
+    asset = (await upload(client, headers, filename="reference.png")).json()
+    project = (await client.post("/api/v1/projects", headers=headers, json={
+        "project_type": "batch_tryon", "name": "Compact links", "draft": {},
+    })).json()
+    linked = await client.post(f"/api/v1/projects/{project['id']}/asset-links", headers=headers, json={
+        "asset_id": asset["id"], "role": "garment_reference.front", "sort_order": 0,
+        "display_name": "Front reference",
+    })
+    assert linked.status_code == 201, linked.text
+    assert linked.json()["asset_id"] == asset["id"]
+    assert linked.json()["role"] == "garment_reference.front"
+    assert "assets" not in linked.json()
+    detail = (await client.get(f"/api/v1/projects/{project['id']}", headers=headers)).json()
+    assert any(item["id"] == linked.json()["id"] for item in detail["assets"])
 
 
 async def test_projects_are_tenant_isolated_and_viewer_read_only(identity_test_context) -> None:

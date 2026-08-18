@@ -56,7 +56,7 @@ class OpenAICompatibleProvider(BaseImageProvider):
                 request_body = {key: value for key, value in request_body.items() if key in allowed_fields}
         endpoint = str(config.get("edits_endpoint" if is_edit else "images_endpoint", "/images/edits" if is_edit else "/images/generations"))
         url = provider_url(base_url, endpoint)
-        timeout = httpx.Timeout(self.settings.provider_request_timeout_seconds)
+        timeout = _provider_timeout(self.settings)
         try:
             async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
                 if is_edit:
@@ -139,12 +139,16 @@ class OpenAICompatibleProvider(BaseImageProvider):
                 {"role": "user", "content": user_content},
             ],
             "stream": False,
-            "response_format": {"type": "json_object"},
         }
+        response_format = payload.get("response_format", "json_object")
+        if response_format == "json_object":
+            request_body["response_format"] = {"type": "json_object"}
+        elif isinstance(response_format, dict):
+            request_body["response_format"] = response_format
         if payload.get("temperature") is not None:
             request_body["temperature"] = payload["temperature"]
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(self.settings.provider_request_timeout_seconds), follow_redirects=False) as client:
+            async with httpx.AsyncClient(timeout=_provider_timeout(self.settings), follow_redirects=False) as client:
                 response = await client.post(url, headers={"Authorization": f"Bearer {api_key}"}, json=request_body)
         except httpx.TimeoutException as error:
             raise ProviderError("provider.timeout", "Upstream provider timed out", retryable=True) from error
@@ -174,7 +178,7 @@ class OpenAICompatibleProvider(BaseImageProvider):
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             raise ProviderError("provider.invalid_output_url", "Upstream returned an invalid output URL")
         try:
-            async with httpx.AsyncClient(timeout=self.settings.provider_request_timeout_seconds, follow_redirects=False) as client:
+            async with httpx.AsyncClient(timeout=_provider_timeout(self.settings), follow_redirects=False) as client:
                 response = await client.get(url)
                 response.raise_for_status()
         except httpx.HTTPError as error:
@@ -201,6 +205,15 @@ def _output(content: bytes, mime_type: str, index: int) -> ProviderOutput:
     if not content:
         raise ProviderError("provider.empty_result", "Upstream provider returned an empty image")
     return ProviderOutput(content, mime_type, f"generated-{index + 1}.png")
+
+
+def _provider_timeout(settings: Settings) -> httpx.Timeout:
+    return httpx.Timeout(
+        connect=settings.provider_connect_timeout_seconds,
+        read=settings.provider_request_timeout_seconds,
+        write=min(120.0, settings.provider_request_timeout_seconds),
+        pool=settings.provider_connect_timeout_seconds,
+    )
 
 
 def _error_message(response: httpx.Response) -> str:

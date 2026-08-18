@@ -24,6 +24,16 @@ def reinforce_delivery_prompt(payload: dict[str, object]) -> dict[str, object]:
     if not prompt or DELIVERY_PROMPT_MARKER in prompt:
         return payload
 
+    contract = delivery_prompt_contract(payload)
+    if not contract:
+        return payload
+    payload["prompt"] = f"{prompt}\n\n{contract}"
+    return payload
+
+
+def delivery_prompt_contract(payload: dict[str, object]) -> str:
+    """Build the deterministic technical contract appended to business prompts."""
+
     width = _positive_int(payload.get("requested_width"))
     height = _positive_int(payload.get("requested_height"))
     target_ratio = str(payload.get("aspect_ratio") or "auto")
@@ -32,9 +42,9 @@ def reinforce_delivery_prompt(payload: dict[str, object]) -> dict[str, object]:
     output_format = str(payload.get("output_format") or "png").strip().upper()
     compression = _compression(payload.get("output_compression"))
     if not width or not height:
-        return payload
+        return ""
 
-    contract = (
+    return (
         f"{DELIVERY_PROMPT_MARKER}: The final delivery canvas is exactly {width}x{height} "
         f"pixels with a {target_ratio} aspect ratio. The upstream working canvas uses the verified "
         f"{provider_ratio} aspect ratio. Requested rendering quality is {quality.upper()}; produce "
@@ -45,8 +55,6 @@ def reinforce_delivery_prompt(payload: dict[str, object]) -> dict[str, object]:
         "letterboxing, pillarboxing, frames, or artificial blank margins. Preserve natural perspective "
         "and avoid stretching."
     )
-    payload["prompt"] = f"{prompt}\n\n{contract}"
-    return payload
 
 
 def render_delivery_output(output: ProviderOutput, payload: dict[str, object]) -> ProviderOutput:

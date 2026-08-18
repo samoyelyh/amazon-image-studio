@@ -1,6 +1,8 @@
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError
 
+from app.api.auth import _login_with_deadlock_retry
 from app.models.identity import AuditLog, LoginAudit, OrganizationMember, RefreshToken, Role, User
 
 
@@ -8,6 +10,34 @@ async def login(client: AsyncClient, email: str, password: str) -> dict[str, obj
     response = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
     assert response.status_code == 200, response.text
     return response.json()
+
+
+async def test_login_retries_transient_mysql_deadlock() -> None:
+    expected = object()
+
+    class FakeSession:
+        rollback_count = 0
+
+        async def rollback(self) -> None:
+            self.rollback_count += 1
+
+    class FakeService:
+        call_count = 0
+
+        async def login(self, *_args):
+            self.call_count += 1
+            if self.call_count == 1:
+                original = Exception(1213, "Deadlock found when trying to get lock")
+                raise OperationalError("INSERT INTO refresh_tokens", {}, original)
+            return expected
+
+    service = FakeService()
+    session = FakeSession()
+    result = await _login_with_deadlock_retry(service, session, None, "user@example.com", "password", None)
+
+    assert result is expected
+    assert service.call_count == 2
+    assert session.rollback_count == 1
 
 
 async def test_login_me_and_refresh_rotation(identity_test_context) -> None:
@@ -36,7 +66,7 @@ async def test_login_me_and_refresh_rotation(identity_test_context) -> None:
         assert tokens[0].token_hash != old_refresh
 
 
-async def test_refresh_token_reuse_revokes_the_whole_family(identity_test_context) -> None:
+async def test_concurrent_refresh_rotation_requests_do_not_revoke_the_whole_family(identity_test_context) -> None:
     client = identity_test_context["client"]
     await login(client, "first-admin@example.com", "correct-password")
     reused_secret = client.cookies["ais_refresh_token"]
@@ -48,6 +78,27 @@ async def test_refresh_token_reuse_revokes_the_whole_family(identity_test_contex
         transport=ASGITransport(app=identity_test_context["app"]),
         base_url="http://test",
         cookies={"ais_refresh_token": reused_secret},
+    ) as replay_client:
+        replay = await replay_client.post("/api/v1/auth/refresh")
+    assert replay.status_code == 409
+    assert replay.json()["error"]["code"] == "auth.refresh_race"
+
+    newest_after_replay = await client.post("/api/v1/auth/refresh")
+    assert newest_after_replay.status_code == 200
+
+
+async def test_refresh_token_reuse_from_another_client_revokes_the_whole_family(identity_test_context) -> None:
+    client = identity_test_context["client"]
+    await login(client, "first-admin@example.com", "correct-password")
+    reused_secret = client.cookies["ais_refresh_token"]
+    successful_refresh = await client.post("/api/v1/auth/refresh")
+    assert successful_refresh.status_code == 200
+
+    async with AsyncClient(
+        transport=ASGITransport(app=identity_test_context["app"]),
+        base_url="http://test",
+        cookies={"ais_refresh_token": reused_secret},
+        headers={"User-Agent": "different-client"},
     ) as replay_client:
         replay = await replay_client.post("/api/v1/auth/refresh")
     assert replay.status_code == 401

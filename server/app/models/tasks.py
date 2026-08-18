@@ -23,6 +23,7 @@ class ApiKeyStatus(str, Enum):
 
 class JobStatus(str, Enum):
     QUEUED = "queued"
+    WAITING_FOR_RESOURCE = "waiting_for_resource"
     DISPATCHING = "dispatching"
     RUNNING = "running"
     RETRY_WAITING = "retry_waiting"
@@ -33,13 +34,67 @@ class JobStatus(str, Enum):
 
 class BatchStatus(str, Enum):
     DRAFT = "draft"
+    VALIDATING = "validating"
+    READY = "ready"
     QUEUED = "queued"
     RUNNING = "running"
+    REVIEW = "review"
+    COMPLETED = "completed"
     PAUSED = "paused"
     PARTIALLY_SUCCEEDED = "partially_succeeded"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+class BatchTryOnPromptPreset(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "batch_tryon_prompt_presets"
+    __table_args__ = (
+        Index("ix_batch_tryon_prompt_presets_scope", "organization_id", "owner_user_id", "enabled", "sort_order"),
+    )
+
+    organization_id: Mapped[str | None] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True)
+    owner_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    scope: Mapped[str] = mapped_column(String(20), nullable=False, default="system")
+    template_type: Mapped[str] = mapped_column(String(60), nullable=False)
+    label: Mapped[str] = mapped_column(String(160), nullable=False)
+    analysis_prompt_template: Mapped[str] = mapped_column(Text, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    is_system_preset: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+
+class BatchTryOnTemplatePrompt(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "batch_tryon_template_prompts"
+    __table_args__ = (
+        UniqueConstraint("workflow_job_id", "client_item_id", name="uq_batch_tryon_template_prompt_workflow_item"),
+        Index("ix_batch_tryon_template_prompts_org_workflow", "organization_id", "workflow_job_id"),
+        Index("ix_batch_tryon_template_prompts_workflow_job", "workflow_job_id"),
+        Index("ix_batch_tryon_template_prompts_analysis_job", "analysis_job_id"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    workflow_job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False)
+    template_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    garment_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    client_item_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    template_type: Mapped[str] = mapped_column(String(60), nullable=False)
+    preset_id: Mapped[str | None] = mapped_column(ForeignKey("batch_tryon_prompt_presets.id", ondelete="SET NULL"), nullable=True)
+    template_asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False)
+    first_garment_asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False)
+    font_reference_asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=True)
+    analysis_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+    analysis_prompt_used: Mapped[str] = mapped_column(Text, nullable=False)
+    generated_final_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    edited_final_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prompt_status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    prompt_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
 
 
 class Provider(UuidPrimaryKeyMixin, TimestampMixin, Base):
@@ -164,12 +219,20 @@ class JobBatch(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "job_batches"
     __table_args__ = (
         Index("ix_job_batches_org_status_created", "organization_id", "status", "created_at"),
+        Index(
+            "ix_job_batches_history_lookup",
+            "organization_id", "workspace_type", "operation_code", "project_id", "created_at",
+        ),
         Index("uq_job_batches_org_idempotency", "organization_id", "idempotency_key", unique=True),
     )
 
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    parent_batch_id: Mapped[str | None] = mapped_column(ForeignKey("job_batches.id", ondelete="SET NULL"), nullable=True)
     workspace_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    batch_kind: Mapped[str] = mapped_column(String(30), default="production", nullable=False)
+    workspace_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    workspace_config_json: Mapped[dict[str, object]] = mapped_column("workspace_config", JSON, default=dict, nullable=False)
     operation_code: Mapped[str] = mapped_column(String(120), nullable=False)
     name: Mapped[str | None] = mapped_column(String(160), nullable=True)
     model_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -190,12 +253,37 @@ class JobBatch(UuidPrimaryKeyMixin, TimestampMixin, Base):
     updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
 
 
+class BatchGarmentStyleProfile(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "batch_garment_style_profiles"
+    __table_args__ = (
+        UniqueConstraint("batch_id", "profile_key", name="uq_batch_garment_style_profile_key"),
+        Index("ix_batch_garment_style_profiles_org_batch", "organization_id", "batch_id"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    batch_id: Mapped[str] = mapped_column(ForeignKey("job_batches.id", ondelete="CASCADE"), nullable=False)
+    source_sample_asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False)
+    profile_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    category: Mapped[str] = mapped_column(String(120), default="apparel", nullable=False)
+    structure_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    view_rules_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    preservation_rules_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    covered_garment_asset_ids_json: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    first_sample_observation_json: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    analysis_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    analysis_version: Mapped[str] = mapped_column(String(80), default="batch-style-v1", nullable=False)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+
 class Job(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "jobs"
     __table_args__ = (
         UniqueConstraint("organization_id", "idempotency_key"),
         Index("ix_jobs_org_status_created", "organization_id", "status", "created_at"),
         Index("ix_jobs_status_retry", "status", "next_retry_at"),
+        Index("ix_jobs_status_dispatch", "status", "next_dispatch_at"),
+        Index("ix_jobs_diagnostic_run_id", "diagnostic_run_id"),
+        Index("ix_jobs_load_test_run_id", "load_test_run_id"),
         Index("ix_jobs_batch_client_item", "batch_id", "client_item_id"),
     )
 
@@ -216,6 +304,7 @@ class Job(UuidPrimaryKeyMixin, TimestampMixin, Base):
     idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    technical_retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False)
     celery_task_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     selected_pool_id: Mapped[str | None] = mapped_column(ForeignKey("resource_pools.id", ondelete="SET NULL"), nullable=True)
@@ -226,6 +315,10 @@ class Job(UuidPrimaryKeyMixin, TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_dispatch_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    diagnostic_run_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    load_test_run_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    last_error_type: Mapped[str | None] = mapped_column(String(60), nullable=True)
     cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     generation_duration_ms: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
@@ -239,6 +332,7 @@ class BatchTryOnReviewItem(UuidPrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("batch_id", "client_item_id", name="uq_batch_tryon_review_batch_client"),
         Index("ix_batch_tryon_review_org_batch", "organization_id", "batch_id"),
         Index("ix_batch_tryon_review_org_status", "organization_id", "review_status"),
+        Index("ix_batch_tryon_review_batch_template", "batch_id", "template_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
@@ -246,6 +340,7 @@ class BatchTryOnReviewItem(UuidPrimaryKeyMixin, TimestampMixin, Base):
     client_item_id: Mapped[str] = mapped_column(String(120), nullable=False)
     garment_asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False)
     model_asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False)
+    template_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     source_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     template_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     preset_summary: Mapped[str | None] = mapped_column(String(1000), nullable=True)
@@ -281,6 +376,7 @@ class BatchTryOnVersion(UuidPrimaryKeyMixin, Base):
     retry_mode: Mapped[str] = mapped_column(String(30), default="initial", nullable=False)
     generation_status: Mapped[str] = mapped_column(String(30), default="queued", nullable=False)
     review_status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reviewed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -311,6 +407,30 @@ class JobAttempt(UuidPrimaryKeyMixin, Base):
     provider_responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     phase_timings_json: Mapped[dict[str, object]] = mapped_column("phase_timings", JSON, default=dict, nullable=False)
+
+
+class JobStatusEvent(UuidPrimaryKeyMixin, Base):
+    __tablename__ = "job_status_events"
+    __table_args__ = (
+        Index("ix_job_status_events_job_created", "job_id", "created_at"),
+        Index("ix_job_status_events_diagnostic_run", "diagnostic_run_id", "created_at"),
+        Index("ix_job_status_events_load_test_run", "load_test_run_id", "created_at"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False)
+    from_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    to_status: Mapped[str] = mapped_column(String(30), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    provider_id: Mapped[str | None] = mapped_column(ForeignKey("providers.id", ondelete="SET NULL"), nullable=True)
+    resource_pool_id: Mapped[str | None] = mapped_column(ForeignKey("resource_pools.id", ondelete="SET NULL"), nullable=True)
+    api_key_id: Mapped[str | None] = mapped_column(ForeignKey("api_keys.id", ondelete="SET NULL"), nullable=True)
+    attempt_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    diagnostic_run_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    load_test_run_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
 
 class ApiKeyUsageStat(UuidPrimaryKeyMixin, Base):

@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { resolveModelCode, submitServerBatch, submitServerJob } from './jobsApi'
+import {
+  getServerJobsByIds, hardDeleteServerBatch, isServerBatchCancelling, isWorkspaceShellBatch,
+  resolveModelCode, submitServerBatch, submitServerJob,
+} from './jobsApi'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -8,6 +11,12 @@ function jsonResponse(value: unknown, status = 200) {
 }
 
 describe('server jobs API', () => {
+  it('distinguishes workspace shells from cancellable task batches', () => {
+    expect(isWorkspaceShellBatch({ batch_kind: 'workspace' })).toBe(true)
+    expect(isWorkspaceShellBatch({ batch_kind: 'production' })).toBe(false)
+    expect(isServerBatchCancelling({ status: 'running', cancel_requested_jobs: 1 })).toBe(true)
+    expect(isServerBatchCancelling({ status: 'cancelled', cancel_requested_jobs: 1 })).toBe(false)
+  })
   it('selects a server-side model pool without exposing any API key', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([{
       id: 'pool-1', model_code: 'image-standard', code: 'default', name: 'Default',
@@ -41,5 +50,31 @@ describe('server jobs API', () => {
     })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(String(fetchMock.mock.calls[0][0])).toContain('/job-batches')
+  })
+
+  it('polls regenerated jobs by stable task ids instead of the latest batch id', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([
+      { id: 'job-old-batch-1', batch_id: 'historical-batch', status: 'running' },
+      { id: 'job-old-batch-2', batch_id: 'historical-batch', status: 'queued' },
+    ]))
+    vi.stubGlobal('fetch', fetchMock)
+    await getServerJobsByIds(['job-old-batch-1', 'job-old-batch-2'])
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/jobs/batch-status')
+    expect(JSON.parse(init.body as string)).toEqual({
+      job_ids: ['job-old-batch-1', 'job-old-batch-2'],
+    })
+  })
+
+  it('requires the explicit permanent-delete confirmation in the hard-delete request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      deleted_batches: 1, deleted_jobs: 3, deleted_outputs: 3, deleted_assets: 3,
+      retained_shared_assets: 0, storage_delete_failures: 0,
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    await hardDeleteServerBatch('batch-1')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/job-batches/batch-1/hard?confirmation=PERMANENT_DELETE')
+    expect(init.method).toBe('DELETE')
   })
 })

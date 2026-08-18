@@ -21,14 +21,55 @@ export async function downloadServerOutput(output: JobOutput) {
   )
 }
 
-export async function downloadAuthenticatedFile(url: string, filename: string) {
-  saveBlob(await (await authenticatedFetchResponse(url)).blob(), filename)
+function responseFilename(response: Response): string | null {
+  const header = response.headers.get('Content-Disposition')
+  if (!header) return null
+  const encoded = header.match(/filename\\*=UTF-8''([^;]+)/i)?.[1]
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded)
+    } catch {
+      // Fall through to the ASCII filename.
+    }
+  }
+  return header.match(/filename=\"?([^\";]+)\"?/i)?.[1] ?? null
+}
+
+export async function downloadAuthenticatedFile(url: string, filename?: string, init: RequestInit = {}) {
+  const response = await authenticatedFetchResponse(url, init)
+  saveBlob(await response.blob(), responseFilename(response) || filename || 'download')
 }
 
 export async function downloadBatchTryOnResultsZip(batchId: string) {
   await downloadAuthenticatedFile(
     `/job-batches/${batchId}/batch-tryon-results.zip`,
     'batch-tryon-results.zip',
+  )
+}
+
+export async function downloadBatchTryOnTemplateZip(
+  batchId: string,
+  templateId: string,
+  scope: 'approved' | 'all_succeeded' = 'approved',
+) {
+  await downloadAuthenticatedFile(
+    `/batch-tryon/batches/${encodeURIComponent(batchId)}/templates/${encodeURIComponent(templateId)}/download?scope=${scope}`,
+    'batch-tryon-template-results.zip',
+  )
+}
+
+export async function downloadSelectedBatchTryOnTemplateZip(
+  templateId: string,
+  reviewItemIds: string[],
+  scope: 'approved' | 'all_succeeded' = 'approved',
+) {
+  await downloadAuthenticatedFile(
+    `/batch-tryon/templates/${encodeURIComponent(templateId)}/download`,
+    'batch-tryon-template-results.zip',
+    {
+      method: 'POST',
+      body: JSON.stringify({ item_ids: reviewItemIds, scope }),
+    },
   )
 }
 

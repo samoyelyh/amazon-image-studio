@@ -36,11 +36,12 @@ from app.services.resource_pool_service import current_concurrency, masked_key
 from app.services.provider_test_service import probe_provider_models, probe_provider_operation
 from app.services.asset_service import asset_content_url
 from app.services.storage_service import StorageService, get_storage_service
+from app.services.generation_resource_diagnostics_service import generation_resource_diagnostics
 
 
 router = APIRouter(prefix="/admin", tags=["platform administration"])
 UTC = timezone.utc
-ACTIVE_JOB_STATUSES = {"queued", "dispatching", "running", "retry_waiting"}
+ACTIVE_JOB_STATUSES = {"queued", "waiting_for_resource", "dispatching", "running", "retry_waiting"}
 QUEUE_NAMES = ("planning_queue", "listing_queue", "batch_tryon_queue", "aplus_queue", "maintenance")
 
 
@@ -448,28 +449,54 @@ async def jobs(
 
 @router.get("/queues", response_model=AdminQueuePage)
 async def queues(
-    session: AsyncSession = Depends(get_db_session), redis: Redis = Depends(get_redis_client),
+    session: AsyncSession = Depends(get_db_session),
+    redis: Redis = Depends(get_redis_client),
+    settings: Settings = Depends(get_settings),
     _: Principal = _platform_admin(),
 ) -> AdminQueuePage:
     items = []
     redis_ok = True
-    for queue in QUEUE_NAMES:
-        try:
-            depth = int(await redis.llen(queue))
-        except (AttributeError, OSError, RuntimeError, RedisError):
-            depth = 0
-            redis_ok = False
-        counts = dict((await session.execute(
-            select(Job.status, func.count()).where(Job.queue_name == queue).group_by(Job.status)
-        )).all())
-        items.append(AdminQueueResponse(
-            name=queue, broker_depth=depth,
-            queued_jobs=int(counts.get("queued", 0)) + int(counts.get("dispatching", 0)),
-            running_jobs=int(counts.get("running", 0)),
-            retry_waiting_jobs=int(counts.get("retry_waiting", 0)),
-            failed_jobs=int(counts.get("failed", 0)),
-        ))
+    broker = Redis.from_url(settings.resolved_celery_broker_url, decode_responses=True)
+    close_broker = True
+    try:
+        await broker.ping()
+    except (AttributeError, OSError, RuntimeError, RedisError):
+        await broker.aclose()
+        broker = redis
+        close_broker = False
+        redis_ok = False
+    try:
+        for queue in QUEUE_NAMES:
+            try:
+                depth = int(await broker.llen(queue))
+            except (AttributeError, OSError, RuntimeError, RedisError):
+                depth = 0
+                redis_ok = False
+            counts = dict((await session.execute(
+                select(Job.status, func.count()).where(Job.queue_name == queue).group_by(Job.status)
+            )).all())
+            items.append(AdminQueueResponse(
+                name=queue, broker_depth=depth,
+                queued_jobs=int(counts.get("queued", 0)) + int(counts.get("dispatching", 0)),
+                waiting_for_resource_jobs=int(counts.get("waiting_for_resource", 0)),
+                running_jobs=int(counts.get("running", 0)),
+                retry_waiting_jobs=int(counts.get("retry_waiting", 0)),
+                failed_jobs=int(counts.get("failed", 0)),
+            ))
+    finally:
+        if close_broker:
+            await broker.aclose()
     return AdminQueuePage(items=items, redis_ok=redis_ok, checked_at=datetime.now(UTC))
+
+
+@router.get("/generation-resources")
+async def generation_resources(
+    session: AsyncSession = Depends(get_db_session),
+    redis: Redis = Depends(get_redis_client),
+    settings: Settings = Depends(get_settings),
+    _: Principal = _platform_admin(),
+) -> dict[str, object]:
+    return await generation_resource_diagnostics(session, redis, settings)
 
 
 @router.get("/generated-outputs/{output_id}/diagnostics")

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { addImageFromFile, ensureImageCached, submitTask, useStore } from '../store'
+import { useImagePaste } from '../hooks/useImagePaste'
 import { getAmazonPlannerProfile, isOfficialDeepSeekPlannerProfile, validateApiProfile } from '../lib/apiProfiles'
 import {
   DEFAULT_AMAZON_PROMPT_DRAFT,
@@ -67,6 +68,18 @@ import {
 } from '../lib/styleReferences'
 import { DEFAULT_PARAMS } from '../types'
 import type { AmazonPlannerSession, CustomStyleReference, StyleReferenceEditState } from '../types'
+import {
+  A_PLUS_MODE_CONFIG,
+  buildAPlusGenerationPayload,
+  buildAPlusProductBrief,
+  buildAPlusWorkbenchSpecs,
+  createDefaultAPlusProjectState,
+  getAPlusModeFromContentType,
+  getAPlusModuleBaseId,
+  type APlusMode,
+  type APlusProjectState,
+} from '../lib/aPlusWorkbenchModules'
+import APlusModernWorkspace from './APlusModernWorkspace'
 import StyleReferenceEditorModal from './StyleReferenceEditorModal'
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, CopyIcon, EditIcon, EyeIcon, HistoryIcon, PhotoIcon, PlusIcon, RefreshIcon, TrashIcon } from './icons'
 
@@ -372,6 +385,10 @@ interface AmazonPlannerProps {
   mode: AmazonPlannerMode
 }
 
+function shouldUseModernAPlus(mode: AmazonPlannerMode): boolean {
+  return mode === 'aplus'
+}
+
 export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
   const prompt = useStore((s) => s.prompt)
   const inputImages = useStore((s) => s.inputImages)
@@ -430,8 +447,30 @@ export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
   const [referencePayloadNotice, setReferencePayloadNotice] = useState('')
   const [actionProgress, setActionProgress] = useState<PlannerActionProgressMap>({})
   const [mobileActionDock, setMobileActionDock] = useState<MobileActionDock>(null)
+  const [isGeneratingAPlusSet, setIsGeneratingAPlusSet] = useState(false)
+  const [aPlusGenerationProgress, setAPlusGenerationProgress] = useState({ current: 0, total: 0 })
+  const [aPlusProjectState, setAPlusProjectState] = useState<APlusProjectState>(() => createDefaultAPlusProjectState('standard'))
   const resolutionTier: SizeTier = resolution === '4k' ? '4K' : '2K'
   const marketplace = useMemo(() => getAmazonMarketplace(marketplaceId), [marketplaceId])
+  const modernAPlusSpecs = useMemo(
+    () => buildAPlusWorkbenchSpecs(
+      aPlusProjectState.selectedModuleIds,
+      aPlusProjectState.moduleSizes,
+      A_PLUS_MODE_CONFIG[aPlusProjectState.mode].contentType,
+      aPlusProjectState.moduleExtraRequirements,
+    ),
+    [aPlusProjectState],
+  )
+  const modernAPlusPayload = useMemo(() => buildAPlusGenerationPayload({
+    mode: aPlusProjectState.mode,
+    site: marketplace.shortLabel,
+    language: marketplace.locale,
+    quality: resolution,
+    outputFormat: aPlusProjectState.outputFormat,
+    outputCompression: aPlusProjectState.outputCompression,
+    instanceIds: aPlusProjectState.selectedModuleIds,
+    specs: modernAPlusSpecs,
+  }), [aPlusProjectState, marketplace.locale, marketplace.shortLabel, modernAPlusSpecs, resolution])
   const listingSlotRange = formatAmazonListingSlotRange(listingImageCount)
   const aPlusSpecs = useMemo(
     () => normalizeAPlusModuleSpecs(aPlusType, aPlusModuleSpecsByType[aPlusType]),
@@ -669,7 +708,13 @@ export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
       mode: overrides.mode ?? plannerMode,
       marketplaceId: overrides.marketplaceId ?? marketplaceId,
       aPlusType: overrides.aPlusType ?? aPlusType,
+      aPlusMode: overrides.aPlusMode ?? aPlusProjectState.mode,
       resolution: overrides.resolution ?? resolution,
+      aPlusSelectedModuleIds: overrides.aPlusSelectedModuleIds ?? aPlusProjectState.selectedModuleIds,
+      aPlusModuleSizes: overrides.aPlusModuleSizes ?? aPlusProjectState.moduleSizes,
+      aPlusModuleExtraRequirements: overrides.aPlusModuleExtraRequirements ?? aPlusProjectState.moduleExtraRequirements,
+      outputFormat: overrides.outputFormat ?? aPlusProjectState.outputFormat,
+      outputCompression: hasOverride('outputCompression') ? overrides.outputCompression ?? null : aPlusProjectState.outputCompression,
       listingImageCount: overrides.listingImageCount ?? listingImageCount,
       aPlusModuleSpecs: hasOverride('aPlusModuleSpecs')
         ? overrides.aPlusModuleSpecs
@@ -1056,7 +1101,11 @@ export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
     if (reference?.imageId) setLightboxImageId(reference.imageId, [reference.imageId])
   }
 
-  const applyPlannerResult = (result: PlannerApiResult, sourceLabel: string) => {
+  const applyPlannerResult = (
+    result: PlannerApiResult,
+    sourceLabel: string,
+    requestedAPlusSpecs?: AmazonAPlusModuleSpec[],
+  ) => {
     const resultMarketplaceId = normalizeAmazonMarketplaceId(result.marketplaceId)
     const firstPlan = result.plans[0]
     const nextDraft = {
@@ -1099,8 +1148,16 @@ export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
       id: createPlannerSessionId(),
       mode: result.mode,
       marketplaceId: resultMarketplaceId,
+      aPlusMode: aPlusProjectState.mode,
       listingImageCount,
-      aPlusModuleSpecs: getAPlusModuleSpecsForSession(aPlusModuleSpecsByType),
+      aPlusSelectedModuleIds: aPlusProjectState.selectedModuleIds,
+      aPlusModuleSizes: aPlusProjectState.moduleSizes,
+      aPlusModuleExtraRequirements: aPlusProjectState.moduleExtraRequirements,
+      outputFormat: aPlusProjectState.outputFormat,
+      outputCompression: aPlusProjectState.outputCompression,
+      aPlusModuleSpecs: requestedAPlusSpecs
+        ? { ...getAPlusModuleSpecsForSession(aPlusModuleSpecsByType), [aPlusType]: requestedAPlusSpecs }
+        : getAPlusModuleSpecsForSession(aPlusModuleSpecsByType),
       draft: toSessionDraft(nextDraft),
       seriesStyleGuides: nextSeriesStyleGuides,
       styleCandidates: [],
@@ -1139,25 +1196,30 @@ export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
     showToast(`${sourceLabel}已生成 ${result.mode === 'aplus' ? result.aPlusPlans.length : result.plans.length} 张图片策划`, 'success')
   }
 
-  const createAiPlan = async () => {
+  const createAiPlan = async (options: {
+    listingTextOverride?: string
+    aPlusModuleSpecsOverride?: AmazonAPlusModuleSpec[]
+    sourceLabel?: string
+  } = {}): Promise<PlannerApiResult | undefined> => {
     if (plannerAbortControllerRef.current) {
       showToast('AI 策划正在进行中', 'info')
-      return
+      return undefined
     }
-    if (!listingText.trim()) {
+    const effectiveListingText = options.listingTextOverride?.trim() || listingText.trim()
+    if (!effectiveListingText) {
       showToast('请先粘贴标题和五点描述', 'error')
-      return
+      return undefined
     }
 
     if (runtimeConfig.isStandalone && !plannerProfile) {
       setPlannerError('未选择支持 Chat Completions 或 Responses API 的 AI 策划配置。\n\n请在设置 -> API 中创建或选择一个 Chat Completions 配置，例如 DeepSeek 文本模型；生图配置继续使用 Images API，不要把 gpt-image-2 用作策划模型。')
       showToast('AI 策划配置缺失', 'error')
-      return
+      return undefined
     }
     if (runtimeConfig.isStandalone && plannerProfileValidation) {
       setPlannerError(`AI 策划配置「${plannerProfile?.name || '未选择'}」不完整：${plannerProfileValidation}`)
       showToast('AI 策划配置不完整', 'error')
-      return
+      return undefined
     }
 
     const controller = new AbortController()
@@ -1168,26 +1230,34 @@ export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
       const currentMarketplaceId = marketplaceId
       const referencePayload = await prepareReferencePayloadForRequest(inputImages.map((image) => image.dataUrl), controller.signal)
       const plannerOptions = {
-        listingText,
+        listingText: effectiveListingText,
         baseDraft: draft,
         referenceImageDataUrls: referencePayload.dataUrls,
         mode: plannerMode,
         marketplaceId: currentMarketplaceId,
         listingImageCount,
         aPlusType,
-        aPlusModuleSpecs: aPlusSpecs,
+        aPlusMode: aPlusProjectState.mode,
+        aPlusModuleSpecs: options.aPlusModuleSpecsOverride ?? aPlusSpecs,
         aPlusGenerationTier: resolutionTier,
         signal: controller.signal,
       }
       const result = runtimeConfig.isStandalone
         ? await callAmazonPlannerApi({ ...plannerOptions, profile: plannerProfile! })
         : await callServerAmazonPlannerApi(plannerOptions)
-      if (controller.signal.aborted) return
-      applyPlannerResult(result, plannerMode === 'aplus' ? 'A+ AI 策划' : 'AI 策划')
+      if (controller.signal.aborted) return undefined
+      if (effectiveListingText !== listingText) setListingText(effectiveListingText)
+      applyPlannerResult(
+        result,
+        options.sourceLabel ?? (plannerMode === 'aplus' ? 'A+ AI 策划' : 'AI 策划'),
+        options.aPlusModuleSpecsOverride,
+      )
+      return result
     } catch (err) {
       if (controller.signal.aborted || isAbortError(err)) return
       setPlannerError(getPlannerFailureDetail(err))
       showToast('AI 策划失败，请查看详情', 'error')
+      return undefined
     } finally {
       if (plannerAbortControllerRef.current === controller) {
         plannerAbortControllerRef.current = null
@@ -1323,6 +1393,7 @@ export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
     setMarketplaceId(DEFAULT_AMAZON_MARKETPLACE_ID)
     setListingImageCount(DEFAULT_LISTING_IMAGE_COUNT)
     setAPlusModuleSpecsByType({})
+    setAPlusProjectState(createDefaultAPlusProjectState('standard'))
     setImagePlans([])
     setAPlusPlans([])
     setSeriesStyleGuides({ listing: '', aplus: '' })
@@ -1448,8 +1519,23 @@ export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
 
     const restoredAPlusModuleSpecsByType = getSessionAPlusModuleSpecsByType(session)
     const restoredMarketplaceId = getSessionMarketplaceId(session)
+    const restoredAPlusMode = session.aPlusMode ?? getAPlusModeFromContentType(session.aPlusType)
+    const defaultProjectState = createDefaultAPlusProjectState(restoredAPlusMode)
+    const restoredSelectedModuleIds = session.aPlusSelectedModuleIds?.length
+      ? session.aPlusSelectedModuleIds
+      : defaultProjectState.selectedModuleIds
     setMarketplaceId(restoredMarketplaceId)
-    setAPlusType(session.aPlusType)
+    setAPlusType(A_PLUS_MODE_CONFIG[restoredAPlusMode].contentType)
+    setAPlusProjectState({
+      ...defaultProjectState,
+      mode: restoredAPlusMode,
+      selectedModuleIds: restoredSelectedModuleIds,
+      moduleSizes: { ...defaultProjectState.moduleSizes, ...(session.aPlusModuleSizes ?? {}) },
+      moduleExtraRequirements: session.aPlusModuleExtraRequirements ?? {},
+      outputFormat: session.outputFormat ?? 'jpeg',
+      outputCompression: session.outputCompression ?? 90,
+      hasManualComposition: Boolean(session.aPlusSelectedModuleIds?.length),
+    })
     setResolution(session.resolution)
     setListingImageCount(getSessionListingImageCount(session))
     setAPlusModuleSpecsByType(restoredAPlusModuleSpecsByType)
@@ -1472,6 +1558,8 @@ export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
     setActionProgress({})
     const restoredSession = {
       ...session,
+      aPlusMode: restoredAPlusMode,
+      aPlusType: A_PLUS_MODE_CONFIG[restoredAPlusMode].contentType,
       marketplaceId: restoredMarketplaceId,
       listingImageCount: getSessionListingImageCount(session),
       aPlusModuleSpecs: getAPlusModuleSpecsForSession(restoredAPlusModuleSpecsByType),
@@ -1555,6 +1643,263 @@ export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
   const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     await handleFiles(event.target.files || [])
     event.target.value = ''
+  }
+
+  const referencePasteZoneProps = useImagePaste({
+    disabled: atImageLimit,
+    maxFiles: Math.max(0, API_MAX_IMAGES - inputImages.length),
+    onPasteFiles: handleFiles,
+  })
+
+  const prepareModernAPlusPlan = async (
+    specs: AmazonAPlusModuleSpec[],
+    sourceLabel: string,
+  ) => {
+    if (!inputImages.length && !buildAPlusProductBrief(draft, listingText).trim()) {
+      showToast('请先上传产品图或填写产品信息', 'error')
+      return undefined
+    }
+    const effectiveSpecs = specs.length
+      ? specs
+      : modernAPlusSpecs
+    setAPlusModuleSpecsByType((current) => ({ ...current, [aPlusType]: effectiveSpecs }))
+    const brief = buildAPlusProductBrief(draft, listingText)
+      || '请分析上传的商品图片，提炼真实产品信息，并规划适合亚马逊 A+ 展示的内容。'
+    return createAiPlan({
+      listingTextOverride: brief,
+      aPlusModuleSpecsOverride: effectiveSpecs,
+      sourceLabel,
+    })
+  }
+
+  const handleModernAPlusPlan = async (specs: AmazonAPlusModuleSpec[]) => {
+    const result = await prepareModernAPlusPlan(specs, 'A+ AI 策划')
+    return Boolean(result)
+  }
+
+  const handleModernAPlusHelpWrite = async (specs: AmazonAPlusModuleSpec[]) => {
+    const result = await prepareModernAPlusPlan(specs, '商品分析与 A+ 策划')
+    return Boolean(result)
+  }
+
+  const handleModernAPlusProjectStateChange = (nextState: APlusProjectState) => {
+    const compositionChanged = JSON.stringify({
+      ids: aPlusProjectState.selectedModuleIds,
+      sizes: aPlusProjectState.moduleSizes,
+      extra: aPlusProjectState.moduleExtraRequirements,
+    }) !== JSON.stringify({
+      ids: nextState.selectedModuleIds,
+      sizes: nextState.moduleSizes,
+      extra: nextState.moduleExtraRequirements,
+    })
+    setAPlusProjectState(nextState)
+    if (compositionChanged) {
+      setAPlusPlans([])
+      setSelectedAPlusPlanIndex(null)
+    }
+    updateCurrentPlannerSession({
+      aPlusMode: nextState.mode,
+      aPlusSelectedModuleIds: nextState.selectedModuleIds,
+      aPlusModuleSizes: nextState.moduleSizes,
+      aPlusModuleExtraRequirements: nextState.moduleExtraRequirements,
+      outputFormat: nextState.outputFormat,
+      outputCompression: nextState.outputCompression,
+      ...(compositionChanged ? { aPlusPlans: [], selectedAPlusPlanIndex: null } : {}),
+    })
+  }
+
+  const handleModernAPlusModeChange = (mode: APlusMode, nextState: APlusProjectState) => {
+    const config = A_PLUS_MODE_CONFIG[mode]
+    changeAPlusType(config.contentType)
+    setResolution(config.defaultResolution)
+    setAPlusProjectState(nextState)
+    setAPlusPlans([])
+    setSelectedAPlusPlanIndex(null)
+    updateCurrentPlannerSession({
+      aPlusMode: mode,
+      aPlusType: config.contentType,
+      resolution: config.defaultResolution,
+      aPlusSelectedModuleIds: nextState.selectedModuleIds,
+      aPlusModuleSizes: nextState.moduleSizes,
+      aPlusModuleExtraRequirements: nextState.moduleExtraRequirements,
+      aPlusPlans: [],
+      selectedAPlusPlanIndex: null,
+    })
+  }
+
+  const handleModernAPlusResolutionChange = (nextResolution: '2k' | '4k') => {
+    setResolution(nextResolution)
+    updateCurrentPlannerSession({ resolution: nextResolution })
+  }
+
+  const updateModernAPlusPlanPrompt = (index: number, nextPrompt: string) => {
+    setAPlusPlans((current) => {
+      const next = current.map((plan, planIndex) => planIndex === index ? { ...plan, prompt: nextPrompt } : plan)
+      updateCurrentPlannerSession({ aPlusPlans: next })
+      return next
+    })
+  }
+
+  const generateModernAPlusSet = async (specs: AmazonAPlusModuleSpec[], instanceIds: string[]) => {
+    if (isGeneratingAPlusSet) return
+    if (!inputImages.length) {
+      showToast('请先上传至少一张产品图', 'error')
+      return
+    }
+    if (!specs.length) {
+      showToast('请先选择至少一个 A+ 模块', 'error')
+      return
+    }
+    if (inputImages.length >= API_MAX_IMAGES && !selectedStyleReference?.imageId) {
+      showToast(`产品图已达 ${API_MAX_IMAGES} 张，无法再附加风格参考；请删除一张产品图后生成。`, 'error')
+      return
+    }
+
+    setIsGeneratingAPlusSet(true)
+    setAPlusGenerationProgress({ current: 0, total: specs.length })
+    try {
+      let plansToSubmit = aPlusPlansWithSizes
+      if (plansToSubmit.length !== specs.length) {
+        const result = await prepareModernAPlusPlan(specs, 'A+ 模块策划')
+        if (!result) return
+        plansToSubmit = withAPlusGenerationSizes(result.aPlusPlans, resolutionTier)
+      }
+      if (!plansToSubmit.length) {
+        showToast('AI 未返回可生成的 A+ 模块', 'error')
+        return
+      }
+
+      const styleReference = selectedStyleReference
+        ?? await selectStylePreset(DEFAULT_STYLE_PRESET_ID, { silent: true })
+      if (!styleReference?.imageId) {
+        showToast('风格参考加载失败，暂时无法提交 A+ 生成', 'error')
+        return
+      }
+      const visualStyle = {
+        label: styleReference.label,
+        description: styleReference.description,
+        palette: styleReference.palette,
+      }
+
+      let submittedCount = 0
+      for (let index = 0; index < plansToSubmit.length; index += 1) {
+        const plan = plansToSubmit[index]
+        const modulePayload = modernAPlusPayload.modules[index]
+        const generatedPrompt = buildAmazonAPlusPlanPrompt({
+          ...plan,
+          seriesStyleGuide: seriesStyleGuides.aplus,
+          styleReferenceAttached: true,
+          styleDensityMode,
+          marketplaceId,
+          selectedVisualStyle: visualStyle,
+        })
+        // submitTask may clear the shared input after each task. Rehydrate the
+        // same canonical product references so every A+ module receives them.
+        setInputImages(inputImages)
+        setSelectedAPlusPlanIndex(index)
+        setPrompt(generatedPrompt)
+        setPendingTaskCategory({
+          mode: 'prompt-match',
+          prompt: generatedPrompt,
+          category: {
+            productTitle: draft.productTitle.trim(),
+            workflow: 'amazon-aplus',
+            amazonSlot: plan.slot,
+            aPlusType,
+            aPlusMode: aPlusProjectState.mode,
+            marketplaceId,
+            marketplaceLanguage: marketplace.locale,
+            aPlusModuleId: modulePayload?.moduleId ?? getAPlusModuleBaseId(instanceIds[index] ?? ''),
+            aPlusModuleType: modulePayload?.type ?? plan.moduleType,
+            aPlusModuleOrder: index + 1,
+            aPlusModuleCount: plansToSubmit.length,
+            aPlusModuleWidth: modulePayload?.width,
+            aPlusModuleHeight: modulePayload?.height,
+            generationQuality: resolution,
+            outputFormat: aPlusProjectState.outputFormat,
+            outputCompression: aPlusProjectState.outputFormat === 'png' ? null : aPlusProjectState.outputCompression,
+            styleReferenceImageId: styleReference.imageId,
+          },
+        })
+        setParams({
+          size: plan.generationSize,
+          quality: DEFAULT_PARAMS.quality,
+          output_format: aPlusProjectState.outputFormat,
+          output_compression: aPlusProjectState.outputFormat === 'png' ? null : aPlusProjectState.outputCompression,
+          n: 1,
+        })
+        const submitted = await submitTask()
+        if (submitted) {
+          submittedCount += 1
+          markActionProgress(getPlannerActionKey('aplus', index, plan.slot), 'submitted')
+        }
+        setAPlusGenerationProgress({ current: index + 1, total: plansToSubmit.length })
+      }
+      showToast(
+        submittedCount === plansToSubmit.length
+          ? `整套 A+ 已提交，共 ${submittedCount} 个模块`
+          : `已提交 ${submittedCount}/${plansToSubmit.length} 个模块，请查看失败提示`,
+        submittedCount ? 'success' : 'error',
+      )
+    } finally {
+      setIsGeneratingAPlusSet(false)
+    }
+  }
+
+  if (shouldUseModernAPlus(plannerMode)) {
+    return (
+      <>
+        {styleEditor && (
+          <StyleReferenceEditorModal
+            title={styleEditor.title}
+            initialState={styleEditor.initialState}
+            saving={isSavingStyleEditor}
+            onClose={() => setStyleEditor(null)}
+            onSave={(state) => void saveStyleEditor(state)}
+          />
+        )}
+        <APlusModernWorkspace
+          draft={draft}
+          onDraftChange={(field, value) => setDraft((current) => updateDraft(current, field, value))}
+          listingText={listingText}
+          onListingTextChange={setListingText}
+          inputImages={inputImages}
+          onUploadFiles={(files) => handleFiles(files)}
+          onRemoveImage={(id) => {
+            const index = inputImages.findIndex((image) => image.id === id)
+            if (index >= 0) removeInputImage(index)
+            queueMicrotask(() => updateCurrentPlannerSession({ referenceImageIds: useStore.getState().inputImages.map((image) => image.id) }))
+          }}
+          onClearImages={() => {
+            clearInputImages()
+            updateCurrentPlannerSession({ referenceImageIds: [] })
+          }}
+          onPreviewImage={(id) => setLightboxImageId(id, inputImages.map((image) => image.id))}
+          marketplaceId={marketplaceId}
+          onMarketplaceChange={changeMarketplaceId}
+          resolution={resolution}
+          onResolutionChange={handleModernAPlusResolutionChange}
+          projectState={aPlusProjectState}
+          onProjectStateChange={handleModernAPlusProjectStateChange}
+          onModeChange={handleModernAPlusModeChange}
+          selectedStyleLabel={selectedStyleLabel}
+          onOpenApiSettings={() => setShowSettings(true)}
+          plans={aPlusPlansWithSizes}
+          onUpdatePlanPrompt={updateModernAPlusPlanPrompt}
+          onAiPlan={(specs) => handleModernAPlusPlan(specs)}
+          onAiHelpWrite={(specs) => handleModernAPlusHelpWrite(specs)}
+          onGenerateSet={(specs, instanceIds) => generateModernAPlusSet(specs, instanceIds)}
+          isPlanning={isPlanning}
+          isGenerating={isGeneratingAPlusSet}
+          generationProgress={aPlusGenerationProgress}
+          plannerError={plannerError}
+          sessions={plannerSessions}
+          onRestoreSession={restorePlannerSession}
+          onDeleteSession={removePlannerSession}
+          debugPayload={modernAPlusPayload}
+        />
+      </>
+    )
   }
 
   return (
@@ -1774,7 +2119,7 @@ export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
               <div className={`flex flex-wrap items-center gap-2 rounded-xl transition sm:justify-end ${getGuideFocusClass(guideState.target === 'planner-action')}`}>
                 <button
                   type="button"
-                  onClick={createAiPlan}
+                  onClick={() => void createAiPlan()}
                   disabled={isPlanning || Boolean(plannerProfileValidation)}
                   className={`inline-flex h-10 items-center rounded-xl px-4 text-sm font-semibold text-white transition ${isPlanning ? 'cursor-wait bg-gray-400' : plannerProfileValidation ? 'cursor-not-allowed bg-gray-300 dark:bg-white/[0.12]' : 'bg-blue-600 hover:bg-blue-500'} ${guideState.target === 'planner-action' ? 'ring-2 ring-blue-500/25 ring-offset-2 ring-offset-white dark:ring-offset-gray-950' : ''}`}
                 >
@@ -1833,7 +2178,7 @@ export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
             )}
           </div>
 
-          <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-white/[0.08] dark:bg-gray-950">
+          <div {...referencePasteZoneProps} className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-3 outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-950">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">参考图</div>
@@ -1842,7 +2187,7 @@ export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
                     ? `${inputImages.length}/${API_MAX_IMAGES} 张产品参考图${usesStyleReferenceForActivePlan ? `；正式生成时另附 1 张隐藏风格参考图（实际 ${effectiveReferenceCount}/${API_MAX_IMAGES}）` : '，将随生成请求一起发送'}`
                     : usesStyleReferenceForActivePlan
                       ? `未上传产品参考图；正式生成时会附 1 张隐藏风格参考图`
-                      : '建议上传产品实拍、包装或结构参考图'}
+                      : '建议上传产品实拍、包装或结构参考图；点击本区域后可 Ctrl/⌘+V 粘贴'}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -1919,7 +2264,7 @@ export default function AmazonPlanner({ mode }: AmazonPlannerProps) {
               >
                 <PhotoIcon className="h-5 w-5 text-gray-400" />
                 <span className="mt-2 text-sm font-medium text-gray-700 dark:text-gray-200">上传产品参考图</span>
-                <span className="mt-1 text-xs text-gray-400">支持多选、拖到底部输入栏或直接在这里选择文件</span>
+                <span className="mt-1 text-xs text-gray-400">支持多选、拖拽、选择文件，或点击后 Ctrl/⌘+V 粘贴</span>
               </button>
             )}
 

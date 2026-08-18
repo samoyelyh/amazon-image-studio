@@ -8,6 +8,7 @@ from app.db.session import get_db_session
 from app.models.content import ProjectVersion
 from app.schemas.content import (
     ProjectAssetCreateRequest,
+    ProjectAssetLinkMutationResponse,
     ProjectAssetUpdateRequest,
     ProjectCreateRequest,
     ProjectPage,
@@ -55,6 +56,7 @@ async def get_projects(
     return await list_projects(
         session, organization_id=organization_id(principal), project_type=project_type,
         status=project_status, search=search, limit=limit, offset=offset,
+        owner_user_id=principal.user.id,
     )
 
 
@@ -77,7 +79,9 @@ async def add_project(
         metadata={"project_type": payload.project_type},
     )
     await session.commit()
-    return project_response(await get_project(session, org_id, project.id))
+    return project_response(await get_project(
+        session, org_id, project.id, owner_user_id=principal.user.id,
+    ))
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -86,7 +90,10 @@ async def get_project_detail(
     session: AsyncSession = Depends(get_db_session),
     principal: Principal = Depends(require_permissions("projects.read")),
 ) -> ProjectResponse:
-    return project_response(await get_project(session, organization_id(principal), project_id))
+    return project_response(await get_project(
+        session, organization_id(principal), project_id,
+        owner_user_id=principal.user.id,
+    ))
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
@@ -98,7 +105,9 @@ async def update_project(
     principal: Principal = Depends(require_permissions("projects.write")),
 ) -> ProjectResponse:
     org_id = organization_id(principal)
-    project = await get_project(session, org_id, project_id, lock=True)
+    project = await get_project(
+        session, org_id, project_id, lock=True, owner_user_id=principal.user.id,
+    )
     values = payload.model_dump(exclude_unset=True)
     if "name" in values:
         project.name = values["name"].strip()
@@ -113,7 +122,9 @@ async def update_project(
         metadata={"fields": sorted(values)},
     )
     await session.commit()
-    return project_response(await get_project(session, org_id, project.id))
+    return project_response(await get_project(
+        session, org_id, project.id, owner_user_id=principal.user.id,
+    ))
 
 
 @router.get("/{project_id}/versions", response_model=list[ProjectVersionResponse])
@@ -123,7 +134,7 @@ async def get_project_versions(
     principal: Principal = Depends(require_permissions("projects.read")),
 ) -> list[ProjectVersionResponse]:
     org_id = organization_id(principal)
-    await get_project(session, org_id, project_id)
+    await get_project(session, org_id, project_id, owner_user_id=principal.user.id)
     versions = list((await session.scalars(select(ProjectVersion).where(
         ProjectVersion.organization_id == org_id, ProjectVersion.project_id == project_id
     ).order_by(ProjectVersion.version_number.desc()))).all())
@@ -140,6 +151,7 @@ async def add_project_version(
     principal: Principal = Depends(require_permissions("projects.write")),
 ) -> ProjectVersionResponse:
     org_id = organization_id(principal)
+    await get_project(session, org_id, project_id, owner_user_id=principal.user.id)
     version = await create_project_version(
         session, settings, organization_id=org_id, project_id=project_id, user_id=principal.user.id,
         draft=payload.draft, expected_version=payload.expected_version, change_summary=payload.change_summary,
@@ -163,6 +175,7 @@ async def add_project_asset(
     principal: Principal = Depends(require_permissions("projects.write")),
 ) -> ProjectResponse:
     org_id = organization_id(principal)
+    await get_project(session, org_id, project_id, owner_user_id=principal.user.id)
     link = await link_asset(
         session, organization_id=org_id, project_id=project_id, asset_id=payload.asset_id,
         user_id=principal.user.id, role=payload.role, sort_order=payload.sort_order,
@@ -174,7 +187,38 @@ async def add_project_asset(
         metadata={"asset_id": payload.asset_id, "link_id": link.id, "role": payload.role},
     )
     await session.commit()
-    return project_response(await get_project(session, org_id, project_id))
+    return project_response(await get_project(
+        session, org_id, project_id, owner_user_id=principal.user.id,
+    ))
+
+
+@router.post(
+    "/{project_id}/asset-links",
+    response_model=ProjectAssetLinkMutationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_project_asset_compact(
+    project_id: str,
+    payload: ProjectAssetCreateRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("projects.write")),
+) -> ProjectAssetLinkMutationResponse:
+    """Link one asset without serializing the project's entire asset collection."""
+    org_id = organization_id(principal)
+    await get_project(session, org_id, project_id, owner_user_id=principal.user.id)
+    link = await link_asset(
+        session, organization_id=org_id, project_id=project_id, asset_id=payload.asset_id,
+        user_id=principal.user.id, role=payload.role, sort_order=payload.sort_order,
+        display_name=payload.display_name, is_default=payload.is_default,
+    )
+    add_audit_log(
+        session, request=request, actor_user_id=principal.user.id, organization_id=org_id,
+        action="project.asset.link", resource_type="project", resource_id=project_id,
+        metadata={"asset_id": payload.asset_id, "link_id": link.id, "role": payload.role, "compact_response": True},
+    )
+    await session.commit()
+    return ProjectAssetLinkMutationResponse.model_validate(link)
 
 
 @router.patch("/{project_id}/assets/{link_id}", response_model=ProjectResponse)
@@ -187,6 +231,7 @@ async def patch_project_asset(
     principal: Principal = Depends(require_permissions("projects.write")),
 ) -> ProjectResponse:
     org_id = organization_id(principal)
+    await get_project(session, org_id, project_id, owner_user_id=principal.user.id)
     await update_asset_link(
         session,
         organization_id=org_id,
@@ -202,7 +247,9 @@ async def patch_project_asset(
         metadata={"link_id": link_id},
     )
     await session.commit()
-    return project_response(await get_project(session, org_id, project_id))
+    return project_response(await get_project(
+        session, org_id, project_id, owner_user_id=principal.user.id,
+    ))
 
 
 @router.delete("/{project_id}/assets/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -214,6 +261,7 @@ async def remove_project_asset(
     principal: Principal = Depends(require_permissions("projects.write")),
 ) -> None:
     org_id = organization_id(principal)
+    await get_project(session, org_id, project_id, owner_user_id=principal.user.id)
     await unlink_asset(session, organization_id=org_id, project_id=project_id, link_id=link_id)
     add_audit_log(
         session, request=request, actor_user_id=principal.user.id, organization_id=org_id,
@@ -231,6 +279,7 @@ async def remove_project(
     principal: Principal = Depends(require_permissions("projects.delete")),
 ) -> None:
     org_id = organization_id(principal)
+    await get_project(session, org_id, project_id, owner_user_id=principal.user.id)
     await delete_project(session, organization_id=org_id, project_id=project_id, user_id=principal.user.id)
     add_audit_log(
         session, request=request, actor_user_id=principal.user.id, organization_id=org_id,

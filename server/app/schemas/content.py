@@ -10,14 +10,17 @@ UploadAssetCategoryValue = Literal[
     "garment",
     "style_reference",
     "temporary",
+    "print_asset",
 ]
 GeneratedAssetCategoryValue = Literal[
     "listing_output",
     "batch_tryon_output",
     "aplus_output",
+    "material_extract_output",
+    "print_design_output",
 ]
 AssetCategoryValue = UploadAssetCategoryValue | GeneratedAssetCategoryValue
-ProjectTypeValue = Literal["listing", "batch_tryon", "aplus"]
+ProjectTypeValue = Literal["listing", "batch_tryon", "aplus", "print_design"]
 ProjectStatusValue = Literal["draft", "archived"]
 
 
@@ -32,6 +35,8 @@ class AssetResponse(BaseModel):
     width: int
     height: int
     sha256: str
+    source_asset_id: str | None = None
+    metadata_json: dict[str, object] | None = None
     created_by: str
     created_at: datetime
     updated_at: datetime
@@ -70,6 +75,20 @@ class ProjectAssetResponse(BaseModel):
     display_name: str | None
     is_default: bool
     asset: AssetResponse
+    created_at: datetime
+
+
+class ProjectAssetLinkMutationResponse(BaseModel):
+    """Compact response for high-volume asset linking workflows."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    asset_id: str
+    role: str
+    sort_order: int
+    display_name: str | None
+    is_default: bool
     created_at: datetime
 
 

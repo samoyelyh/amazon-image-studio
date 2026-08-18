@@ -6,6 +6,7 @@ export type ApiMode = 'images' | 'responses' | 'chat'
 export type ApiSetupMode = 'standard' | 'single-connection'
 export type AppMode = 'gallery' | 'agent'
 export type GalleryWorkspace = 'listing' | 'aplus'
+export type APlusMode = 'quick' | 'standard' | 'premium'
 export type TaskWorkflow = 'amazon-listing' | 'amazon-aplus' | 'batch-tryon' | 'gallery' | 'agent' | 'unknown'
 export type TaskAspect = 'square' | 'landscape' | 'portrait'
 export type HistoryWorkflowFilter = 'all' | TaskWorkflow
@@ -159,7 +160,7 @@ export interface TaskRecord {
   /** 多人模式服务端统一任务 ID；standalone 任务不设置。 */
   serverJobId?: string
   /** 多人模式服务端任务所属工作台，用于准确识别历史任务来源。 */
-  serverWorkspaceType?: 'listing' | 'batch_tryon' | 'aplus'
+  serverWorkspaceType?: 'listing' | 'batch_tryon' | 'aplus' | 'material_extract' | 'print_design'
   /** 多人模式输出在素材中心对应的 Asset ID。 */
   serverOutputAssetIds?: string[]
   /** 多人模式输出对应的 GeneratedOutput ID，用于精确选择当前结果版本。 */
@@ -244,7 +245,18 @@ export interface TaskRecord {
     workflow?: TaskWorkflow
     amazonSlot?: string
     aPlusType?: 'standard' | 'standard-large' | 'premium' | 'mobile'
+    aPlusMode?: APlusMode
     marketplaceId?: AmazonMarketplaceId
+    marketplaceLanguage?: string
+    aPlusModuleId?: string
+    aPlusModuleType?: string
+    aPlusModuleOrder?: number
+    aPlusModuleCount?: number
+    aPlusModuleWidth?: number
+    aPlusModuleHeight?: number
+    generationQuality?: '2k' | '4k'
+    outputFormat?: 'png' | 'jpeg' | 'webp'
+    outputCompression?: number | null
     styleReferenceImageId?: string
     /** 批量套图批次 ID（旧任务可为空） */
     batchTryOnBatchId?: string
@@ -264,6 +276,43 @@ export type BatchTryOnReviewStatus = 'pending' | 'approved' | 'rejected' | 'rege
 /** `template` or any positive width:height ratio selected by the user. */
 export type BatchTryOnAspectRatio = string
 
+export interface BatchTryOnFontReference {
+  imageId: string
+  serverAssetId?: string
+  fileName: string
+}
+
+export type BatchTryOnGarmentView = 'front' | 'back' | 'detail'
+export type BatchTryOnTemplateGarmentView = 'auto' | BatchTryOnGarmentView | 'front_back'
+
+export interface BatchTryOnNormalizedRect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface BatchTryOnEraseStroke {
+  points: Array<{ x: number; y: number }>
+  radius: number
+}
+
+export interface BatchTryOnGarmentTransform {
+  mode: 'crop' | 'keep'
+  crop: BatchTryOnNormalizedRect
+  eraseStrokes: BatchTryOnEraseStroke[]
+}
+
+export interface BatchTryOnGarmentReference {
+  imageId: string
+  serverAssetId?: string
+  projectAssetLinkId?: string
+  sourceAssetId?: string
+  fileName: string
+  garmentView: BatchTryOnGarmentView
+  transform: BatchTryOnGarmentTransform
+}
+
 export interface BatchTryOnTemplate {
   id: string
   imageId: string
@@ -277,6 +326,17 @@ export interface BatchTryOnTemplate {
   isDefault: boolean
   sourceType?: 'listing_generated_output' | 'upload'
   sourceId?: string
+  focusArea?: string
+  cropType?: string
+  detailPriority?: string
+  visibleRegions?: string[]
+  garmentView?: BatchTryOnTemplateGarmentView
+  promptStrategy?: 'preset' | 'ai_optimize' | 'luna_per_image'
+  validationStatus?: 'not_generated' | 'generating' | 'pending_review' | 'approved' | 'rejected' | 'needs_revalidation'
+  validatedPrompt?: string
+  validatedPromptVersion?: number
+  validatedSampleOutputId?: string
+  validatedAt?: number
 }
 
 export interface BatchTryOnGarment {
@@ -289,6 +349,8 @@ export interface BatchTryOnGarment {
   index: number
   selected: boolean
   createdAt: number
+  fontReference?: BatchTryOnFontReference
+  references?: Partial<Record<BatchTryOnGarmentView, BatchTryOnGarmentReference>>
 }
 
 export interface BatchTryOnPresetSelection {
@@ -298,6 +360,26 @@ export interface BatchTryOnPresetSelection {
   backgroundAdaptationMode?: string
 }
 
+export interface BatchGarmentStyleProfile {
+  profileKey: string
+  sourceSampleAssetId: string
+  sourceGarmentId: string
+  category: string
+  garmentStructure: { neckline?: string; sleeveType?: string; fit?: string; closure?: string; hemType?: string }
+  viewRules: { supportsFront: boolean; supportsBack: boolean; frontBackMustNotSwap: boolean }
+  designRules: {
+    preserveText: boolean; preserveNumbers: boolean; preserveNames: boolean; preserveGraphics: boolean
+    preserveFontStyle: boolean; preserveElementPosition: boolean
+  }
+  structureRules: {
+    preserveNeckline: boolean; preserveSleeves: boolean; preserveGarmentLength: boolean; preserveSilhouette: boolean
+  }
+  firstSampleObservation?: Record<string, unknown>
+  analysisModel: string
+  analysisVersion: string
+  coveredGarmentIds: string[]
+}
+
 export interface BatchTryOnItem {
   id: string
   batchId: string
@@ -305,6 +387,8 @@ export interface BatchTryOnItem {
   templateImageId?: string
   templateServerAssetId?: string
   templateName?: string
+  templateOrder?: number
+  templateCount?: number
   garmentId?: string
   garmentImageId: string
   garmentServerAssetId?: string
@@ -313,6 +397,10 @@ export interface BatchTryOnItem {
   presetSummary?: string
   index: number
   taskId?: string
+  /** 创建该条结果的服务端工作流；样图并行分析时用于独立恢复和轮询。 */
+  serverWorkflowId?: string
+  /** 该结果所属的服务端提交批次，用于同一模板多次提交时保持任务组独立。 */
+  serverBatchId?: string
   outputImageId?: string
   /** 本地缓存的结果对应哪个服务端 Job，防止新版本完成后继续显示旧图。 */
   outputTaskId?: string
@@ -333,6 +421,12 @@ export interface BatchTryOnItem {
   finishedAt?: number
 }
 
+export interface BatchTryOnTemplatePromptConfig {
+  templateType: 'pure_white' | 'gift_scene' | 'stadium_scene' | 'detail_display' | 'casual_scene' | 'custom_process'
+  presetId: string
+  analysisPrompt: string
+}
+
 export interface BatchTryOnBatch {
   id: string
   /** 当前绑定的服务端批量套图项目。 */
@@ -340,6 +434,20 @@ export interface BatchTryOnBatch {
   serverProjectName?: string
   /** 多人模式服务端批次 ID；用于刷新恢复、暂停、取消和重试。 */
   serverBatchId?: string
+  /** 当前工作台仍需持续同步的服务端批次；serverBatchId 指向最近一次提交。 */
+  serverBatchIds?: string[]
+  /** 服务端分析与提交工作流根 Job，用于刷新、重新登录和跨电脑恢复。 */
+  serverWorkflowId?: string
+  /** 用户清空页面队列的时间；早于该时间的工作流只保留在历史中，不再恢复到当前队列。 */
+  queueClearedAt?: number
+  /** 每个模板当前选择的预设及提示词草稿，随工作批次保存，刷新后继续使用。 */
+  templatePromptConfigs?: Record<string, BatchTryOnTemplatePromptConfig>
+  /** 持久化工作台标签对应的 draft JobBatch。 */
+  serverWorkspaceId?: string
+  sampleGarmentId?: string
+  generationMode?: 'normal_tryon' | 'detail_tryon'
+  /** 模板与服装的组合方式：全部交叉组合，或按当前已选列表顺序一一配对。 */
+  combinationMode?: 'cartesian' | 'one_to_one'
   templateImageId: string | null
   templateServerAssetId?: string
   templateSourceType?: 'listing_generated_output' | 'upload'
@@ -349,11 +457,14 @@ export interface BatchTryOnBatch {
   templateHeight?: number
   templates: BatchTryOnTemplate[]
   garments: BatchTryOnGarment[]
+  /** 当前模板+服装组合的字体参考覆盖，key 为 templateId:garmentId。 */
+  fontReferenceOverrides?: Record<string, BatchTryOnFontReference>
+  styleProfiles?: BatchGarmentStyleProfile[]
   items: BatchTryOnItem[]
   presetSelection: BatchTryOnPresetSelection
   extraRequirements: string
   aspectRatio: BatchTryOnAspectRatio
-  concurrency: 1 | 2 | 3 | 5 | 10
+  concurrency: 1 | 2 | 3 | 5 | 10 | 12
   adminTestMode: boolean
   params: TaskParams
   queuePaused: boolean
@@ -457,7 +568,13 @@ export interface AmazonPlannerSession {
   mode: 'listing' | 'aplus'
   marketplaceId?: AmazonMarketplaceId
   aPlusType: 'standard' | 'standard-large' | 'premium' | 'mobile'
+  aPlusMode?: APlusMode
   resolution: '2k' | '4k'
+  aPlusSelectedModuleIds?: string[]
+  aPlusModuleSizes?: Record<string, string>
+  aPlusModuleExtraRequirements?: Record<string, string>
+  outputFormat?: 'png' | 'jpeg' | 'webp'
+  outputCompression?: number | null
   listingImageCount?: number
   aPlusModuleSpecs?: Partial<Record<'standard' | 'standard-large' | 'premium' | 'mobile', AmazonPlannerSessionAPlusModuleSpec[]>>
   listingText: string
