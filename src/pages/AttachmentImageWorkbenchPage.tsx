@@ -28,6 +28,19 @@ import {
   type ListingWorkflowSessionSummary,
 } from '../lib/listingWorkflowApi'
 import { useStore } from '../store'
+import { AuthApiError } from '../lib/authApi'
+import {
+  getAttachmentPlanning,
+  listAttachmentPlanVersions,
+  optimizeAttachmentModulePrompt,
+  planAttachmentSuite,
+  replanAttachmentModule,
+  updateAttachmentModule,
+  updateAttachmentVisualDirection,
+  type AttachmentPlanningState,
+  type AttachmentPlanVersion,
+} from '../lib/attachmentPlanningApi'
+import { randomUuid } from '../lib/randomUuid'
 
 const panel = 'rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-gray-900'
 const button = 'rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[0.1] dark:bg-gray-950 dark:text-gray-200'
@@ -108,6 +121,14 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState('')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'failed'>('idle')
   const [pollingPaused, setPollingPaused] = useState(false)
+  const [planning, setPlanning] = useState<AttachmentPlanningState | null>(null)
+  const [planningBusy, setPlanningBusy] = useState('')
+  const [visualDirection, setVisualDirection] = useState('')
+  const [visualDirty, setVisualDirty] = useState(false)
+  const [suiteVersions, setSuiteVersions] = useState<AttachmentPlanVersion[]>([])
+  const [suiteHistoryOpen, setSuiteHistoryOpen] = useState(false)
+  const visualDirtyRef = useRef(false)
+  const suitePlanningAwaitingResultRef = useRef(false)
 
   const refreshGroups = async (projectId: string) => {
     const response = await listListingImageTaskGroups(projectId)
@@ -134,14 +155,17 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         const availableCodes = backendModules.filter((item) => item.available !== false).map((item) => String(item.code))
         const stored = projectValue.prompt_config?.[ATTACHMENT_WORKBENCH_CONFIG_KEY]
         const nextDraft = normalizeAttachmentWorkbenchDraft(stored, availableCodes)
-        const [loadedAssets, taskGroups] = await Promise.all([
+        const [loadedAssets, taskGroups, planningValue] = await Promise.all([
           Promise.all(projectValue.source_asset_ids.map((id) => getAsset(id).catch(() => null))),
           listListingImageTaskGroups(projectValue.id),
+          getAttachmentPlanning(projectValue.id),
         ])
         if (!active) return
         setSession(sessionValue); setProject(projectValue); projectRef.current = projectValue
         setAssets(loadedAssets.filter((item): item is Asset => Boolean(item)))
         setGroups(taskGroups.items); setDraft(nextDraft); draftRef.current = nextDraft
+        setPlanning(planningValue); setVisualDirection(planningValue.visual_direction_cn)
+        setVisualDirty(false); visualDirtyRef.current = false
         lastSavedSignature.current = JSON.stringify(nextDraft)
         setSaveStatus('saved'); hydrated.current = true
       } catch (reason) {
@@ -152,6 +176,18 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     })()
     return () => { active = false; hydrated.current = false }
   }, [sessionId])
+
+  const applyPlanning = (value: AttachmentPlanningState) => {
+    setPlanning(value)
+    if (!visualDirtyRef.current) setVisualDirection(value.visual_direction_cn)
+  }
+
+  const refreshPlanning = async () => {
+    if (!projectRef.current) return null
+    const value = await getAttachmentPlanning(projectRef.current.id)
+    applyPlanning(value)
+    return value
+  }
 
   const saveDraft = (force = false) => {
     const nextDraft = draftRef.current
@@ -203,6 +239,28 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     return () => { active = false; window.clearTimeout(timer) }
   }, [project?.id, taskSummary.activeGroups, pollingPaused])
 
+  const planningActive = planning?.planning_status === 'planning'
+    || planning?.modules.some((item) => item.status === 'planning')
+  useEffect(() => {
+    if (!project || !planningActive) return
+    let active = true
+    const timer = window.setInterval(() => {
+      if (!active) return
+      void getAttachmentPlanning(project.id).then((value) => {
+        if (!active) return
+        if (suitePlanningAwaitingResultRef.current && value.planning_status !== 'planning') {
+          suitePlanningAwaitingResultRef.current = false
+          if (value.planning_status === 'ready') {
+            visualDirtyRef.current = false
+            setVisualDirty(false)
+          }
+        }
+        applyPlanning(value)
+      }).catch(() => undefined)
+    }, 1600)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [project?.id, planningActive])
+
   const moduleBackend = useMemo(() => Object.fromEntries((project?.modules || []).map((item) => [String(item.code || ''), item])), [project?.modules])
   const selectedModules = selectedAttachmentModules(draft)
   const requestedImages = countRequestedAttachmentImages(draft)
@@ -224,6 +282,130 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         selected: selected && phaseOneSupported && moduleBackend[definition.code]?.available !== false,
       }])) as AttachmentWorkbenchDraft['modules'],
     }))
+  }
+
+  const saveVisualDirection = async () => {
+    if (!project || !planning) return
+    setPlanningBusy('visual-save')
+    const base = planning
+    try {
+      let value: AttachmentPlanningState
+      try {
+        value = await updateAttachmentVisualDirection(project.id, {
+          visual_direction_cn: visualDirection,
+          expected_state_version: base.state_version,
+        })
+      } catch (reason) {
+        if (!(reason instanceof AuthApiError) || reason.status !== 409) throw reason
+        const latest = await getAttachmentPlanning(project.id)
+        if (latest.visual_direction_cn !== base.visual_direction_cn && latest.visual_direction_cn !== visualDirection) {
+          applyPlanning(latest)
+          throw new Error('其他页面也修改了整套视觉方向。最新版本已读取，你当前输入仍保留在编辑框中，请确认后再次保存。')
+        }
+        value = await updateAttachmentVisualDirection(project.id, {
+          visual_direction_cn: visualDirection,
+          expected_state_version: latest.state_version,
+        })
+      }
+      visualDirtyRef.current = false; setVisualDirty(false); applyPlanning(value)
+      showToast('整套视觉方向已保存，并创建了新版本。', 'success')
+    } catch (reason) {
+      showToast(errorText(reason), 'error')
+    } finally {
+      setPlanningBusy('')
+    }
+  }
+
+  const saveModulePlanning = async (moduleKey: AttachmentModuleCode, input: {
+    plan_summary_cn: string; prompt_cn: string; operator_requirement_cn: string
+    aspect_ratio: string; expected_state_version: number
+  }) => {
+    if (!project || !planning) return
+    const base = planning.modules.find((item) => item.module_key === moduleKey)
+    if (!base) return
+    setPlanningBusy(`save:${moduleKey}`)
+    try {
+      let value: AttachmentPlanningState
+      try {
+        value = await updateAttachmentModule(project.id, moduleKey, input)
+      } catch (reason) {
+        if (!(reason instanceof AuthApiError) || reason.status !== 409) throw reason
+        const latest = await getAttachmentPlanning(project.id)
+        const remote = latest.modules.find((item) => item.module_key === moduleKey)
+        if (!remote) throw reason
+        const fields = ['plan_summary_cn', 'prompt_cn', 'operator_requirement_cn', 'aspect_ratio'] as const
+        const overlap = fields.some((field) => input[field] !== base[field]
+          && remote[field] !== base[field] && remote[field] !== input[field])
+        if (overlap) {
+          applyPlanning(latest)
+          throw new Error('该模块的同一字段已被其他页面修改。最新版本已读取，你当前输入仍保留，请确认差异后再次保存。')
+        }
+        value = await updateAttachmentModule(project.id, moduleKey, {
+          plan_summary_cn: input.plan_summary_cn !== base.plan_summary_cn ? input.plan_summary_cn : remote.plan_summary_cn,
+          prompt_cn: input.prompt_cn !== base.prompt_cn ? input.prompt_cn : remote.prompt_cn,
+          operator_requirement_cn: input.operator_requirement_cn !== base.operator_requirement_cn ? input.operator_requirement_cn : remote.operator_requirement_cn,
+          aspect_ratio: input.aspect_ratio !== base.aspect_ratio ? input.aspect_ratio : remote.aspect_ratio,
+          expected_state_version: remote.state_version,
+        })
+      }
+      applyPlanning(value)
+      showToast(`${base.module_name}已保存，并创建了新版本。`, 'success')
+    } catch (reason) {
+      showToast(errorText(reason), 'error')
+      throw reason
+    } finally {
+      setPlanningBusy('')
+    }
+  }
+
+  const runSuitePlanning = async () => {
+    if (!project || !planning || !selectedModules.length) return
+    setPlanningBusy('suite')
+    try {
+      const indexed = Object.fromEntries(planning.modules.map((item) => [item.module_key, item]))
+      const value = await planAttachmentSuite(project.id, {
+        modules: selectedModules.map((definition) => ({
+          module_key: definition.code,
+          aspect_ratio: draft.modules[definition.code].aspectRatio,
+          operator_requirement_cn: indexed[definition.code]?.operator_requirement_cn || '',
+        })),
+        visual_direction_cn: visualDirection,
+        idempotency_key: `attachment-suite:${randomUuid()}`,
+      })
+      // The submit response still contains the previously persisted visual direction.
+      // Keep the user's submitted draft visible until the asynchronous AI result lands.
+      suitePlanningAwaitingResultRef.current = true
+      visualDirtyRef.current = true
+      setVisualDirty(true)
+      setPlanning(value)
+      showToast('AI整套策划已提交，完成后会自动显示各模块方案与Prompt。', 'success')
+    } catch (reason) {
+      showToast(errorText(reason), 'error')
+    } finally {
+      setPlanningBusy('')
+    }
+  }
+
+  const runModulePlanning = async (moduleKey: AttachmentModuleCode, operatorRequirement: string, optimize: boolean) => {
+    if (!project) return
+    setPlanningBusy(`${optimize ? 'optimize' : 'replan'}:${moduleKey}`)
+    try {
+      const input = {
+        aspect_ratio: draft.modules[moduleKey].aspectRatio,
+        operator_requirement_cn: operatorRequirement,
+        idempotency_key: `attachment-${optimize ? 'optimize' : 'replan'}:${moduleKey}:${randomUuid()}`,
+      }
+      const value = optimize
+        ? await optimizeAttachmentModulePrompt(project.id, moduleKey, input)
+        : await replanAttachmentModule(project.id, moduleKey, input)
+      applyPlanning(value)
+      showToast(optimize ? 'Prompt优化任务已提交。' : '单模块重新策划已提交。', 'success')
+    } catch (reason) {
+      showToast(errorText(reason), 'error')
+      throw reason
+    } finally {
+      setPlanningBusy('')
+    }
   }
 
   if (loading) return <div className={`${panel} mt-6`}>正在恢复附图项目与任务状态…</div>
@@ -249,8 +431,16 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     </section>
 
     <section className={panel}>
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold text-gray-950 dark:text-white">整套视觉方向</h2><p className="mt-1 text-xs text-gray-500">当前先支持运营手动填写并自动保存。Phase 2 将接入 AI 整套策划和版本记录。</p></div><span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">运营可编辑</span></div>
-      <textarea disabled={!phaseOneSupported} className="mt-4 min-h-28 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm leading-6 disabled:bg-gray-100 dark:border-white/[0.1] dark:bg-gray-950 dark:text-white" value={draft.visualDirection} placeholder="例如：整套保持真实橄榄球运动氛围，统一冷暖对比和干净商业光线，商品颜色、号码、文字和版型必须准确。" onChange={(event) => setDraft((current) => ({ ...current, visualDirection: event.target.value }))} />
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold text-gray-950 dark:text-white">整套视觉方向</h2><p className="mt-1 text-xs text-gray-500">统一约束当前已选标准模块；AI整套策划一次返回视觉方向、模块方案和中文Prompt。</p></div><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-semibold ${planning?.planning_status === 'failed' ? 'bg-red-50 text-red-700' : planning?.planning_status === 'planning' ? 'bg-violet-50 text-violet-700' : 'bg-gray-100 text-gray-600'}`}>{planning?.planning_status === 'planning' ? 'AI策划中' : planning?.visual_direction_version ? `方向 V${planning.visual_direction_version}` : '尚未策划'}</span><button className={button} disabled={!planning} onClick={() => void refreshPlanning()}>刷新策划</button></div></div>
+      <textarea disabled={!phaseOneSupported} className="mt-4 min-h-28 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm leading-6 disabled:bg-gray-100 dark:border-white/[0.1] dark:bg-gray-950 dark:text-white" value={visualDirection} placeholder="尚未策划。可以直接填写，也可以点击AI策划生成2～4行统一视觉方向。" onChange={(event) => { setVisualDirection(event.target.value); setVisualDirty(true); visualDirtyRef.current = true }} />
+      {planning?.error_message && <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{planning.error_message}</div>}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <button className={primary} disabled={!phaseOneSupported || !planning || planningBusy !== '' || planningActive || !selectedModules.length} onClick={() => void runSuitePlanning()}>{planning?.visual_direction_version ? 'AI重新分析整套' : 'AI策划整套'}</button>
+        <button className={button} disabled={!planning || !visualDirty || planningBusy !== ''} onClick={() => void saveVisualDirection()}>保存视觉方向</button>
+        <button className={button} disabled={!planning} onClick={() => { const next = !suiteHistoryOpen; setSuiteHistoryOpen(next); if (next && project) void listAttachmentPlanVersions(project.id).then(setSuiteVersions).catch((reason) => showToast(errorText(reason), 'error')) }}>{suiteHistoryOpen ? '收起方向版本' : '查看方向版本'}</button>
+        <span className="text-xs text-gray-400">{planning?.visual_direction_source ? `来源：${planning.visual_direction_source}` : ''}</span>
+      </div>
+      {suiteHistoryOpen && <div className="mt-4 grid gap-2 md:grid-cols-2">{suiteVersions.length ? suiteVersions.map((item) => <details key={item.id} className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><summary className="cursor-pointer text-xs font-semibold text-gray-700 dark:text-gray-200">方向 V{item.version_number} · {item.action} · {new Date(item.created_at).toLocaleString('zh-CN', { hour12: false })}</summary><p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-gray-500">{item.visual_direction_cn}</p></details>) : <p className="text-xs text-gray-500">暂无历史方向版本。</p>}</div>}
     </section>
 
     <section className={panel}>
@@ -266,11 +456,8 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         const backend = moduleBackend[definition.code] || {}
         const tasks = groups.flatMap((group) => group.tasks).filter((task) => task.image_type === definition.code)
         const available = phaseOneSupported && backend.available !== false
-        const prompts = project.prompt_config.prompts
-        const existingPrompt = prompts && typeof prompts === 'object' && !Array.isArray(prompts)
-          ? String((prompts as Record<string, unknown>)[definition.code] || backend.prompt || '')
-          : String(backend.prompt || '')
-        return <AttachmentImageModuleCard key={definition.code} index={index + 1} definition={definition} draft={draft.modules[definition.code]} expanded={expanded.has(definition.code)} available={available} unavailableReason={phaseOneSupported ? String(backend.unavailable_reason || '') : '首期仅支持橄榄球衣。'} objective={String(backend.objective || '')} existingPrompt={existingPrompt} tasks={tasks} onToggleExpanded={() => setExpanded((current) => { const next = new Set(current); next.has(definition.code) ? next.delete(definition.code) : next.add(definition.code); return next })} onChange={(next) => updateModule(definition.code, next)} />
+        const modulePlanning = planning?.modules.find((item) => item.module_key === definition.code)
+        return <AttachmentImageModuleCard key={definition.code} index={index + 1} definition={definition} draft={draft.modules[definition.code]} expanded={expanded.has(definition.code)} available={available} unavailableReason={phaseOneSupported ? String(backend.unavailable_reason || '') : '首期仅支持橄榄球衣。'} objective={String(backend.objective || '')} projectId={project.id} planning={modulePlanning} planningBusy={planningBusy !== '' || planningActive} tasks={tasks} onToggleExpanded={() => setExpanded((current) => { const next = new Set(current); next.has(definition.code) ? next.delete(definition.code) : next.add(definition.code); return next })} onChange={(next) => updateModule(definition.code, next)} onSavePlanning={(input) => saveModulePlanning(definition.code, input)} onReplan={(requirement) => runModulePlanning(definition.code, requirement, false)} onOptimizePrompt={(requirement) => runModulePlanning(definition.code, requirement, true)} />
       })}</div>
     </section>
 

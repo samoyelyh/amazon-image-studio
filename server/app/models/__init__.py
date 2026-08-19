@@ -32,6 +32,11 @@ from app.models.tasks import (
     JobBatch, ModelCapability, Provider, ProviderModel, ResourcePool, ResourcePoolKey,
 )
 from app.models.print_design import PrintAssetGroup, PrintAssetLibraryItem, ProductPrintMapping
+from app.models.attachment_planning import (
+    AttachmentWorkbenchModulePlan,
+    AttachmentWorkbenchPlan,
+    AttachmentWorkbenchPlanVersion,
+)
 
 __all__ = [
     "AuditLog",
@@ -62,4 +67,5 @@ __all__ = [
     "BatchGarmentStyleProfile", "BatchTryOnPromptPreset", "BatchTryOnTemplatePrompt",
     "BatchTryOnReviewItem", "BatchTryOnVersion",
     "PrintAssetGroup", "PrintAssetLibraryItem", "ProductPrintMapping",
+    "AttachmentWorkbenchPlan", "AttachmentWorkbenchModulePlan", "AttachmentWorkbenchPlanVersion",
 ]

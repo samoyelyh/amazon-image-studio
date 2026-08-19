@@ -34,6 +34,7 @@ from app.api.batch_tryon_workflow import router as batch_tryon_workflow_router
 from app.api.batch_tryon_workspace import router as batch_tryon_workspace_router
 from app.api.batch_tryon_prompts import router as batch_tryon_prompts_router
 from app.api.print_design import router as print_design_router
+from app.api.attachment_planning import router as attachment_planning_router
 from app.core.config import get_settings
 
 
@@ -67,6 +68,7 @@ api_router.include_router(batch_tryon_workflow_router)
 api_router.include_router(batch_tryon_workspace_router)
 api_router.include_router(batch_tryon_prompts_router)
 api_router.include_router(print_design_router)
+api_router.include_router(attachment_planning_router)
 api_router.include_router(resource_pools_router)
 api_router.include_router(admin_router)
 
