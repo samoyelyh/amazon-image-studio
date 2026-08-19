@@ -463,6 +463,14 @@ class ListingImageTaskResponse(BaseModel):
     variation_plan_name: str | None = None
     variation_version: int | None = None
     chinese_prompt: str = ""
+    slot_index: int | None = None
+    generation_mode: str | None = None
+    requested_aspect_ratio: str | None = None
+    requested_width: int | None = None
+    requested_height: int | None = None
+    plan_version_id: str | None = None
+    prompt_version_id: str | None = None
+    reference_understanding_id: str | None = None
 
 
 class ListingImageTaskGroupStatistics(BaseModel):

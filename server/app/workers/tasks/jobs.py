@@ -228,7 +228,7 @@ async def _execute_job(
                     generated = GeneratedOutput(
                         organization_id=job.organization_id, project_id=job.project_id, asset_id=asset.id,
                         job_id=job.id, batch_id=job.batch_id, sequence_number=index,
-                        output_type=category, module_key=str(metadata.get("slot") or "") or None,
+                        output_type=category, module_key=str(metadata.get("item_code") or metadata.get("slot") or "") or None,
                         metadata_json={
                             "provider_request_id": result.provider_request_id,
                             "client_item_id": job.client_item_id,
@@ -251,6 +251,17 @@ async def _execute_job(
                             "edit_mask_asset_id": metadata.get("edit_mask_asset_id"),
                             "blend_ring_only": metadata.get("blend_ring_only"),
                             "protect_core": metadata.get("protect_core"),
+                            "attachment_workflow": metadata.get("workflow") if metadata.get("workflow") == "attachment_workbench_generation" else None,
+                            "attachment_module_key": metadata.get("item_code") if metadata.get("workflow") == "attachment_workbench_generation" else None,
+                            "slot_index": metadata.get("slot_index"),
+                            "generation_mode": metadata.get("generation_mode"),
+                            "plan_version_id": metadata.get("plan_version_id"),
+                            "prompt_version_id": metadata.get("prompt_version_id"),
+                            "reference_understanding_id": metadata.get("reference_understanding_id"),
+                            "reference_snapshot": metadata.get("reference_snapshot"),
+                            "requested_aspect_ratio": metadata.get("requested_aspect_ratio"),
+                            "requested_width": metadata.get("requested_width"),
+                            "requested_height": metadata.get("requested_height"),
                         },
                         created_by=job.created_by, created_at=datetime.now(UTC),
                     )

@@ -227,7 +227,8 @@ async def task_group_response(
         for item in jobs
     ]
     variation_jobs = [item for item in job_metadata if item.get("workflow") == "smart_image_variation"]
-    workflow_mode = "smart_image_variation" if variation_jobs else "standard"
+    attachment_jobs = [item for item in job_metadata if item.get("workflow") == "attachment_workbench_generation"]
+    workflow_mode = "attachment_standard" if attachment_jobs else "smart_image_variation" if variation_jobs else "standard"
     variation_types = list(dict.fromkeys(
         str(item.get("variation_type_name") or item.get("variation_type_code") or "")
         for item in variation_jobs if item.get("variation_type_name") or item.get("variation_type_code")
@@ -259,6 +260,14 @@ async def task_group_response(
             variation_plan_name=str(metadata.get("variation_plan_name") or "") or None,
             variation_version=int(metadata.get("variation_version") or 0) or None,
             chinese_prompt=str(metadata.get("chinese_prompt") or ""),
+            slot_index=int(metadata.get("slot_index") or 0) or None,
+            generation_mode=str(metadata.get("generation_mode") or "") or None,
+            requested_aspect_ratio=str(metadata.get("requested_aspect_ratio") or job.input_json.get("aspect_ratio") or "") or None,
+            requested_width=int(metadata.get("requested_width") or job.input_json.get("requested_width") or 0) or None,
+            requested_height=int(metadata.get("requested_height") or job.input_json.get("requested_height") or 0) or None,
+            plan_version_id=str(metadata.get("plan_version_id") or "") or None,
+            prompt_version_id=str(metadata.get("prompt_version_id") or "") or None,
+            reference_understanding_id=str(metadata.get("reference_understanding_id") or "") or None,
         ))
     return ListingImageTaskGroupResponse(
         id=group.id, batch_id=group.job_batch_id, listing_image_project_id=group.listing_image_project_id,

@@ -47,6 +47,8 @@ interface Props {
   onRemoveReference: (referenceId: string) => Promise<void>
   onAnalyzeReferences: () => Promise<void>
   onReferenceError: (message: string) => void
+  onGenerate: () => Promise<void>
+  generationBusy?: boolean
 }
 
 export default function AttachmentImageModuleCard({
@@ -72,6 +74,8 @@ export default function AttachmentImageModuleCard({
   onRemoveReference,
   onAnalyzeReferences,
   onReferenceError,
+  onGenerate,
+  generationBusy = false,
 }: Props) {
   const [planSummary, setPlanSummary] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -110,9 +114,15 @@ export default function AttachmentImageModuleCard({
     }
   }
 
-  const outputs = tasks.flatMap((task) => task.outputs)
   const latestStatus = tasks[0]?.status || 'draft'
-  const slotCount = Math.max(draft.imageCount, Math.min(4, outputs.length))
+  const taskBySlot = new Map(tasks.map((task, index) => [task.slot_index || index + 1, task]))
+  const latestSlot = tasks.reduce((highest, task) => Math.max(highest, task.slot_index || 0), 0)
+  const slotCount = Math.max(draft.imageCount, Math.min(4, latestSlot))
+  const outputCount = tasks.reduce((total, task) => total + task.outputs.length, 0)
+  const readyToGenerate = Boolean(
+    available && planning?.prompt_cn.trim() && planning?.plan_summary_cn.trim()
+    && referenceState?.understanding?.status === 'ready' && !referenceState.reference_context_dirty,
+  )
 
   return <article className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition dark:bg-gray-900 ${draft.selected && available ? 'border-blue-300 ring-1 ring-blue-100 dark:border-blue-500/40' : 'border-gray-200 dark:border-white/[0.08]'}`}>
     <header className="flex items-center gap-3 p-4 sm:p-5">
@@ -146,15 +156,17 @@ export default function AttachmentImageModuleCard({
       <section>
         <div className="flex items-center justify-between gap-3">
           <div><h3 className="text-sm font-semibold text-gray-900 dark:text-white">结果槽位</h3><p className="mt-1 text-xs text-gray-500">固定按任务顺序显示，已完成结果不会因返回先后跳位。</p></div>
-          <span className="text-xs text-gray-500">已有 {outputs.length} 张</span>
+          <span className="text-xs text-gray-500">已有 {outputCount} 张</span>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3">
           {Array.from({ length: slotCount }, (_, slot) => {
-            const output = outputs[slot]
+            const task = taskBySlot.get(slot + 1)
+            const output = task?.outputs[0]
             return <div key={slot} className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.03]">
               {output
                 ? <AuthenticatedImage url={output.url} alt={`${definition.name}结果${slot + 1}`} className="aspect-square w-full object-contain" placeholderClassName="aspect-square" />
-                : <div className="flex aspect-square items-center justify-center text-xs text-gray-400">候选 {slot + 1} · 尚未生成</div>}
+                : <div className="flex aspect-square items-center justify-center px-3 text-center text-xs text-gray-400">候选 {slot + 1} · {task ? statusLabels[task.status] || task.status : '尚未生成'}</div>}
+              {task?.error_message && <div className="border-t border-red-100 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">{task.error_message}</div>}
             </div>
           })}
         </div>
@@ -208,7 +220,9 @@ export default function AttachmentImageModuleCard({
             <button type="button" className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50" disabled={!planning || planningBusy || saving || !dirty} onClick={() => { setSaving(true); void saveCurrent().catch(() => undefined).finally(() => setSaving(false)) }}>{saving ? '保存中…' : '保存修改'}</button>
             <button type="button" className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 disabled:opacity-50 dark:border-white/[0.1] dark:text-gray-200" disabled={!planning || planningBusy || saving} onClick={() => void saveThenRun(() => onReplan(operatorRequirement)).catch(() => undefined)}>AI重新策划</button>
             <button type="button" className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 disabled:opacity-50 dark:border-white/[0.1] dark:text-gray-200" disabled={!planning || !prompt.trim() || planningBusy || saving} onClick={() => void saveThenRun(() => onOptimizePrompt(operatorRequirement)).catch(() => undefined)}>AI优化 Prompt</button>
+            <button type="button" className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50" disabled={!readyToGenerate || planningBusy || saving || generationBusy || dirty} onClick={() => void onGenerate()}>{generationBusy ? '准备确认…' : '生成当前模块'}</button>
           </div>
+          {!readyToGenerate && <p className="text-[11px] leading-5 text-amber-700">正式生成前需保存完整方案与Prompt，并完成当前参考素材分析。</p>}
           {planning?.skill_source.can_view_rules && planning.skill_source.module_rule && <details><summary className="cursor-pointer text-xs font-semibold text-gray-500">管理员：查看规则来源</summary><pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-[11px] leading-5 text-gray-500 dark:bg-white/[0.03]">{JSON.stringify(planning.skill_source.module_rule, null, 2)}</pre></details>}
           {historyOpen && <div className="space-y-2 border-t border-gray-100 pt-3 dark:border-white/[0.06]">{historyLoading ? <p className="text-xs text-gray-500">正在读取版本…</p> : versions.length ? versions.map((item) => <details key={item.id} className="rounded-lg bg-gray-50 px-3 py-2 dark:bg-white/[0.03]"><summary className="cursor-pointer text-xs font-semibold text-gray-700 dark:text-gray-200">V{item.version_number} · {item.action} · {new Date(item.created_at).toLocaleString('zh-CN', { hour12: false })}</summary><div className="mt-2 whitespace-pre-wrap text-xs leading-5 text-gray-500">{item.plan_summary_cn}{item.prompt_cn ? `\n\n${item.prompt_cn}` : ''}</div></details>) : <p className="text-xs text-gray-500">暂无历史版本。</p>}</div>}
         </div>

@@ -180,3 +180,55 @@ class AttachmentReferenceStateResponse(BaseModel):
     product_state_version: int
     product_references: list[AttachmentProductReferenceItemResponse]
     modules: list[AttachmentModuleReferenceStateResponse]
+
+
+class AttachmentGenerationSelectionRequest(BaseModel):
+    selected_module_keys: list[str] = Field(min_length=1, max_length=6)
+
+    @model_validator(mode="after")
+    def unique_modules(self) -> "AttachmentGenerationSelectionRequest":
+        if len(self.selected_module_keys) != len(set(self.selected_module_keys)):
+            raise ValueError("selected_module_keys must be unique")
+        return self
+
+
+class AttachmentGenerationRequest(AttachmentGenerationSelectionRequest):
+    snapshot_signature: str = Field(pattern=r"^[a-f0-9]{64}$")
+    idempotency_key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$", min_length=8, max_length=160)
+
+
+class AttachmentGenerationModulePreviewResponse(BaseModel):
+    module_key: str
+    module_name: str
+    aspect_ratio: str
+    image_count: int
+    generation_mode: str
+    delivery_width: int
+    delivery_height: int
+    plan_version_id: str
+    plan_version_number: int
+    prompt_version_id: str
+    prompt_version_number: int
+    reference_understanding_id: str
+    reference_understanding_version: int
+    reference_count: int
+
+
+class AttachmentGenerationPreviewResponse(BaseModel):
+    project_id: str
+    model_code: str
+    modules: list[AttachmentGenerationModulePreviewResponse]
+    total_images: int
+    snapshot_signature: str
+
+
+class AttachmentGenerationResponse(BaseModel):
+    project_id: str
+    batch_id: str
+    task_group_id: str
+    group_number: int
+    status: str
+    job_ids: list[str]
+    module_keys: list[str]
+    total_images: int
+    created: bool

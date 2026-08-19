@@ -127,6 +127,59 @@ export interface AttachmentPlanningModuleInput {
   operator_requirement_cn: string
 }
 
+export interface AttachmentGenerationModulePreview {
+  module_key: AttachmentModuleCode
+  module_name: string
+  aspect_ratio: string
+  image_count: number
+  generation_mode: string
+  delivery_width: number
+  delivery_height: number
+  plan_version_id: string
+  plan_version_number: number
+  prompt_version_id: string
+  prompt_version_number: number
+  reference_understanding_id: string
+  reference_understanding_version: number
+  reference_count: number
+}
+
+export interface AttachmentGenerationPreview {
+  project_id: string
+  model_code: string
+  modules: AttachmentGenerationModulePreview[]
+  total_images: number
+  snapshot_signature: string
+}
+
+export interface AttachmentGenerationResult {
+  project_id: string
+  batch_id: string
+  task_group_id: string
+  group_number: number
+  status: string
+  job_ids: string[]
+  module_keys: AttachmentModuleCode[]
+  total_images: number
+  created: boolean
+}
+
+export function previewAttachmentGeneration(projectId: string, selectedModuleKeys: AttachmentModuleCode[]) {
+  return authenticatedFetch<AttachmentGenerationPreview>(`/attachment-workbench/projects/${projectId}/generation-preview`, {
+    method: 'POST', body: JSON.stringify({ selected_module_keys: selectedModuleKeys }),
+  })
+}
+
+export function generateAttachments(projectId: string, input: {
+  selected_module_keys: AttachmentModuleCode[]
+  snapshot_signature: string
+  idempotency_key: string
+}) {
+  return authenticatedFetch<AttachmentGenerationResult>(`/attachment-workbench/projects/${projectId}/generate`, {
+    method: 'POST', body: JSON.stringify(input),
+  })
+}
+
 export function getAttachmentPlanning(projectId: string) {
   return authenticatedFetch<AttachmentPlanningState>(`/attachment-workbench/projects/${projectId}/planning`)
 }

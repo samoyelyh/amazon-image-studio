@@ -36,6 +36,11 @@ from app.schemas.attachment_planning import (
     AttachmentReferenceSlotDefinitionResponse,
     AttachmentReferenceStateResponse,
     AttachmentReferenceUnderstandingResponse,
+    AttachmentGenerationSelectionRequest,
+    AttachmentGenerationRequest,
+    AttachmentGenerationModulePreviewResponse,
+    AttachmentGenerationPreviewResponse,
+    AttachmentGenerationResponse,
 )
 from app.security.principal import Principal, require_permissions
 from app.services.attachment_planning_service import (
@@ -63,6 +68,11 @@ from app.services.attachment_reference_service import (
     start_reference_analysis,
 )
 from app.services.storage_service import StorageService, get_storage_service
+from app.services.attachment_generation_service import (
+    AttachmentGenerationPreview,
+    build_attachment_generation_preview,
+    create_attachment_generation,
+)
 
 
 router = APIRouter(prefix="/attachment-workbench", tags=["attachment-workbench"])
@@ -218,6 +228,28 @@ async def _reference_response(
     )
 
 
+def _generation_preview_response(
+    project: ListingImageProject, preview: AttachmentGenerationPreview,
+) -> AttachmentGenerationPreviewResponse:
+    return AttachmentGenerationPreviewResponse(
+        project_id=project.id, model_code=preview.model_code,
+        total_images=preview.total_images, snapshot_signature=preview.snapshot_signature,
+        modules=[AttachmentGenerationModulePreviewResponse(
+            module_key=item.module_key, module_name=item.module_name,
+            aspect_ratio=item.aspect_ratio, image_count=item.image_count,
+            generation_mode=item.generation_mode,
+            delivery_width=item.width, delivery_height=item.height,
+            plan_version_id=item.plan_version.id,
+            plan_version_number=item.plan_version.version_number,
+            prompt_version_id=item.plan_version.id,
+            prompt_version_number=item.plan_version.version_number,
+            reference_understanding_id=item.understanding.id,
+            reference_understanding_version=item.understanding.version_number,
+            reference_count=sum(len(values) for values in item.grouped_references.values()),
+        ) for item in preview.modules],
+    )
+
+
 @router.get("/projects/{project_id}/planning", response_model=AttachmentPlanningResponse)
 async def get_planning(
     project_id: str, db: AsyncSession = Depends(get_db_session),
@@ -235,6 +267,55 @@ async def get_references(
 ) -> AttachmentReferenceStateResponse:
     _, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
     return await _reference_response(db, storage, settings, plan=plan, modules=modules)
+
+
+@router.post("/projects/{project_id}/generation-preview", response_model=AttachmentGenerationPreviewResponse)
+async def preview_generation(
+    project_id: str, payload: AttachmentGenerationSelectionRequest,
+    db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentGenerationPreviewResponse:
+    project, listing_session, version, plan, modules = await _load_and_reconcile(
+        db, project_id=project_id, principal=principal,
+    )
+    preview = await build_attachment_generation_preview(
+        db, project=project, session=listing_session, version=version, plan=plan,
+        modules=modules, selected_module_keys=payload.selected_module_keys,
+    )
+    return _generation_preview_response(project, preview)
+
+
+@router.post(
+    "/projects/{project_id}/generate", response_model=AttachmentGenerationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def generate_attachments(
+    project_id: str, payload: AttachmentGenerationRequest,
+    db: AsyncSession = Depends(get_db_session), settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentGenerationResponse:
+    project, listing_session, version, plan, modules = await _load_and_reconcile(
+        db, project_id=project_id, principal=principal,
+    )
+    preview, batch, jobs, group, created = await create_attachment_generation(
+        db, settings, project=project, session=listing_session, version=version,
+        plan=plan, modules=modules, selected_module_keys=payload.selected_module_keys,
+        snapshot_signature=payload.snapshot_signature, idempotency_key=payload.idempotency_key,
+        user_id=principal.user.id,
+    )
+    await db.commit()
+    if created:
+        await dispatch_jobs(
+            db,
+            await due_jobs(db, settings, limit=preview.total_images, batch_id=batch.id),
+        )
+    return AttachmentGenerationResponse(
+        project_id=project.id, batch_id=batch.id, task_group_id=group.id,
+        group_number=group.group_number, status=batch.status,
+        job_ids=[item.id for item in jobs],
+        module_keys=[item.module_key for item in preview.modules],
+        total_images=preview.total_images, created=created,
+    )
 
 
 @router.post("/projects/{project_id}/modules/{module_key}/references", response_model=AttachmentReferenceStateResponse)

@@ -283,6 +283,14 @@ export interface ListingImageTask {
   variation_plan_name: string | null
   variation_version: number | null
   chinese_prompt: string
+  slot_index: number | null
+  generation_mode: string | null
+  requested_aspect_ratio: string | null
+  requested_width: number | null
+  requested_height: number | null
+  plan_version_id: string | null
+  prompt_version_id: string | null
+  reference_understanding_id: string | null
 }
 
 export interface FreeVariationContext {
@@ -343,7 +351,7 @@ export interface ListingImageTaskGroup {
   category_name: string
   skill_name: string
   listing_summary: BilingualListingContent
-  workflow_mode: 'standard' | 'smart_image_variation'
+  workflow_mode: 'standard' | 'smart_image_variation' | 'attachment_standard'
   variation_types: string[]
   variation_plan_count: number
   source_task_group_id: string | null

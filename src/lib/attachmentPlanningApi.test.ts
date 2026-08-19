@@ -12,6 +12,8 @@ import {
   replanAttachmentModule,
   updateAttachmentModule,
   updateAttachmentVisualDirection,
+  previewAttachmentGeneration,
+  generateAttachments,
 } from './attachmentPlanningApi'
 
 afterEach(() => {
@@ -94,5 +96,25 @@ describe('attachment planning API', () => {
     ])
     expect((fetchMock.mock.calls[3][1] as RequestInit).method).toBe('PATCH')
     expect((fetchMock.mock.calls[4][1] as RequestInit).method).toBe('PATCH')
+  })
+
+  it('previews the durable snapshot before submitting an idempotent generation batch', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(ok({ modules: [] })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await previewAttachmentGeneration('project-1', ['gift_scene', 'detail_display'])
+    await generateAttachments('project-1', {
+      selected_module_keys: ['gift_scene', 'detail_display'],
+      snapshot_signature: 'a'.repeat(64),
+      idempotency_key: 'attachment-generate:test',
+    })
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/attachment-workbench/projects/project-1/generation-preview')
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v1/attachment-workbench/projects/project-1/generate')
+    const previewBody = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    const generationBody = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)
+    expect(previewBody.selected_module_keys).toEqual(['gift_scene', 'detail_display'])
+    expect(generationBody.snapshot_signature).toHaveLength(64)
+    expect(generationBody.idempotency_key).toBe('attachment-generate:test')
   })
 })
