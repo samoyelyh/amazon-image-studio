@@ -15,7 +15,7 @@ export default function PasswordChangeForm({ forced = false }: { forced?: boolea
   const [visible, setVisible] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
-  const rules = passwordRules(newPassword, auth.identity?.user.email, auth.identity?.user.display_name)
+  const rules = passwordRules(newPassword, auth.identity?.user.account, auth.identity?.user.display_name)
   const valid = rules.every((rule) => rule.passed) && confirmation === newPassword && currentPassword.length > 0
 
   const submit = async (event: FormEvent) => {

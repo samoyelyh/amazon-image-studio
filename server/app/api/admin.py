@@ -90,7 +90,7 @@ async def users(
     filters = []
     if search:
         value = f"%{search.strip()}%"
-        filters.append(or_(User.email.ilike(value), User.display_name.ilike(value)))
+        filters.append(or_(User.account.ilike(value), User.display_name.ilike(value)))
     if user_status:
         filters.append(User.status == user_status)
     total = await _count(session, User, *filters)
@@ -125,6 +125,17 @@ async def update_user(
     if user.id == principal.user.id and (payload.status == "disabled" or payload.platform_admin is False):
         raise AppError("admin.self_lockout", "You cannot disable or demote your own platform administrator account", 409)
     changes: dict[str, object] = {}
+    if payload.account is not None:
+        if await session.scalar(select(User.id).where(User.account == payload.account, User.id != user.id)):
+            raise AppError("admin.user_account_exists", "该账号已存在，请更换账号", 409)
+        old_account = user.account
+        user.account = payload.account
+        user.token_version += 1
+        await session.execute(update(RefreshToken).where(
+            RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None)
+        ).values(revoked_at=datetime.now(UTC)))
+        changes["old_account"] = old_account
+        changes["account"] = user.account
     if payload.display_name is not None:
         user.display_name = payload.display_name.strip()
         changes["display_name"] = user.display_name
@@ -596,7 +607,7 @@ async def _load_user(session: AsyncSession, user_id: str) -> User:
 
 def _user_response(user: User) -> AdminUserResponse:
     return AdminUserResponse(
-        id=user.id, email=user.email, display_name=user.display_name, status=user.status,
+        id=user.id, account=user.account, display_name=user.display_name, status=user.status,
         auth_provider=user.auth_provider, platform_role=user.platform_role.code if user.platform_role else None,
         memberships=[AdminMembershipSummary(
             id=item.id,

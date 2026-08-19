@@ -19,6 +19,7 @@ from app.models.identity import (
     UserStatus,
 )
 from app.schemas.identity import (
+    MemberAccountUpdateRequest,
     MemberCreateRequest,
     MemberRoleUpdateRequest,
     MemberStatusUpdateRequest,
@@ -29,6 +30,7 @@ from app.schemas.identity import (
     PasswordResetResponse,
 )
 from app.security.passwords import hash_password
+from app.security.accounts import validate_account
 from app.security.principal import Principal, require_organization, require_permissions
 from app.services.audit_service import add_audit_log
 from app.services.identity_views import membership_response
@@ -176,7 +178,7 @@ async def add_member(
 ) -> MembershipResponse:
     organization = _current_organization(principal)
     require_organization(principal, organization.id)
-    email = str(payload.email).strip().lower()
+    account = validate_account(payload.account)
     if idempotency_key:
         replay = await session.scalar(
             select(OrganizationMember).where(
@@ -186,7 +188,7 @@ async def add_member(
         )
         if replay is not None:
             loaded = await _loaded_membership(session, replay.id)
-            if loaded.user.email != email or loaded.role.code != payload.role_code:
+            if loaded.user.account != account or loaded.role.code != payload.role_code:
                 await _raise_operation_error(session, request, principal, organization.id, "organization.member.add", replay.id, AppError(
                     "organization.idempotency_conflict",
                     "同一个幂等键不能用于不同的创建请求",
@@ -194,31 +196,31 @@ async def add_member(
                 ))
             return membership_response(loaded)
 
-    if not payload.display_name or not payload.temporary_password:
+    if not payload.display_name:
         await _raise_operation_error(session, request, principal, organization.id, "organization.member.add", None, AppError(
             "organization.new_user_details_required",
             "创建用户时必须填写姓名和初始密码",
             422,
         ))
-    if await session.scalar(select(User.id).where(User.email == email)):
+    if await session.scalar(select(User.id).where(User.account == account)):
         await _raise_operation_error(session, request, principal, organization.id, "organization.member.add", None, AppError(
-            "organization.user_email_exists",
-            "该邮箱已存在，请更换邮箱或重置该用户密码",
+            "organization.user_account_exists",
+            "该账号已存在，请更换账号或重置该用户密码",
             409,
         ))
     display_name = payload.display_name.strip()
     try:
-        validate_password(payload.temporary_password, email=email, display_name=display_name)
+        validate_password(payload.temporary_password, account=account, display_name=display_name)
     except AppError as error:
         await _raise_operation_error(session, request, principal, organization.id, "organization.member.add", None, error)
     now = datetime.now(timezone.utc)
     user = User(
-        email=email,
+        account=account,
         display_name=display_name,
         password_hash=hash_password(payload.temporary_password),
         status=UserStatus.ACTIVE.value,
-        must_change_password=True,
-        temporary_password_created_at=now,
+        must_change_password=False,
+        password_changed_at=now,
         created_by=principal.user.id,
     )
     session.add(user)
@@ -236,7 +238,7 @@ async def add_member(
     add_audit_log(
         session, request=request, actor_user_id=principal.user.id, organization_id=organization.id,
         action="organization.member.add", resource_type="organization_member", resource_id=membership.id,
-        metadata={"user_id": user.id, "role_code": role.code, "must_change_password": True, "outcome": "success"},
+        metadata={"user_id": user.id, "role_code": role.code, "outcome": "success"},
     )
     await session.commit()
     return membership_response(await _loaded_membership(session, membership.id))
@@ -266,7 +268,7 @@ async def reset_member_password(
     try:
         validate_password(
             payload.temporary_password,
-            email=membership.user.email,
+            account=membership.user.account,
             display_name=membership.user.display_name,
         )
     except AppError as error:
@@ -276,9 +278,9 @@ async def reset_member_password(
         )
     now = datetime.now(timezone.utc)
     membership.user.password_hash = hash_password(payload.temporary_password)
-    membership.user.must_change_password = True
-    membership.user.temporary_password_created_at = now
-    membership.user.password_changed_at = None
+    membership.user.must_change_password = False
+    membership.user.temporary_password_created_at = None
+    membership.user.password_changed_at = now
     membership.user.token_version += 1
     await session.execute(
         update(RefreshToken)
@@ -293,13 +295,56 @@ async def reset_member_password(
         action="organization.member.password_reset",
         resource_type="user",
         resource_id=membership.user_id,
-        metadata={"force_change_password": True, "outcome": "success"},
+        metadata={"outcome": "success"},
     )
     await session.commit()
     return PasswordResetResponse(
         user_id=membership.user_id,
         must_change_password=membership.user.must_change_password,
     )
+
+
+@router.patch("/current/members/{member_id}/account", response_model=MembershipResponse)
+async def update_member_account(
+    member_id: str,
+    payload: MemberAccountUpdateRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("organization.members.write")),
+) -> MembershipResponse:
+    organization = _current_organization(principal)
+    membership = await _loaded_membership(session, member_id)
+    require_organization(principal, membership.organization_id)
+    if membership.organization_id != organization.id:
+        raise AppError("auth.organization_access_denied", "Organization access denied", 403)
+    if membership.user_id == principal.user.id:
+        raise AppError("organization.cannot_edit_own_account", "不能在成员管理中修改自己的登录账号", 409)
+    if membership.user.platform_role and membership.user.platform_role.code == "platform_admin" and not principal.is_platform_admin:
+        raise AppError("auth.permission_denied", "组织管理员不能修改平台管理员账号", 403)
+    account = validate_account(payload.account)
+    if await session.scalar(select(User.id).where(User.account == account, User.id != membership.user_id)):
+        raise AppError("organization.user_account_exists", "该账号已存在，请更换账号", 409)
+    old_account = membership.user.account
+    membership.user.account = account
+    membership.user.token_version += 1
+    now = datetime.now(timezone.utc)
+    await session.execute(
+        update(RefreshToken)
+        .where(RefreshToken.user_id == membership.user_id, RefreshToken.revoked_at.is_(None))
+        .values(revoked_at=now)
+    )
+    add_audit_log(
+        session,
+        request=request,
+        actor_user_id=principal.user.id,
+        organization_id=organization.id,
+        action="organization.member.account_update",
+        resource_type="user",
+        resource_id=membership.user_id,
+        metadata={"old_account": old_account, "new_account": account, "outcome": "success"},
+    )
+    await session.commit()
+    return membership_response(await _loaded_membership(session, membership.id))
 
 
 @router.patch("/current/members/{member_id}/status", response_model=MembershipResponse)

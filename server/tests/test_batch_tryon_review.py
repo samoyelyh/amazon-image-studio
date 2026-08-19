@@ -47,8 +47,8 @@ def test_detailed_prompt_legacy_wrappers_are_removed_without_changing_preset() -
     assert prompt_analysis_preset_only(preset) == preset
 
 
-async def auth_headers(client, email: str, password: str) -> dict[str, str]:
-    response = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+async def auth_headers(client, account: str, password: str) -> dict[str, str]:
+    response = await client.post("/api/v1/auth/login", json={"account": account, "password": password})
     assert response.status_code == 200, response.text
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
@@ -174,7 +174,7 @@ async def test_region_replace_stays_candidate_until_dedicated_approval(
 ) -> None:
     client = identity_test_context["client"]
     monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
-    admin = await auth_headers(client, "first-admin@example.com", "correct-password")
+    admin = await auth_headers(client, "first-admin", "correct-password")
     model_code = await seed_batch_try_on_pool(identity_test_context)
     model = await upload_asset(client, admin, "model_template", "model.png")
     garment = await upload_asset(client, admin, "garment", "jersey-06.png")
@@ -323,7 +323,7 @@ async def test_region_replace_candidate_can_be_discarded_before_retry(
 ) -> None:
     client = identity_test_context["client"]
     monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
-    admin = await auth_headers(client, "first-admin@example.com", "correct-password")
+    admin = await auth_headers(client, "first-admin", "correct-password")
     model_code = await seed_batch_try_on_pool(identity_test_context)
     model = await upload_asset(client, admin, "model_template", "model-discard.png")
     garment = await upload_asset(client, admin, "garment", "jersey-discard.png")
@@ -421,7 +421,7 @@ async def test_normal_tryon_submission_contract_preserves_matrix_jobs_reviews_ve
 ) -> None:
     client = identity_test_context["client"]
     monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
-    admin = await auth_headers(client, "first-admin@example.com", "correct-password")
+    admin = await auth_headers(client, "first-admin", "correct-password")
     model_code = await seed_batch_try_on_pool(identity_test_context)
     templates = [
         await upload_asset(client, admin, "model_template", "model-front.png"),
@@ -583,9 +583,9 @@ async def test_batch_try_on_review_approve_regenerate_versions_and_tenant_permis
 ) -> None:
     client = identity_test_context["client"]
     monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
-    admin = await auth_headers(client, "first-admin@example.com", "correct-password")
-    viewer = await auth_headers(client, "first-viewer@example.com", "viewer-password")
-    second = await auth_headers(client, "second-admin@example.com", "second-password")
+    admin = await auth_headers(client, "first-admin", "correct-password")
+    viewer = await auth_headers(client, "first-viewer", "viewer-password")
+    second = await auth_headers(client, "second-admin", "second-password")
     model_code = await seed_batch_try_on_pool(identity_test_context)
     model = await upload_asset(client, admin, "model_template", "model.png")
     garment = await upload_asset(client, admin, "garment", "jersey-06.png")
@@ -853,7 +853,7 @@ async def test_batch_try_on_zip_deduplicates_names_from_garment_assets(
 ) -> None:
     client = identity_test_context["client"]
     monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
-    admin = await auth_headers(client, "first-admin@example.com", "correct-password")
+    admin = await auth_headers(client, "first-admin", "correct-password")
     model_code = await seed_batch_try_on_pool(identity_test_context)
     model = await upload_asset(client, admin, "model_template", "model.png")
     garments = [
@@ -925,7 +925,7 @@ async def test_multi_template_cartesian_outputs_combine_template_and_garment_nam
 ) -> None:
     client = identity_test_context["client"]
     monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
-    admin = await auth_headers(client, "first-admin@example.com", "correct-password")
+    admin = await auth_headers(client, "first-admin", "correct-password")
     model_code = await seed_batch_try_on_pool(identity_test_context)
     templates = [
         await upload_asset(client, admin, "model_template", f"long-template-name-{index}.png")
@@ -1019,7 +1019,7 @@ async def test_old_batch_try_on_task_lazily_restores_filename_from_job_snapshot(
 ) -> None:
     client = identity_test_context["client"]
     monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
-    admin = await auth_headers(client, "first-admin@example.com", "correct-password")
+    admin = await auth_headers(client, "first-admin", "correct-password")
     model_code = await seed_batch_try_on_pool(identity_test_context)
     model = await upload_asset(client, admin, "model_template", "model.png")
     garment = await upload_asset(client, admin, "garment", "06-blue-jersey.webp")
@@ -1075,7 +1075,7 @@ async def test_bulk_regeneration_and_per_template_zip_are_stable_and_idempotent(
         "app.workers.celery_app.celery_app.send_task",
         lambda *args, **kwargs: send_calls.append((args, kwargs)),
     )
-    admin = await auth_headers(client, "first-admin@example.com", "correct-password")
+    admin = await auth_headers(client, "first-admin", "correct-password")
     model_code = await seed_batch_try_on_pool(identity_test_context)
     templates = [
         await upload_asset(client, admin, "model_template", filename)
@@ -1306,7 +1306,7 @@ async def test_bulk_regeneration_and_per_template_zip_are_stable_and_idempotent(
     cross_tenant_status = await client.post(
         "/api/v1/jobs/batch-status",
         headers=await auth_headers(
-            client, "second-admin@example.com", "second-password"
+            client, "second-admin", "second-password"
         ),
         json={
             "job_ids": [

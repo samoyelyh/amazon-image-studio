@@ -9,15 +9,15 @@ from app.models.quota import QuotaAccount
 from app.services.provider_test_service import ProviderConnectionResult
 
 
-async def auth_headers(client, email: str, password: str) -> dict[str, str]:
-    response = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+async def auth_headers(client, account: str, password: str) -> dict[str, str]:
+    response = await client.post("/api/v1/auth/login", json={"account": account, "password": password})
     assert response.status_code == 200, response.text
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
 async def test_admin_endpoints_require_platform_permission(identity_test_context) -> None:
     client = identity_test_context["client"]
-    organization_admin = await auth_headers(client, "first-admin@example.com", "correct-password")
+    organization_admin = await auth_headers(client, "first-admin", "correct-password")
 
     response = await client.get("/api/v1/admin/overview", headers=organization_admin)
 
@@ -27,7 +27,7 @@ async def test_admin_endpoints_require_platform_permission(identity_test_context
 
 async def test_admin_overview_users_and_self_lockout(identity_test_context) -> None:
     client = identity_test_context["client"]
-    platform = await auth_headers(client, "platform-admin@example.com", "platform-password")
+    platform = await auth_headers(client, "platform-admin", "platform-password")
 
     overview = await client.get("/api/v1/admin/overview", headers=platform)
     assert overview.status_code == 200, overview.text
@@ -51,9 +51,9 @@ async def test_admin_overview_users_and_self_lockout(identity_test_context) -> N
 
 async def test_admin_can_disable_and_restore_user(identity_test_context) -> None:
     client = identity_test_context["client"]
-    platform = await auth_headers(client, "platform-admin@example.com", "platform-password")
+    platform = await auth_headers(client, "platform-admin", "platform-password")
     async with identity_test_context["session_factory"]() as session:
-        user_id = await session.scalar(select(User.id).where(User.email == "first-viewer@example.com"))
+        user_id = await session.scalar(select(User.id).where(User.account == "first-viewer"))
 
     disabled = await client.patch(
         f"/api/v1/admin/users/{user_id}", headers=platform, json={"status": "disabled"}
@@ -61,7 +61,7 @@ async def test_admin_can_disable_and_restore_user(identity_test_context) -> None
     assert disabled.status_code == 200, disabled.text
     assert disabled.json()["status"] == "disabled"
     rejected = await client.post("/api/v1/auth/login", json={
-        "email": "first-viewer@example.com", "password": "viewer-password",
+        "account": "first-viewer", "password": "viewer-password",
     })
     assert rejected.status_code == 401
 
@@ -74,7 +74,7 @@ async def test_admin_can_disable_and_restore_user(identity_test_context) -> None
 
 async def test_admin_organization_quota_and_audit(identity_test_context) -> None:
     client = identity_test_context["client"]
-    platform = await auth_headers(client, "platform-admin@example.com", "platform-password")
+    platform = await auth_headers(client, "platform-admin", "platform-password")
     second_org = identity_test_context["second_org"]
 
     organizations = await client.get("/api/v1/admin/organizations", headers=platform)
@@ -107,7 +107,7 @@ async def test_admin_organization_quota_and_audit(identity_test_context) -> None
 
 async def test_admin_resource_inventory_never_returns_secret(identity_test_context) -> None:
     client = identity_test_context["client"]
-    platform = await auth_headers(client, "platform-admin@example.com", "platform-password")
+    platform = await auth_headers(client, "platform-admin", "platform-password")
     provider = await client.post("/api/v1/resource-pools/providers", headers=platform, json={
         "code": "admin-relay", "name": "Admin Relay", "provider_type": "openai_compatible",
         "base_url": "https://relay.example/v1", "config": {},
@@ -154,7 +154,7 @@ async def test_admin_resource_inventory_never_returns_secret(identity_test_conte
 
 async def test_admin_global_jobs_queues_and_login_audits(identity_test_context) -> None:
     client = identity_test_context["client"]
-    platform = await auth_headers(client, "platform-admin@example.com", "platform-password")
+    platform = await auth_headers(client, "platform-admin", "platform-password")
 
     jobs = await client.get("/api/v1/admin/jobs", headers=platform)
     queues = await client.get("/api/v1/admin/queues", headers=platform)
@@ -176,8 +176,8 @@ async def test_admin_global_jobs_queues_and_login_audits(identity_test_context) 
 
 async def test_admin_generated_output_diagnostics_are_safe(identity_test_context) -> None:
     client = identity_test_context["client"]
-    platform = await auth_headers(client, "platform-admin@example.com", "platform-password")
-    first = await auth_headers(client, "first-admin@example.com", "correct-password")
+    platform = await auth_headers(client, "platform-admin", "platform-password")
+    first = await auth_headers(client, "first-admin", "correct-password")
     asset_response = await client.post(
         "/api/v1/assets", headers=first, data={"category": "listing_output"},
         files={"file": ("diagnostic.png", __import__("base64").b64decode(
@@ -210,7 +210,7 @@ async def test_admin_generated_output_diagnostics_are_safe(identity_test_context
 
 async def test_admin_provider_test_uses_encrypted_key_and_masks_response(identity_test_context, monkeypatch) -> None:
     client = identity_test_context["client"]
-    platform = await auth_headers(client, "platform-admin@example.com", "platform-password")
+    platform = await auth_headers(client, "platform-admin", "platform-password")
     provider = await client.post("/api/v1/resource-pools/providers", headers=platform, json={
         "code": "probe-relay", "name": "Probe Relay", "provider_type": "openai_compatible",
         "base_url": "https://relay.example/v1", "config": {},

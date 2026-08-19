@@ -6,15 +6,15 @@ from httpx import AsyncClient
 PNG = b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
 
 
-async def auth_headers(client: AsyncClient, email: str, password: str) -> dict[str, str]:
-    response = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+async def auth_headers(client: AsyncClient, account: str, password: str) -> dict[str, str]:
+    response = await client.post("/api/v1/auth/login", json={"account": account, "password": password})
     assert response.status_code == 200, response.text
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
 async def test_print_asset_library_group_search_and_tenant_isolation(identity_test_context) -> None:
     client = identity_test_context["client"]
-    first = await auth_headers(client, "first-admin@example.com", "correct-password")
+    first = await auth_headers(client, "first-admin", "correct-password")
     group = await client.post("/api/v1/print-design/asset-groups", headers=first, json={
         "code": "football-numbers", "name": "橄榄球号码", "product_type": "jersey",
     })
@@ -47,7 +47,7 @@ async def test_print_asset_library_group_search_and_tenant_isolation(identity_te
     assert renamed.status_code == 200, renamed.text
     assert renamed.json()["asset_name"] == "号码 12 新版名称"
     assert renamed.json()["tags"] == ["football", "updated"]
-    second = await auth_headers(client, "second-admin@example.com", "second-password")
+    second = await auth_headers(client, "second-admin", "second-password")
     assert (await client.get("/api/v1/print-design/assets", headers=second)).json()["total"] == 0
     assert (await client.get("/api/v1/print-design/asset-groups", headers=second)).json() == []
     archived = await client.delete(f"/api/v1/print-design/assets/{registered.json()['id']}", headers=first)
@@ -57,7 +57,7 @@ async def test_print_asset_library_group_search_and_tenant_isolation(identity_te
 
 async def test_print_design_project_and_lossless_debug_assets(identity_test_context) -> None:
     client = identity_test_context["client"]
-    admin = await auth_headers(client, "first-admin@example.com", "correct-password")
+    admin = await auth_headers(client, "first-admin", "correct-password")
     source = await client.post(
         "/api/v1/assets", headers=admin, data={"category": "product_reference"},
         files={"file": ("base.png", PNG, "image/png")},

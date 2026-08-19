@@ -8,21 +8,21 @@ export default function LoginPage() {
   const auth = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [email, setEmail] = useState('')
+  const [account, setAccount] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => { document.title = '登录 · Amazon Image Studio' }, [])
 
-  if (auth.status === 'authenticated') return <Navigate to={auth.identity?.user.must_change_password ? appRoutes.changePassword : appRoutes.dashboard} replace />
+  if (auth.status === 'authenticated') return <Navigate to={appRoutes.dashboard} replace />
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     setSubmitting(true)
     setError('')
     try {
-      await auth.login(email, password)
+      await auth.login(account, password)
       const target = (location.state as { from?: string } | null)?.from || appRoutes.dashboard
       navigate(target, { replace: true })
     } catch (requestError) {
@@ -40,8 +40,8 @@ export default function LoginPage() {
         <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">使用平台账号进入团队工作区。登录状态通过安全的刷新令牌恢复。</p>
         <form className="mt-7 space-y-4" onSubmit={submit}>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
-            邮箱
-            <input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-gray-950 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/[0.1] dark:bg-gray-950 dark:text-white" />
+            账号
+            <input type="text" autoComplete="username" minLength={3} maxLength={32} pattern="[A-Za-z0-9_-]+" required value={account} onChange={(event) => setAccount(event.target.value)} placeholder="请输入账号" className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-gray-950 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/[0.1] dark:bg-gray-950 dark:text-white" />
           </label>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
             密码

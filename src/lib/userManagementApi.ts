@@ -6,7 +6,7 @@ export const getCurrentOrganizationMembers = () =>
   authenticatedFetch<AuthMembership[]>('/organizations/current/members')
 
 export const createOrganizationMember = (
-  input: { email: string; display_name: string; temporary_password: string; role_code: OrganizationRole },
+  input: { account: string; display_name: string; temporary_password: string; role_code: OrganizationRole },
   idempotencyKey: string,
 ) => authenticatedFetch<AuthMembership>('/organizations/current/members', {
   method: 'POST',
@@ -20,6 +20,12 @@ export const updateOrganizationMemberRole = (memberId: string, roleCode: Organiz
     body: JSON.stringify({ role_code: roleCode }),
   })
 
+export const updateOrganizationMemberAccount = (memberId: string, account: string) =>
+  authenticatedFetch<AuthMembership>(`/organizations/current/members/${memberId}/account`, {
+    method: 'PATCH',
+    body: JSON.stringify({ account }),
+  })
+
 export const updateOrganizationMemberStatus = (memberId: string, status: 'active' | 'disabled') =>
   authenticatedFetch<AuthMembership>(`/organizations/current/members/${memberId}/status`, {
     method: 'PATCH',
@@ -31,7 +37,7 @@ export const resetOrganizationMemberPassword = (memberId: string, temporaryPassw
     `/organizations/current/members/${memberId}/reset-password`,
     {
       method: 'POST',
-      body: JSON.stringify({ temporary_password: temporaryPassword, force_change_password: true }),
+      body: JSON.stringify({ temporary_password: temporaryPassword }),
     },
   )
 

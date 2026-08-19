@@ -28,7 +28,7 @@ def add_login_audit(
     request: Request,
     event: str,
     outcome: str,
-    email: str | None = None,
+    account: str | None = None,
     user_id: str | None = None,
     organization_id: str | None = None,
     detail: str | None = None,
@@ -36,7 +36,7 @@ def add_login_audit(
     session.add(LoginAudit(
         user_id=user_id,
         organization_id=organization_id,
-        email=email,
+        account=account,
         event=event,
         outcome=outcome,
         ip_address=client_ip(request),

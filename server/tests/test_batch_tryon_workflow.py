@@ -52,7 +52,7 @@ def test_analysis_only_response_is_still_rejected() -> None:
 
 async def auth_headers(client) -> dict[str, str]:
     response = await client.post("/api/v1/auth/login", json={
-        "email": "first-admin@example.com", "password": "correct-password",
+        "account": "first-admin", "password": "correct-password",
     })
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 

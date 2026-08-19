@@ -8,6 +8,7 @@ from app.core.config import get_settings
 from app.db.session import get_engine
 from app.models.identity import Organization, OrganizationMember, User
 from app.security.passwords import hash_password
+from app.security.accounts import validate_account
 from app.security.rbac import sync_rbac
 
 
@@ -19,16 +20,16 @@ def slugify(value: str) -> str:
 async def bootstrap(session: AsyncSession) -> None:
     settings = get_settings()
     roles = await sync_rbac(session)
-    if not settings.bootstrap_admin_email or not settings.bootstrap_admin_password:
+    if not settings.bootstrap_admin_account or not settings.bootstrap_admin_password:
         await session.commit()
         print("RBAC definitions synchronized; bootstrap admin is disabled.")
         return
 
-    email = str(settings.bootstrap_admin_email).strip().lower()
-    user = await session.scalar(select(User).where(User.email == email))
+    account = validate_account(settings.bootstrap_admin_account)
+    user = await session.scalar(select(User).where(User.account == account))
     if user is None:
         user = User(
-            email=email,
+            account=account,
             display_name=settings.bootstrap_admin_name,
             password_hash=hash_password(settings.bootstrap_admin_password.get_secret_value()),
             platform_role_id=roles["platform_admin"].id,
@@ -62,7 +63,7 @@ async def bootstrap(session: AsyncSession) -> None:
             invited_by=user.id,
         ))
     await session.commit()
-    print(f"Identity bootstrap ready for {email} in {organization.slug}.")
+    print(f"Identity bootstrap ready for {account} in {organization.slug}.")
 
 
 async def main() -> None:

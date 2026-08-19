@@ -1,8 +1,14 @@
 import { useEffect } from 'react'
+import { Navigate } from 'react-router-dom'
+import { useAuth } from '../app/AuthContext'
+import { appRoutes } from '../app/routes'
 import PasswordChangeForm from '../components/account/PasswordChangeForm'
 
 export default function ChangePasswordPage() {
+  const auth = useAuth()
   useEffect(() => { document.title = '修改初始密码 · Amazon Image Studio' }, [])
+  const allowed = auth.identity?.role_codes.some((role) => role === 'platform_admin' || role === 'organization_admin')
+  if (!allowed) return <Navigate to={appRoutes.profile} replace />
   return <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-10 dark:bg-gray-950">
     <section className="w-full max-w-lg rounded-3xl border border-gray-200 bg-white p-7 shadow-xl shadow-gray-200/40 dark:border-white/[0.08] dark:bg-gray-900 dark:shadow-none">
       <div className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">首次登录安全验证</div>

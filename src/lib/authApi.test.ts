@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { authenticatedFetch, clearAccessToken, login, refreshSession } from './authApi'
 
 const identity = {
-  user: { id: 'user-1', email: 'user@example.com', display_name: 'User', status: 'active', auth_provider: 'local', created_at: '', updated_at: '' },
+  user: { id: 'user-1', account: 'user-1', display_name: 'User', status: 'active', auth_provider: 'local', created_at: '', updated_at: '' },
   organization: null,
   role_codes: [],
   permissions: [],

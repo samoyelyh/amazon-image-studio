@@ -28,7 +28,7 @@ export interface AdminMembership {
 
 export interface AdminUser {
   id: string
-  email: string
+  account: string
   display_name: string
   status: string
   auth_provider: string
@@ -285,7 +285,7 @@ export interface AdminLoginAudit {
   id: string
   user_id: string | null
   organization_id: string | null
-  email: string | null
+  account: string | null
   event: string
   outcome: string
   ip_address: string | null
@@ -308,7 +308,7 @@ export const getGenerationResourceDiagnostics = () =>
 export const getAdminAudits = () => authenticatedFetch<Page<AdminAudit>>('/admin/audit-logs?limit=100')
 export const getAdminLoginAudits = () => authenticatedFetch<Page<AdminLoginAudit>>('/admin/login-audits?limit=100')
 
-export const updateAdminUser = (id: string, input: { status?: 'active' | 'disabled'; platform_admin?: boolean; display_name?: string }) =>
+export const updateAdminUser = (id: string, input: { account?: string; status?: 'active' | 'disabled'; platform_admin?: boolean; display_name?: string }) =>
   authenticatedFetch<AdminUser>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(input) })
 
 export const updateAdminOrganization = (id: string, input: { status?: 'active' | 'disabled'; name?: string }) =>

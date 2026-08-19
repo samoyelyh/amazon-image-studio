@@ -36,9 +36,6 @@ function ProtectedRoutes() {
   if (auth.status === 'anonymous') {
     return <Navigate to={appRoutes.login} replace state={{ from: location.pathname }} />
   }
-  if (auth.identity?.user.must_change_password && location.pathname !== appRoutes.changePassword) {
-    return <Navigate to={appRoutes.changePassword} replace />
-  }
   return <Outlet />
 }
 

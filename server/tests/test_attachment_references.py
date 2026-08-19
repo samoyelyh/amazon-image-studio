@@ -34,7 +34,7 @@ def _asset(org_id: str, user_id: str, suffix: str, category: str = "product_refe
 
 async def _project_with_assets(context: dict[str, object]) -> tuple[str, dict[str, str]]:
     async with context["session_factory"]() as db:
-        user = await db.scalar(select(User).where(User.email == "first-admin@example.com"))
+        user = await db.scalar(select(User).where(User.account == "first-admin"))
         category = ProductCategory(category_code="football_jersey", category_name="橄榄球衣")
         db.add(category)
         await db.flush()
@@ -131,7 +131,7 @@ def test_planning_context_accepts_reference_understanding_without_flattening() -
 async def test_reference_api_inherits_product_validates_slots_limits_and_protects_asset(identity_test_context) -> None:
     project_id, assets = await _project_with_assets(identity_test_context)
     client = identity_test_context["client"]
-    login = await client.post("/api/v1/auth/login", json={"email": "first-admin@example.com", "password": "correct-password"})
+    login = await client.post("/api/v1/auth/login", json={"account": "first-admin", "password": "correct-password"})
     headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
     initial = await client.get(f"/api/v1/attachment-workbench/projects/{project_id}/references", headers=headers)
@@ -183,7 +183,7 @@ async def test_reference_api_inherits_product_validates_slots_limits_and_protect
     protected = await client.delete(f"/api/v1/assets/{assets['template']}", headers=headers)
     assert protected.status_code == 409
 
-    second_login = await client.post("/api/v1/auth/login", json={"email": "second-admin@example.com", "password": "second-password"})
+    second_login = await client.post("/api/v1/auth/login", json={"account": "second-admin", "password": "second-password"})
     isolated = await client.get(
         f"/api/v1/attachment-workbench/projects/{project_id}/references",
         headers={"Authorization": f"Bearer {second_login.json()['access_token']}"},

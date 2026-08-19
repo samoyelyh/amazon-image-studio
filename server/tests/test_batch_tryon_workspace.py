@@ -4,10 +4,10 @@ from app.models.tasks import JobBatch
 
 
 async def auth_headers(
-    client, email: str = "first-admin@example.com", password: str = "correct-password",
+    client, account: str = "first-admin", password: str = "correct-password",
 ) -> dict[str, str]:
     response = await client.post("/api/v1/auth/login", json={
-        "email": email, "password": password,
+        "account": account, "password": password,
     })
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
@@ -94,7 +94,7 @@ async def test_batch_try_on_projects_workspaces_and_batches_are_account_isolated
     client = identity_test_context["client"]
     owner = await auth_headers(client)
     other_account = await auth_headers(
-        client, "first-viewer@example.com", "viewer-password",
+        client, "first-viewer", "viewer-password",
     )
     project = (await client.post("/api/v1/projects", headers=owner, json={
         "project_type": "batch_tryon", "name": "Private batch project", "draft": {},

@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field, field_serializer
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
-from app.schemas.identity import AuditLogResponse, LoginAuditResponse
+from app.schemas.identity import ACCOUNT_PATTERN, AuditLogResponse, LoginAuditResponse
+from app.security.accounts import normalize_account
 from app.schemas.quota import QuotaAccountResponse, QuotaTransactionResponse
 
 
@@ -34,7 +35,7 @@ class AdminMembershipSummary(BaseModel):
 
 class AdminUserResponse(BaseModel):
     id: str
-    email: EmailStr
+    account: str
     display_name: str
     status: str
     auth_provider: str
@@ -57,9 +58,15 @@ class AdminUserPage(BaseModel):
 
 
 class AdminUserUpdateRequest(BaseModel):
+    account: str | None = Field(default=None, pattern=ACCOUNT_PATTERN, min_length=3, max_length=32)
     display_name: str | None = Field(default=None, min_length=1, max_length=100)
     status: Literal["active", "disabled"] | None = None
     platform_admin: bool | None = None
+
+    @field_validator("account", mode="before")
+    @classmethod
+    def normalize_user_account(cls, value: object) -> object:
+        return normalize_account(value) if isinstance(value, str) else value
 
 
 class AdminOrganizationResponse(BaseModel):

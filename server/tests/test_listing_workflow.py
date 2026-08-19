@@ -140,8 +140,8 @@ def test_listing_image_prompt_does_not_invent_unsupported_product_claims() -> No
     assert "LOW-WEIGHT CREATIVE CONTEXT" in prompt
 
 
-async def auth_headers(client: AsyncClient, email: str, password: str) -> dict[str, str]:
-    response = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+async def auth_headers(client: AsyncClient, account: str, password: str) -> dict[str, str]:
+    response = await client.post("/api/v1/auth/login", json={"account": account, "password": password})
     assert response.status_code == 200, response.text
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
@@ -342,7 +342,7 @@ def test_free_variation_prompt_is_neutral_without_skill_and_skill_is_lower_prior
 
 async def test_free_variation_project_works_without_category_skill(identity_test_context) -> None:
     client = identity_test_context["client"]
-    member = await auth_headers(client, "first-admin@example.com", "correct-password")
+    member = await auth_headers(client, "first-admin", "correct-password")
     uploaded = await client.post(
         "/api/v1/assets", headers=member, data={"category": "temporary"},
         files={"file": ("free-source.png", PNG, "image/png")},
@@ -388,8 +388,8 @@ async def test_free_variation_project_works_without_category_skill(identity_test
 
 async def test_admin_can_create_category_skill_and_bind_default(identity_test_context) -> None:
     client = identity_test_context["client"]
-    platform = await auth_headers(client, "platform-admin@example.com", "platform-password")
-    member = await auth_headers(client, "first-admin@example.com", "correct-password")
+    platform = await auth_headers(client, "platform-admin", "platform-password")
+    member = await auth_headers(client, "first-admin", "correct-password")
 
     created = await client.post("/api/v1/categories", headers=platform, json={
         "category_code": "football_jersey", "category_name": "橄榄球衣",
@@ -444,10 +444,10 @@ async def test_admin_can_create_category_skill_and_bind_default(identity_test_co
 
 async def test_listing_confirmation_versions_output_projects_and_org_isolation(identity_test_context) -> None:
     client = identity_test_context["client"]
-    member = await auth_headers(client, "first-admin@example.com", "correct-password")
-    other_org = await auth_headers(client, "second-admin@example.com", "second-password")
+    member = await auth_headers(client, "first-admin", "correct-password")
+    other_org = await auth_headers(client, "second-admin", "second-password")
     async with identity_test_context["session_factory"]() as session:
-        user = await session.scalar(select(User).where(User.email == "first-admin@example.com"))
+        user = await session.scalar(select(User).where(User.account == "first-admin"))
         membership = await session.scalar(select(OrganizationMember).where(
             OrganizationMember.user_id == user.id,
             OrganizationMember.organization_id == identity_test_context["first_org"],
@@ -572,8 +572,8 @@ async def test_listing_confirmation_versions_output_projects_and_org_isolation(i
 
 async def test_category_skill_admin_version_publish_and_default(identity_test_context) -> None:
     client = identity_test_context["client"]
-    platform = await auth_headers(client, "platform-admin@example.com", "platform-password")
-    member = await auth_headers(client, "first-admin@example.com", "correct-password")
+    platform = await auth_headers(client, "platform-admin", "platform-password")
+    member = await auth_headers(client, "first-admin", "correct-password")
     category = await client.post("/api/v1/categories", headers=platform, json={
         "category_code": "skill_console_test", "category_name": "Skill Console Test",
     })

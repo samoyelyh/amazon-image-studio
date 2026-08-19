@@ -93,13 +93,6 @@ async def get_current_principal(
         session, claims.user_id, claims.organization_id,
         expected_token_version=claims.token_version,
     )
-    api_prefix = get_settings().api_v1_prefix
-    allowed_while_changing_password = request.url.path in {
-        f"{api_prefix}/auth/me",
-        f"{api_prefix}/auth/change-password",
-    } or (request.method == "GET" and request.url.path == f"{api_prefix}/users/me")
-    if principal.user.must_change_password and not allowed_while_changing_password:
-        raise AppError("auth.password_change_required", "首次登录或密码已重置，请先修改密码。", 403)
     return principal
 
 

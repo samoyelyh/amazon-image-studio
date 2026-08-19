@@ -12,8 +12,8 @@ from app.security.passwords import hash_password
 PNG = b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
 
 
-async def auth_headers(client, email: str, password: str) -> dict[str, str]:
-    response = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+async def auth_headers(client, account: str, password: str) -> dict[str, str]:
+    response = await client.post("/api/v1/auth/login", json={"account": account, "password": password})
     assert response.status_code == 200, response.text
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
@@ -66,13 +66,13 @@ async def seed_listing_pool(context) -> str:
 async def test_listing_output_send_create_replace_idempotency_and_isolation(identity_test_context, monkeypatch) -> None:
     client = identity_test_context["client"]
     monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
-    admin = await auth_headers(client, "first-admin@example.com", "correct-password")
-    viewer = await auth_headers(client, "first-viewer@example.com", "viewer-password")
-    second = await auth_headers(client, "second-admin@example.com", "second-password")
+    admin = await auth_headers(client, "first-admin", "correct-password")
+    viewer = await auth_headers(client, "first-viewer", "viewer-password")
+    second = await auth_headers(client, "second-admin", "second-password")
     async with identity_test_context["session_factory"]() as session:
         member_role = await session.scalar(select(Role).where(Role.code == "member"))
         member = User(
-            email="listing-member@example.com",
+            account="listing-member",
             display_name="Listing Member",
             password_hash=hash_password("member-password"),
         )
@@ -84,7 +84,7 @@ async def test_listing_output_send_create_replace_idempotency_and_isolation(iden
             role_id=member_role.id,
         ))
         await session.commit()
-    member_headers = await auth_headers(client, "listing-member@example.com", "member-password")
+    member_headers = await auth_headers(client, "listing-member", "member-password")
     member_probe = await client.post(
         "/api/v1/listing/generated-outputs/missing-output/send-to-batch-tryon",
         headers=member_headers,

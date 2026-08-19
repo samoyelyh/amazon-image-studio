@@ -2,7 +2,7 @@ from functools import lru_cache
 from typing import Annotated, Literal
 from urllib.parse import quote_plus
 
-from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     refresh_cookie_name: str = "ais_refresh_token"
     refresh_cookie_secure: bool = False
     refresh_cookie_samesite: Literal["lax", "strict"] = "lax"
-    bootstrap_admin_email: EmailStr | None = None
+    bootstrap_admin_account: str | None = None
     bootstrap_admin_password: SecretStr | None = None
     bootstrap_admin_name: str = "Platform Administrator"
     bootstrap_organization_name: str = "Default Organization"
@@ -101,8 +101,8 @@ class Settings(BaseSettings):
             raise ValueError("JWT_SECRET must be replaced in production")
         if self.environment == "production" and not self.refresh_cookie_secure:
             raise ValueError("REFRESH_COOKIE_SECURE must be enabled in production")
-        if bool(self.bootstrap_admin_email) != bool(self.bootstrap_admin_password):
-            raise ValueError("BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD must be configured together")
+        if bool(self.bootstrap_admin_account) != bool(self.bootstrap_admin_password):
+            raise ValueError("BOOTSTRAP_ADMIN_ACCOUNT and BOOTSTRAP_ADMIN_PASSWORD must be configured together")
         if self.bootstrap_admin_password and len(self.bootstrap_admin_password.get_secret_value()) < 12:
             raise ValueError("BOOTSTRAP_ADMIN_PASSWORD must contain at least 12 characters")
         if self.asset_max_upload_bytes < 1:

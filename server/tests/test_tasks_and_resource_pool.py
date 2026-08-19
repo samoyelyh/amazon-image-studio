@@ -20,8 +20,8 @@ from app.services.task_service import (
 )
 
 
-async def auth_headers(client, email: str, password: str) -> dict[str, str]:
-    response = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+async def auth_headers(client, account: str, password: str) -> dict[str, str]:
+    response = await client.post("/api/v1/auth/login", json={"account": account, "password": password})
     assert response.status_code == 200, response.text
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
@@ -67,7 +67,7 @@ async def seed_pool(
 
 async def test_platform_key_is_encrypted_masked_and_never_returned(identity_test_context) -> None:
     client = identity_test_context["client"]
-    headers = await auth_headers(client, "platform-admin@example.com", "platform-password")
+    headers = await auth_headers(client, "platform-admin", "platform-password")
     provider = await client.post("/api/v1/resource-pools/providers", headers=headers, json={
         "code": "newapi", "name": "Relay", "provider_type": "new_api", "base_url": "https://relay.example/v1",
     })
@@ -89,13 +89,13 @@ async def test_platform_key_is_encrypted_masked_and_never_returned(identity_test
 
 async def test_credentials_are_rejected_from_provider_config_and_job_input(identity_test_context) -> None:
     client = identity_test_context["client"]
-    platform = await auth_headers(client, "platform-admin@example.com", "platform-password")
+    platform = await auth_headers(client, "platform-admin", "platform-password")
     provider = await client.post("/api/v1/resource-pools/providers", headers=platform, json={
         "code": "unsafe", "name": "Unsafe", "provider_type": "new_api", "base_url": "https://relay.example/v1",
         "config": {"api_key": "must-not-be-here"},
     })
     assert provider.status_code == 422
-    first = await auth_headers(client, "first-admin@example.com", "correct-password")
+    first = await auth_headers(client, "first-admin", "correct-password")
     job = await client.post("/api/v1/jobs", headers=first, json={
         "operation_code": "listing.generate", "workspace_type": "listing", "queue_name": "listing_queue",
         "capability": "image_generation", "model_code": "standard", "idempotency_key": "unsafe-job-001",
@@ -203,7 +203,7 @@ async def test_repeated_failures_keep_fast_probe_cooldown_capped_at_ten_seconds(
 async def test_job_submission_is_idempotent_tenant_scoped_and_cancel_refunds(identity_test_context, monkeypatch) -> None:
     client = identity_test_context["client"]
     monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
-    first = await auth_headers(client, "first-admin@example.com", "correct-password")
+    first = await auth_headers(client, "first-admin", "correct-password")
     _, model_code, _, _ = await seed_pool(identity_test_context)
     payload = {
         "operation_code": "listing.generate", "workspace_type": "listing", "queue_name": "listing_queue",
@@ -216,7 +216,7 @@ async def test_job_submission_is_idempotent_tenant_scoped_and_cancel_refunds(ide
     repeated = await client.post("/api/v1/jobs", headers=first, json=payload)
     assert repeated.status_code == 200
     assert repeated.json()["id"] == created.json()["id"]
-    second = await auth_headers(client, "second-admin@example.com", "second-password")
+    second = await auth_headers(client, "second-admin", "second-password")
     assert (await client.get(f"/api/v1/jobs/{created.json()['id']}", headers=second)).status_code == 404
     cancelled = await client.post(f"/api/v1/jobs/{created.json()['id']}/cancel", headers=first)
     assert cancelled.status_code == 200
@@ -235,7 +235,7 @@ async def test_job_submission_is_idempotent_tenant_scoped_and_cancel_refunds(ide
 async def test_batch_split_concurrency_partial_settlement_and_refresh_recovery(identity_test_context, monkeypatch) -> None:
     client = identity_test_context["client"]
     monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
-    headers = await auth_headers(client, "first-admin@example.com", "correct-password")
+    headers = await auth_headers(client, "first-admin", "correct-password")
     _, model_code, _, _ = await seed_pool(identity_test_context)
     payload = {
         "name": "Listing batch", "workspace_type": "listing", "operation_code": "listing.generate",
@@ -337,7 +337,7 @@ async def test_duplicate_worker_claim_and_stale_recovery_are_idempotent(identity
         input={"prompt": "test", "size": "1024x1024"},
     )
     async with identity_test_context["session_factory"]() as session:
-        user_id = await session.scalar(select(User.id).where(User.email == "first-admin@example.com"))
+        user_id = await session.scalar(select(User.id).where(User.account == "first-admin"))
         job, _ = await submit_job(session, settings, organization_id=identity_test_context["first_org"],
                                   user_id=user_id, payload=payload)
         job.celery_task_id = "dispatch-token-current"
@@ -376,7 +376,7 @@ async def test_resource_wait_does_not_consume_attempt_or_retry(identity_test_con
 
     _, model_code, _, _ = await seed_pool(identity_test_context)
     async with identity_test_context["session_factory"]() as session:
-        user_id = await session.scalar(select(User.id).where(User.email == "first-admin@example.com"))
+        user_id = await session.scalar(select(User.id).where(User.account == "first-admin"))
         job, _ = await submit_job(
             session,
             settings,
@@ -413,7 +413,7 @@ async def test_technical_retry_uses_jitter_and_separate_counter(identity_test_co
 
     _, model_code, _, _ = await seed_pool(identity_test_context)
     async with identity_test_context["session_factory"]() as session:
-        user_id = await session.scalar(select(User.id).where(User.email == "first-admin@example.com"))
+        user_id = await session.scalar(select(User.id).where(User.account == "first-admin"))
         job, _ = await submit_job(
             session,
             settings,
@@ -451,7 +451,7 @@ async def test_claim_reactivates_an_expired_zero_use_reservation(identity_test_c
 
     _, model_code, _, _ = await seed_pool(identity_test_context)
     async with identity_test_context["session_factory"]() as session:
-        user_id = await session.scalar(select(User.id).where(User.email == "first-admin@example.com"))
+        user_id = await session.scalar(select(User.id).where(User.account == "first-admin"))
         job, _ = await submit_job(
             session, settings,
             organization_id=identity_test_context["first_org"], user_id=user_id,
@@ -502,7 +502,7 @@ async def test_due_job_scheduler_respects_batch_concurrency_under_load(
 
     _, model_code, _, _ = await seed_pool(identity_test_context, max_concurrency=concurrency)
     async with identity_test_context["session_factory"]() as session:
-        user_id = await session.scalar(select(User.id).where(User.email == "first-admin@example.com"))
+        user_id = await session.scalar(select(User.id).where(User.account == "first-admin"))
         batch = JobBatch(
             organization_id=identity_test_context["first_org"],
             workspace_type="listing", operation_code="listing.generate", name=f"load-{item_count}",
@@ -574,7 +574,7 @@ async def test_batch_try_on_high_concurrency_is_available_to_members(
         }],
     }
 
-    admin_headers = await auth_headers(client, "first-admin@example.com", "correct-password")
+    admin_headers = await auth_headers(client, "first-admin", "correct-password")
     accepted = await client.post("/api/v1/job-batches", headers=admin_headers, json=payload)
     assert accepted.status_code == 202, accepted.text
     assert accepted.json()["concurrency"] == 10
@@ -589,7 +589,7 @@ async def test_batch_try_on_high_concurrency_is_available_to_members(
         membership.role_id = member_role.id
         await session.commit()
 
-    member_headers = await auth_headers(client, "first-viewer@example.com", "viewer-password")
+    member_headers = await auth_headers(client, "first-viewer", "viewer-password")
     member_accepted = await client.post(
         "/api/v1/job-batches",
         headers=member_headers,
@@ -628,7 +628,7 @@ async def test_due_job_scheduler_prioritizes_new_work_and_skips_cooling_capacity
 
     _, model_code, _, key_ids = await seed_pool(identity_test_context)
     async with identity_test_context["session_factory"]() as session:
-        user_id = await session.scalar(select(User.id).where(User.email == "first-admin@example.com"))
+        user_id = await session.scalar(select(User.id).where(User.account == "first-admin"))
         retry_job, _ = await submit_job(
             session, settings,
             organization_id=identity_test_context["first_org"], user_id=user_id,
@@ -673,7 +673,7 @@ async def test_429_cools_key_and_fails_over_to_next_key(identity_test_context, m
     settings = Settings(_env_file=None)
     from app.models.identity import User
     async with identity_test_context["session_factory"]() as session:
-        user_id = await session.scalar(select(User.id).where(User.email == "first-admin@example.com"))
+        user_id = await session.scalar(select(User.id).where(User.account == "first-admin"))
         job, _ = await submit_job(session, settings, organization_id=identity_test_context["first_org"], user_id=user_id,
             payload=JobSubmitRequest(operation_code="listing.generate", workspace_type="listing", queue_name="listing_queue",
                 capability="image_generation", model_code=model_code, idempotency_key="failover-429-001",

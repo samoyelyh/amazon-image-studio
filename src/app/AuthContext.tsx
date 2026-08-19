@@ -9,7 +9,7 @@ type AuthStatus = 'loading' | 'authenticated' | 'anonymous'
 interface AuthContextValue {
   status: AuthStatus
   identity: CurrentIdentity | null
-  login: (email: string, password: string) => Promise<void>
+  login: (account: string, password: string) => Promise<void>
   logout: () => Promise<void>
   switchOrganization: (organizationId: string) => Promise<void>
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>
@@ -90,10 +90,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (account: string, password: string) => {
     const revision = ++authRevision.current
     try {
-      const session = await loginRequest(email, password)
+      const session = await loginRequest(account, password)
       if (authRevision.current !== revision) return
       queryClient.clear()
       synchronizeAccountScope(session.identity)

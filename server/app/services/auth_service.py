@@ -48,23 +48,23 @@ class AuthService:
         self,
         session: AsyncSession,
         request: Request,
-        email: str,
+        account: str,
         password: str,
         organization_id: str | None,
     ) -> AuthSession:
-        normalized_email = email.strip().lower()
-        user = await self.identity_provider.authenticate(session, normalized_email, password)
+        normalized_account = account.strip().lower()
+        user = await self.identity_provider.authenticate(session, normalized_account, password)
         if user is None or user.status != UserStatus.ACTIVE.value:
             add_login_audit(
                 session,
                 request=request,
                 event="login",
                 outcome="failure",
-                email=normalized_email,
+                account=normalized_account,
                 detail="invalid_credentials",
             )
             await session.commit()
-            raise AppError("auth.invalid_credentials", "Email or password is incorrect", 401)
+            raise AppError("auth.invalid_credentials", "账号或密码错误", 401)
 
         selected_organization_id = await self._select_organization(session, user, organization_id)
         now = datetime.now(UTC)
@@ -76,7 +76,7 @@ class AuthService:
             request=request,
             event="login",
             outcome="success",
-            email=user.email,
+            account=user.account,
             user_id=user.id,
             organization_id=selected_organization_id,
         )
@@ -230,6 +230,8 @@ class AuthService:
         new_password: str,
     ) -> AuthSession:
         user = principal.user
+        if not principal.is_platform_admin and "organization_admin" not in principal.role_codes:
+            raise AppError("auth.password_change_forbidden", "普通成员不能自行修改密码，请联系管理员重置", 403)
         if not verify_password(current_password, user.password_hash):
             add_audit_log(
                 session, request=request, actor_user_id=user.id,
@@ -249,7 +251,7 @@ class AuthService:
             await session.commit()
             raise AppError("auth.password_unchanged", "新密码不能与当前密码相同", 422)
         try:
-            validate_password(new_password, email=user.email, display_name=user.display_name)
+            validate_password(new_password, account=user.account, display_name=user.display_name)
         except AppError as error:
             add_audit_log(
                 session, request=request, actor_user_id=user.id,
@@ -294,7 +296,7 @@ class AuthService:
             request=request,
             event="password_change",
             outcome="success",
-            email=user.email,
+            account=user.account,
             user_id=user.id,
             organization_id=principal.organization.id if principal.organization else None,
         )

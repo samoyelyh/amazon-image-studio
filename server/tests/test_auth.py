@@ -6,8 +6,8 @@ from app.api.auth import _login_with_deadlock_retry
 from app.models.identity import AuditLog, LoginAudit, OrganizationMember, RefreshToken, Role, User
 
 
-async def login(client: AsyncClient, email: str, password: str) -> dict[str, object]:
-    response = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+async def login(client: AsyncClient, account: str, password: str) -> dict[str, object]:
+    response = await client.post("/api/v1/auth/login", json={"account": account, "password": password})
     assert response.status_code == 200, response.text
     return response.json()
 
@@ -33,7 +33,7 @@ async def test_login_retries_transient_mysql_deadlock() -> None:
 
     service = FakeService()
     session = FakeSession()
-    result = await _login_with_deadlock_retry(service, session, None, "user@example.com", "password", None)
+    result = await _login_with_deadlock_retry(service, session, None, "user", "password", None)
 
     assert result is expected
     assert service.call_count == 2
@@ -42,7 +42,7 @@ async def test_login_retries_transient_mysql_deadlock() -> None:
 
 async def test_login_me_and_refresh_rotation(identity_test_context) -> None:
     client = identity_test_context["client"]
-    payload = await login(client, "FIRST-ADMIN@EXAMPLE.COM", "correct-password")
+    payload = await login(client, " FIRST-ADMIN ", "correct-password")
     assert payload["token_type"] == "bearer"
     assert payload["identity"]["organization"]["slug"] == "first-team"
     assert "organization.members.write" in payload["identity"]["permissions"]
@@ -52,7 +52,7 @@ async def test_login_me_and_refresh_rotation(identity_test_context) -> None:
         "/api/v1/auth/me", headers={"Authorization": f"Bearer {payload['access_token']}"}
     )
     assert me_response.status_code == 200
-    assert me_response.json()["user"]["email"] == "first-admin@example.com"
+    assert me_response.json()["user"]["account"] == "first-admin"
 
     refresh_response = await client.post("/api/v1/auth/refresh")
     assert refresh_response.status_code == 200
@@ -68,7 +68,7 @@ async def test_login_me_and_refresh_rotation(identity_test_context) -> None:
 
 async def test_concurrent_refresh_rotation_requests_do_not_revoke_the_whole_family(identity_test_context) -> None:
     client = identity_test_context["client"]
-    await login(client, "first-admin@example.com", "correct-password")
+    await login(client, "first-admin", "correct-password")
     reused_secret = client.cookies["ais_refresh_token"]
     successful_refresh = await client.post("/api/v1/auth/refresh")
     assert successful_refresh.status_code == 200
@@ -89,7 +89,7 @@ async def test_concurrent_refresh_rotation_requests_do_not_revoke_the_whole_fami
 
 async def test_refresh_token_reuse_from_another_client_revokes_the_whole_family(identity_test_context) -> None:
     client = identity_test_context["client"]
-    await login(client, "first-admin@example.com", "correct-password")
+    await login(client, "first-admin", "correct-password")
     reused_secret = client.cookies["ais_refresh_token"]
     successful_refresh = await client.post("/api/v1/auth/refresh")
     assert successful_refresh.status_code == 200
@@ -112,7 +112,7 @@ async def test_refresh_token_reuse_from_another_client_revokes_the_whole_family(
 async def test_invalid_login_is_generic_and_audited(identity_test_context) -> None:
     client = identity_test_context["client"]
     response = await client.post(
-        "/api/v1/auth/login", json={"email": "first-admin@example.com", "password": "wrong-password"}
+        "/api/v1/auth/login", json={"account": "first-admin", "password": "wrong-password"}
     )
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "auth.invalid_credentials"
@@ -124,9 +124,24 @@ async def test_invalid_login_is_generic_and_audited(identity_test_context) -> No
         assert audit.detail == "invalid_credentials"
 
 
+async def test_login_and_user_api_do_not_accept_or_return_email(identity_test_context) -> None:
+    client = identity_test_context["client"]
+    legacy = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "first-admin@example.com", "password": "correct-password"},
+    )
+    assert legacy.status_code == 422
+
+    signed_in = await login(client, "first-admin", "correct-password")
+    user = signed_in["identity"]["user"]
+    assert user["account"] == "first-admin"
+    assert "email" not in user
+    assert "email" not in User.__table__.columns
+
+
 async def test_viewer_cannot_read_members(identity_test_context) -> None:
     client = identity_test_context["client"]
-    payload = await login(client, "first-viewer@example.com", "viewer-password")
+    payload = await login(client, "first-viewer", "viewer-password")
     headers = {"Authorization": f"Bearer {payload['access_token']}"}
     organization_response = await client.get("/api/v1/organizations/current", headers=headers)
     members_response = await client.get("/api/v1/organizations/current/members", headers=headers)
@@ -137,7 +152,7 @@ async def test_viewer_cannot_read_members(identity_test_context) -> None:
 
 async def test_organization_admin_cannot_mutate_another_team(identity_test_context) -> None:
     client = identity_test_context["client"]
-    payload = await login(client, "first-admin@example.com", "correct-password")
+    payload = await login(client, "first-admin", "correct-password")
     response = await client.delete(
         f"/api/v1/organizations/current/members/{identity_test_context['second_admin_membership']}",
         headers={"Authorization": f"Bearer {payload['access_token']}"},
@@ -148,7 +163,7 @@ async def test_organization_admin_cannot_mutate_another_team(identity_test_conte
 
 async def test_last_organization_admin_cannot_be_demoted(identity_test_context) -> None:
     client = identity_test_context["client"]
-    payload = await login(client, "first-admin@example.com", "correct-password")
+    payload = await login(client, "first-admin", "correct-password")
     response = await client.patch(
         f"/api/v1/organizations/current/members/{identity_test_context['first_admin_membership']}/role",
         headers={"Authorization": f"Bearer {payload['access_token']}"},
@@ -160,13 +175,13 @@ async def test_last_organization_admin_cannot_be_demoted(identity_test_context) 
 
 async def test_add_member_creates_audit_log(identity_test_context) -> None:
     client = identity_test_context["client"]
-    payload = await login(client, "first-admin@example.com", "correct-password")
+    payload = await login(client, "first-admin", "correct-password")
     headers = {"Authorization": f"Bearer {payload['access_token']}"}
     response = await client.post(
         "/api/v1/organizations/current/members",
         headers=headers,
         json={
-            "email": "new-member@example.com",
+            "account": "new-member",
             "display_name": "New Member",
             "temporary_password": "N7!vK2@qR8#z",
             "role_code": "member",
@@ -187,15 +202,15 @@ async def test_add_member_creates_audit_log(identity_test_context) -> None:
         assert count == 1
 
 
-async def test_member_creation_is_idempotent_and_requires_unique_email(identity_test_context) -> None:
+async def test_member_creation_is_idempotent_and_requires_unique_account(identity_test_context) -> None:
     client = identity_test_context["client"]
-    payload = await login(client, "first-admin@example.com", "correct-password")
+    payload = await login(client, "first-admin", "correct-password")
     headers = {
         "Authorization": f"Bearer {payload['access_token']}",
         "Idempotency-Key": "create-user-replay-001",
     }
     body = {
-        "email": "idempotent@example.com",
+        "account": "idempotent",
         "display_name": "Idempotent User",
         "temporary_password": "R8@tY4!mQ2#v",
         "role_code": "member",
@@ -205,7 +220,7 @@ async def test_member_creation_is_idempotent_and_requires_unique_email(identity_
     assert first.status_code == 201, first.text
     assert replay.status_code == 201, replay.text
     assert replay.json()["id"] == first.json()["id"]
-    assert replay.json()["user"]["must_change_password"] is True
+    assert replay.json()["user"]["must_change_password"] is False
 
     conflict = await client.post(
         "/api/v1/organizations/current/members",
@@ -213,12 +228,12 @@ async def test_member_creation_is_idempotent_and_requires_unique_email(identity_
         json=body,
     )
     assert conflict.status_code == 409
-    assert conflict.json()["error"]["code"] == "organization.user_email_exists"
+    assert conflict.json()["error"]["code"] == "organization.user_account_exists"
 
 
-async def test_forced_password_change_blocks_business_and_rotates_sessions(identity_test_context) -> None:
+async def test_ordinary_member_cannot_change_own_password(identity_test_context) -> None:
     admin_client = identity_test_context["client"]
-    admin = await login(admin_client, "first-admin@example.com", "correct-password")
+    admin = await login(admin_client, "first-admin", "correct-password")
     create = await admin_client.post(
         "/api/v1/organizations/current/members",
         headers={
@@ -226,7 +241,7 @@ async def test_forced_password_change_blocks_business_and_rotates_sessions(ident
             "Idempotency-Key": "forced-password-user-001",
         },
         json={
-            "email": "forced-change@example.com",
+            "account": "forced-change",
             "display_name": "Forced Change",
             "temporary_password": "V7!qM3@rT9#x",
             "role_code": "member",
@@ -238,62 +253,46 @@ async def test_forced_password_change_blocks_business_and_rotates_sessions(ident
         transport=ASGITransport(app=identity_test_context["app"]),
         base_url="http://test",
     ) as user_client:
-        signed_in = await login(user_client, "forced-change@example.com", "V7!qM3@rT9#x")
-        old_access = signed_in["access_token"]
-        assert signed_in["identity"]["user"]["must_change_password"] is True
-        me = await user_client.get(
-            "/api/v1/auth/me", headers={"Authorization": f"Bearer {old_access}"}
-        )
-        blocked = await user_client.get(
-            "/api/v1/organizations/current", headers={"Authorization": f"Bearer {old_access}"}
-        )
-        assert me.status_code == 200
-        assert blocked.status_code == 403
-        assert blocked.json()["error"]["code"] == "auth.password_change_required"
-
-        changed = await user_client.post(
-            "/api/v1/auth/change-password",
-            headers={"Authorization": f"Bearer {old_access}"},
-            json={"current_password": "V7!qM3@rT9#x", "new_password": "K6@pW8!zN4$q"},
-        )
-        assert changed.status_code == 200, changed.text
-        assert changed.json()["identity"]["user"]["must_change_password"] is False
-        stale = await user_client.get(
-            "/api/v1/auth/me", headers={"Authorization": f"Bearer {old_access}"}
-        )
-        assert stale.status_code == 401
-        assert stale.json()["error"]["code"] == "auth.session_revoked"
+        signed_in = await login(user_client, "forced-change", "V7!qM3@rT9#x")
+        access = signed_in["access_token"]
+        assert signed_in["identity"]["user"]["must_change_password"] is False
         current = await user_client.get(
-            "/api/v1/organizations/current",
-            headers={"Authorization": f"Bearer {changed.json()['access_token']}"},
+            "/api/v1/organizations/current", headers={"Authorization": f"Bearer {access}"}
         )
         assert current.status_code == 200
+        changed = await user_client.post(
+            "/api/v1/auth/change-password",
+            headers={"Authorization": f"Bearer {access}"},
+            json={"current_password": "V7!qM3@rT9#x", "new_password": "K6@pW8!zN4$q"},
+        )
+        assert changed.status_code == 403
+        assert changed.json()["error"]["code"] == "auth.password_change_forbidden"
 
     old_login = await admin_client.post(
         "/api/v1/auth/login",
-        json={"email": "forced-change@example.com", "password": "V7!qM3@rT9#x"},
+        json={"account": "forced-change", "password": "V7!qM3@rT9#x"},
     )
     new_login = await admin_client.post(
         "/api/v1/auth/login",
-        json={"email": "forced-change@example.com", "password": "K6@pW8!zN4$q"},
+        json={"account": "forced-change", "password": "K6@pW8!zN4$q"},
     )
-    assert old_login.status_code == 401
-    assert new_login.status_code == 200
+    assert old_login.status_code == 200
+    assert new_login.status_code == 401
 
 
 async def test_reset_password_invalidates_access_and_does_not_audit_secret(identity_test_context) -> None:
     client = identity_test_context["client"]
-    target = await login(client, "first-viewer@example.com", "viewer-password")
+    target = await login(client, "first-viewer", "viewer-password")
     old_access = target["access_token"]
     old_refresh = client.cookies["ais_refresh_token"]
-    admin = await login(client, "first-admin@example.com", "correct-password")
+    admin = await login(client, "first-admin", "correct-password")
     reset = await client.post(
         f"/api/v1/organizations/current/members/{identity_test_context['first_viewer_membership']}/reset-password",
         headers={"Authorization": f"Bearer {admin['access_token']}"},
-        json={"temporary_password": "J9!sC4@uL7#n", "force_change_password": True},
+        json={"temporary_password": "J9!sC4@uL7#n"},
     )
     assert reset.status_code == 200, reset.text
-    assert reset.json()["must_change_password"] is True
+    assert reset.json()["must_change_password"] is False
     stale = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {old_access}"})
     assert stale.status_code == 401
 
@@ -302,15 +301,15 @@ async def test_reset_password_invalidates_access_and_does_not_audit_secret(ident
     ) as password_client:
         old_password = await password_client.post(
             "/api/v1/auth/login",
-            json={"email": "first-viewer@example.com", "password": "viewer-password"},
+            json={"account": "first-viewer", "password": "viewer-password"},
         )
         new_password = await password_client.post(
             "/api/v1/auth/login",
-            json={"email": "first-viewer@example.com", "password": "J9!sC4@uL7#n"},
+            json={"account": "first-viewer", "password": "J9!sC4@uL7#n"},
         )
     assert old_password.status_code == 401
     assert new_password.status_code == 200
-    assert new_password.json()["identity"]["user"]["must_change_password"] is True
+    assert new_password.json()["identity"]["user"]["must_change_password"] is False
 
     async with AsyncClient(
         transport=ASGITransport(app=identity_test_context["app"]),
@@ -321,13 +320,35 @@ async def test_reset_password_invalidates_access_and_does_not_audit_secret(ident
     assert stale_refresh.status_code == 401
 
     async with identity_test_context["session_factory"]() as session:
-        user = await session.scalar(select(User).where(User.email == "first-viewer@example.com"))
+        user = await session.scalar(select(User).where(User.account == "first-viewer"))
         audit = await session.scalar(
             select(AuditLog).where(AuditLog.action == "organization.member.password_reset")
         )
-        assert user is not None and user.must_change_password is True
+        assert user is not None and user.must_change_password is False
         assert audit is not None
         assert "J9!sC4@uL7#n" not in str(audit.metadata_json)
+
+
+async def test_admin_can_change_member_account_and_revoke_old_session(identity_test_context) -> None:
+    client = identity_test_context["client"]
+    member = await login(client, "first-viewer", "viewer-password")
+    old_access = member["access_token"]
+    admin = await login(client, "first-admin", "correct-password")
+    changed = await client.patch(
+        f"/api/v1/organizations/current/members/{identity_test_context['first_viewer_membership']}/account",
+        headers={"Authorization": f"Bearer {admin['access_token']}"},
+        json={"account": "yunying01"},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["user"]["account"] == "yunying01"
+    stale = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {old_access}"})
+    assert stale.status_code == 401
+    assert (await client.post(
+        "/api/v1/auth/login", json={"account": "first-viewer", "password": "viewer-password"}
+    )).status_code == 401
+    assert (await client.post(
+        "/api/v1/auth/login", json={"account": "yunying01", "password": "viewer-password"}
+    )).status_code == 200
 
 
 async def test_member_role_cannot_create_users(identity_test_context) -> None:
@@ -338,12 +359,12 @@ async def test_member_role_cannot_create_users(identity_test_context) -> None:
         await session.commit()
 
     client = identity_test_context["client"]
-    signed_in = await login(client, "first-viewer@example.com", "viewer-password")
+    signed_in = await login(client, "first-viewer", "viewer-password")
     response = await client.post(
         "/api/v1/organizations/current/members",
         headers={"Authorization": f"Bearer {signed_in['access_token']}"},
         json={
-            "email": "forbidden-create@example.com",
+            "account": "forbidden-create",
             "display_name": "Forbidden Create",
             "temporary_password": "H8!mR3@qV6#z",
             "role_code": "member",

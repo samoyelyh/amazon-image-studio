@@ -31,13 +31,13 @@ async def _login_with_deadlock_retry(
     service: AuthService,
     session: AsyncSession,
     request: Request,
-    email: str,
+    account: str,
     password: str,
     organization_id: str | None,
 ) -> AuthSession:
     for attempt in range(3):
         try:
-            return await service.login(session, request, email, password, organization_id)
+            return await service.login(session, request, account, password, organization_id)
         except OperationalError as error:
             await session.rollback()
             if not _is_mysql_deadlock(error) or attempt == 2:
@@ -86,7 +86,7 @@ async def login(
 ) -> AccessTokenResponse:
     auth_session = await _login_with_deadlock_retry(
         AuthService(settings), session, request,
-        str(payload.email), payload.password, payload.organization_id,
+        payload.account, payload.password, payload.organization_id,
     )
     _set_refresh_cookie(response, settings, auth_session.refresh_secret)
     return _token_response(auth_session)

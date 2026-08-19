@@ -6,6 +6,7 @@ import PasswordChangeForm from '../components/account/PasswordChangeForm'
 export default function ProfilePage() {
   const auth = useAuth()
   const identity = auth.identity!
+  const canChangePassword = identity.role_codes.includes('platform_admin') || identity.role_codes.includes('organization_admin')
   const [displayName, setDisplayName] = useState(identity.user.display_name)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
@@ -34,11 +35,11 @@ export default function ProfilePage() {
         <h1 className="text-xl font-bold text-gray-950 dark:text-white">个人中心</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">账号身份由服务端统一管理。</p>
         <form onSubmit={save} className="mt-6 max-w-lg space-y-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">邮箱<input readOnly value={identity.user.email} className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-gray-500 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-400" /></label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">账号<input readOnly value={identity.user.account} className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-gray-500 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-400" /></label>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">显示名称<input required maxLength={100} value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-gray-950 outline-none focus:border-blue-500 dark:border-white/[0.1] dark:bg-gray-950 dark:text-white" /></label>
           <div className="flex items-center gap-3"><button disabled={saving} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{saving ? '保存中…' : '保存资料'}</button>{message && <span className="text-sm text-gray-500 dark:text-gray-400">{message}</span>}</div>
         </form>
-      </section><section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-white/[0.08] dark:bg-gray-900"><h2 className="text-lg font-bold text-gray-950 dark:text-white">修改密码</h2><p className="mt-1 text-sm text-gray-500">修改后，其他设备上的旧登录会话会立即失效。</p><div className="mt-5 max-w-lg"><PasswordChangeForm /></div></section></div>
+      </section>{canChangePassword ? <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-white/[0.08] dark:bg-gray-900"><h2 className="text-lg font-bold text-gray-950 dark:text-white">修改密码</h2><p className="mt-1 text-sm text-gray-500">修改后，其他设备上的旧登录会话会立即失效。</p><div className="mt-5 max-w-lg"><PasswordChangeForm /></div></section> : <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-white/[0.08] dark:bg-gray-900"><h2 className="text-lg font-bold text-gray-950 dark:text-white">密码管理</h2><p className="mt-2 text-sm text-gray-500">普通成员的密码由管理员统一管理。如需更换密码，请联系团队管理员执行重置。</p></section>}</div>
       <aside className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-gray-900">
         <h2 className="font-bold text-gray-950 dark:text-white">当前团队</h2>
         <select value={identity.organization?.id || ''} onChange={(event) => auth.switchOrganization(event.target.value)} className="mt-3 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm dark:border-white/[0.1] dark:bg-gray-950 dark:text-white">

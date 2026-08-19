@@ -130,7 +130,7 @@ def test_prompt_optimizer_result_does_not_require_or_replace_plan() -> None:
 async def _create_project(context: dict[str, object]) -> str:
     session_factory = context["session_factory"]
     async with session_factory() as db:
-        user = await db.scalar(select(User).where(User.email == "first-admin@example.com"))
+        user = await db.scalar(select(User).where(User.account == "first-admin"))
         category = ProductCategory(category_code="football_jersey", category_name="橄榄球衣")
         db.add(category)
         await db.flush()
@@ -172,7 +172,7 @@ async def _create_project(context: dict[str, object]) -> str:
 async def test_planning_api_is_org_isolated_versioned_and_conflict_safe(identity_test_context) -> None:
     client = identity_test_context["client"]
     project_id = await _create_project(identity_test_context)
-    login = await client.post("/api/v1/auth/login", json={"email": "first-admin@example.com", "password": "correct-password"})
+    login = await client.post("/api/v1/auth/login", json={"account": "first-admin", "password": "correct-password"})
     headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
     response = await client.get(f"/api/v1/attachment-workbench/projects/{project_id}/planning", headers=headers)
@@ -222,7 +222,7 @@ async def test_planning_api_is_org_isolated_versioned_and_conflict_safe(identity
     assert module_versions.json()[0]["action"] == "manual_edit"
     assert module_versions.json()[0]["operator_requirement_cn"] == "保持纯白背景"
 
-    second_login = await client.post("/api/v1/auth/login", json={"email": "second-admin@example.com", "password": "second-password"})
+    second_login = await client.post("/api/v1/auth/login", json={"account": "second-admin", "password": "second-password"})
     second_headers = {"Authorization": f"Bearer {second_login.json()['access_token']}"}
     isolated = await client.get(f"/api/v1/attachment-workbench/projects/{project_id}/planning", headers=second_headers)
     assert isolated.status_code == 404

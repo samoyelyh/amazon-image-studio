@@ -102,22 +102,22 @@ async def identity_test_context() -> AsyncIterator[dict[str, object]]:
         first_org = Organization(name="First Team", slug="first-team")
         second_org = Organization(name="Second Team", slug="second-team")
         admin = User(
-            email="first-admin@example.com",
+            account="first-admin",
             display_name="First Admin",
             password_hash=hash_password("correct-password"),
         )
         viewer = User(
-            email="first-viewer@example.com",
+            account="first-viewer",
             display_name="First Viewer",
             password_hash=hash_password("viewer-password"),
         )
         second_user = User(
-            email="second-admin@example.com",
+            account="second-admin",
             display_name="Second Admin",
             password_hash=hash_password("second-password"),
         )
         platform_admin = User(
-            email="platform-admin@example.com",
+            account="platform-admin",
             display_name="Platform Admin",
             password_hash=hash_password("platform-password"),
             platform_role_id=roles["platform_admin"].id,

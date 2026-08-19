@@ -30,10 +30,10 @@ export interface PasswordRule {
   passed: boolean
 }
 
-export function passwordRules(password: string, email = '', displayName = ''): PasswordRule[] {
+export function passwordRules(password: string, account = '', displayName = ''): PasswordRule[] {
   const compact = password.toLowerCase().replace(/[^a-z0-9]/g, '')
   const commonWeakParts = ['password', 'passwd', 'qwerty', 'admin', 'welcome', 'letmein', '123456', '111111', 'abc123', 'iloveyou']
-  const identityParts = [email.split('@')[0], displayName]
+  const identityParts = [account, displayName]
     .map((value) => value.toLowerCase().replace(/[^a-z0-9]/g, ''))
     .filter((value) => value.length >= 4)
   return [
@@ -43,10 +43,10 @@ export function passwordRules(password: string, email = '', displayName = ''): P
     { label: '包含数字', passed: /\d/.test(password) },
     { label: '包含特殊字符', passed: /[^A-Za-z0-9]/.test(password) },
     { label: '不包含常见弱密码', passed: !commonWeakParts.some((part) => compact.includes(part)) },
-    { label: '不包含邮箱或姓名的主要部分', passed: !identityParts.some((part) => compact.includes(part)) },
+    { label: '不包含账号或姓名的主要部分', passed: !identityParts.some((part) => compact.includes(part)) },
   ]
 }
 
-export function isStrongPassword(password: string, email = '', displayName = '') {
-  return passwordRules(password, email, displayName).every((rule) => rule.passed)
+export function isStrongPassword(password: string, account = '', displayName = '') {
+  return passwordRules(password, account, displayName).every((rule) => rule.passed)
 }

@@ -1,8 +1,11 @@
 from datetime import datetime
 
-from typing import Literal
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from app.security.accounts import normalize_account
+
+
+ACCOUNT_PATTERN = r"^[A-Za-z0-9_-]{3,32}$"
 
 
 class PermissionResponse(BaseModel):
@@ -22,7 +25,7 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    email: EmailStr
+    account: str
     display_name: str
     status: str
     auth_provider: str
@@ -65,9 +68,15 @@ class CurrentIdentityResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    model_config = ConfigDict(extra="forbid")
+    account: str = Field(pattern=ACCOUNT_PATTERN, min_length=3, max_length=32)
     password: str = Field(min_length=1, max_length=256)
     organization_id: str | None = None
+
+    @field_validator("account", mode="before")
+    @classmethod
+    def normalize_login_account(cls, value: object) -> object:
+        return normalize_account(value) if isinstance(value, str) else value
 
 
 class SwitchOrganizationRequest(BaseModel):
@@ -91,10 +100,25 @@ class OrganizationCreateRequest(BaseModel):
 
 
 class MemberCreateRequest(BaseModel):
-    email: EmailStr
+    model_config = ConfigDict(extra="forbid")
+    account: str = Field(pattern=ACCOUNT_PATTERN, min_length=3, max_length=32)
     role_code: str = Field(pattern=r"^[a-z_]+$", max_length=80)
     display_name: str | None = Field(default=None, min_length=2, max_length=50)
-    temporary_password: str | None = Field(default=None, min_length=12, max_length=256)
+    temporary_password: str = Field(min_length=12, max_length=256)
+
+    @field_validator("account", mode="before")
+    @classmethod
+    def normalize_member_account(cls, value: object) -> object:
+        return normalize_account(value) if isinstance(value, str) else value
+
+
+class MemberAccountUpdateRequest(BaseModel):
+    account: str = Field(pattern=ACCOUNT_PATTERN, min_length=3, max_length=32)
+
+    @field_validator("account", mode="before")
+    @classmethod
+    def normalize_member_account(cls, value: object) -> object:
+        return normalize_account(value) if isinstance(value, str) else value
 
 
 class MemberRoleUpdateRequest(BaseModel):
@@ -107,7 +131,6 @@ class MemberStatusUpdateRequest(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     temporary_password: str = Field(min_length=12, max_length=256)
-    force_change_password: Literal[True] = True
 
 
 class ChangePasswordRequest(BaseModel):
@@ -147,7 +170,7 @@ class LoginAuditResponse(BaseModel):
     id: str
     user_id: str | None
     organization_id: str | None
-    email: str | None
+    account: str | None
     event: str
     outcome: str
     ip_address: str | None

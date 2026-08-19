@@ -6,15 +6,15 @@ from app.models.quota import QuotaAccount, QuotaReservation, QuotaTransaction
 from app.services.billing_service import refund_reservation, release_reservation, reserve_quota, settle_reservation
 
 
-async def auth_headers(client, email: str, password: str) -> dict[str, str]:
-    response = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+async def auth_headers(client, account: str, password: str) -> dict[str, str]:
+    response = await client.post("/api/v1/auth/login", json={"account": account, "password": password})
     assert response.status_code == 200, response.text
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
 async def test_cost_estimate_uses_server_rules_and_multipliers(identity_test_context) -> None:
     client = identity_test_context["client"]
-    headers = await auth_headers(client, "first-admin@example.com", "correct-password")
+    headers = await auth_headers(client, "first-admin", "correct-password")
     response = await client.post("/api/v1/quota/estimate", headers=headers, json={
         "operation_code": "listing.generate",
         "quantity": 2,
@@ -33,7 +33,7 @@ async def test_cost_estimate_uses_server_rules_and_multipliers(identity_test_con
 
 async def test_personal_resource_pool_can_be_configured_as_free(identity_test_context) -> None:
     client = identity_test_context["client"]
-    headers = await auth_headers(client, "first-admin@example.com", "correct-password")
+    headers = await auth_headers(client, "first-admin", "correct-password")
     response = await client.post("/api/v1/quota/estimate", headers=headers, json={
         "operation_code": "listing.generate", "quantity": 20, "resource_pool": "personal",
     })
@@ -169,8 +169,8 @@ async def test_idempotency_conflict_is_rejected(identity_test_context) -> None:
 
 async def test_quota_api_is_tenant_scoped_and_adjustment_is_platform_only(identity_test_context) -> None:
     client = identity_test_context["client"]
-    first = await auth_headers(client, "first-admin@example.com", "correct-password")
-    second = await auth_headers(client, "second-admin@example.com", "second-password")
+    first = await auth_headers(client, "first-admin", "correct-password")
+    second = await auth_headers(client, "second-admin", "second-password")
     assert (await client.get("/api/v1/quota/account", headers=first)).json()["balance"] == 1000
     assert (await client.get("/api/v1/quota/account", headers=second)).json()["balance"] == 50
     denied = await client.post("/api/v1/quota/adjustments", headers=first, json={
@@ -178,7 +178,7 @@ async def test_quota_api_is_tenant_scoped_and_adjustment_is_platform_only(identi
     })
     assert denied.status_code == 403
 
-    platform = await auth_headers(client, "platform-admin@example.com", "platform-password")
+    platform = await auth_headers(client, "platform-admin", "platform-password")
     invalid = await client.post("/api/v1/quota/adjustments", headers=platform, json={
         "transaction_type": "grant", "amount": -100, "idempotency_key": "manual:invalid-001", "reason": "invalid",
     })

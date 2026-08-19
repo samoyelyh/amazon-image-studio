@@ -2,7 +2,7 @@ import { runtimeConfig } from '../app/runtimeConfig'
 
 export interface AuthUser {
   id: string
-  email: string
+  account: string
   display_name: string
   status: string
   auth_provider: string
@@ -241,8 +241,8 @@ async function sessionRequest(path: string, body?: unknown): Promise<AuthSession
   return session
 }
 
-export async function login(email: string, password: string): Promise<AuthSessionResponse> {
-  return enqueueSessionMutation(() => sessionRequest('/auth/login', { email, password }))
+export async function login(account: string, password: string): Promise<AuthSessionResponse> {
+  return enqueueSessionMutation(() => sessionRequest('/auth/login', { account, password }))
 }
 
 export async function refreshSession(expectedAccessToken = accessToken): Promise<AuthSessionResponse> {

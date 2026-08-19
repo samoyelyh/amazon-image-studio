@@ -73,7 +73,7 @@ docker compose config --quiet
 
 ## Phase 3 identity bootstrap
 
-The backend now runs `alembic upgrade head` and synchronizes the built-in RBAC definitions before Uvicorn starts. Configure `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` to create the first local administrator idempotently. Existing administrator passwords are never reset during startup.
+The backend now runs `alembic upgrade head` and synchronizes the built-in RBAC definitions before Uvicorn starts. Configure `BOOTSTRAP_ADMIN_ACCOUNT` and `BOOTSTRAP_ADMIN_PASSWORD` to create the first local administrator idempotently. Existing administrator passwords are never reset during startup.
 
 The Compose values are local development examples. Replace `JWT_SECRET`, `BOOTSTRAP_ADMIN_PASSWORD`, the MySQL passwords, and MinIO credentials before LAN sharing or production use. Production mode also requires `REFRESH_COOKIE_SECURE=true`.
 

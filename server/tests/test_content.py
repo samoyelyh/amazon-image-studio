@@ -9,8 +9,8 @@ from app.models.content import Asset, GeneratedOutput
 PNG = b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
 
 
-async def auth_headers(client: AsyncClient, email: str, password: str) -> dict[str, str]:
-    response = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+async def auth_headers(client: AsyncClient, account: str, password: str) -> dict[str, str]:
+    response = await client.post("/api/v1/auth/login", json={"account": account, "password": password})
     assert response.status_code == 200, response.text
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
@@ -26,7 +26,7 @@ async def upload(client: AsyncClient, headers: dict[str, str], filename: str = "
 
 async def test_asset_upload_list_and_authenticated_content(identity_test_context) -> None:
     client = identity_test_context["client"]
-    headers = await auth_headers(client, "first-admin@example.com", "correct-password")
+    headers = await auth_headers(client, "first-admin", "correct-password")
     response = await upload(client, headers)
     assert response.status_code == 201, response.text
     asset = response.json()
@@ -44,7 +44,7 @@ async def test_asset_upload_list_and_authenticated_content(identity_test_context
     assert content.headers["content-type"] == "image/png"
     assert content.headers["cache-control"] == "private, max-age=300"
     assert content.headers["x-content-type-options"] == "nosniff"
-    viewer = await auth_headers(client, "first-viewer@example.com", "viewer-password")
+    viewer = await auth_headers(client, "first-viewer", "viewer-password")
     same_team_content = await client.get(asset["url"], headers=viewer)
     assert same_team_content.status_code == 200
     assert same_team_content.content == PNG
@@ -106,7 +106,7 @@ async def test_asset_upload_list_and_authenticated_content(identity_test_context
 
 async def test_invalid_image_and_viewer_write_permissions(identity_test_context) -> None:
     client = identity_test_context["client"]
-    admin = await auth_headers(client, "first-admin@example.com", "correct-password")
+    admin = await auth_headers(client, "first-admin", "correct-password")
     invalid = await client.post(
         "/api/v1/assets", headers=admin, data={"category": "garment"},
         files={"file": ("fake.png", b"not-an-image", "image/png")},
@@ -115,7 +115,7 @@ async def test_invalid_image_and_viewer_write_permissions(identity_test_context)
     assert invalid.json()["error"]["code"] == "asset.invalid_image"
     assert not identity_test_context["storage"].objects
 
-    viewer = await auth_headers(client, "first-viewer@example.com", "viewer-password")
+    viewer = await auth_headers(client, "first-viewer", "viewer-password")
     forbidden = await upload(client, viewer)
     assert forbidden.status_code == 403
     assert forbidden.json()["error"]["code"] == "auth.permission_denied"
@@ -123,7 +123,7 @@ async def test_invalid_image_and_viewer_write_permissions(identity_test_context)
 
 async def test_garment_reference_is_non_destructive_and_keeps_normalized_transform(identity_test_context) -> None:
     client = identity_test_context["client"]
-    admin = await auth_headers(client, "first-admin@example.com", "correct-password")
+    admin = await auth_headers(client, "first-admin", "correct-password")
     source_response = await client.post(
         "/api/v1/assets", headers=admin, data={"category": "garment"},
         files={"file": ("front-back.png", PNG, "image/png")},
@@ -154,7 +154,7 @@ async def test_garment_reference_is_non_destructive_and_keeps_normalized_transfo
 
 async def test_garment_reference_accepts_compact_erase_metadata_over_legacy_limit(identity_test_context) -> None:
     client = identity_test_context["client"]
-    admin = await auth_headers(client, "first-admin@example.com", "correct-password")
+    admin = await auth_headers(client, "first-admin", "correct-password")
     source = (await client.post(
         "/api/v1/assets", headers=admin, data={"category": "garment"},
         files={"file": ("source.png", PNG, "image/png")},
@@ -182,9 +182,9 @@ async def test_garment_reference_accepts_compact_erase_metadata_over_legacy_limi
 
 async def test_assets_are_tenant_isolated(identity_test_context) -> None:
     client = identity_test_context["client"]
-    first = await auth_headers(client, "first-admin@example.com", "correct-password")
+    first = await auth_headers(client, "first-admin", "correct-password")
     asset = (await upload(client, first)).json()
-    second = await auth_headers(client, "second-admin@example.com", "second-password")
+    second = await auth_headers(client, "second-admin", "second-password")
     hidden = await client.get(f"/api/v1/assets/{asset['id']}", headers=second)
     assert hidden.status_code == 404
     hidden_content = await client.get(f"/api/v1/assets/{asset['id']}/content", headers=second)
@@ -194,7 +194,7 @@ async def test_assets_are_tenant_isolated(identity_test_context) -> None:
 
 async def test_missing_asset_content_returns_clear_error(identity_test_context) -> None:
     client = identity_test_context["client"]
-    headers = await auth_headers(client, "first-admin@example.com", "correct-password")
+    headers = await auth_headers(client, "first-admin", "correct-password")
     asset = (await upload(client, headers)).json()
     identity_test_context["storage"].objects.clear()
     response = await client.get(asset["url"], headers=headers)
@@ -204,7 +204,7 @@ async def test_missing_asset_content_returns_clear_error(identity_test_context) 
 
 async def test_project_versions_are_immutable_and_conflict_checked(identity_test_context) -> None:
     client = identity_test_context["client"]
-    headers = await auth_headers(client, "first-admin@example.com", "correct-password")
+    headers = await auth_headers(client, "first-admin", "correct-password")
     created = await client.post("/api/v1/projects", headers=headers, json={
         "project_type": "listing", "name": "Summer Listing", "draft": {"title": "v1"},
     })
@@ -228,7 +228,7 @@ async def test_project_versions_are_immutable_and_conflict_checked(identity_test
 
 async def test_project_asset_reference_blocks_delete_and_project_delete_keeps_object(identity_test_context) -> None:
     client = identity_test_context["client"]
-    headers = await auth_headers(client, "first-admin@example.com", "correct-password")
+    headers = await auth_headers(client, "first-admin", "correct-password")
     asset = (await upload(client, headers)).json()
     project = (await client.post("/api/v1/projects", headers=headers, json={
         "project_type": "batch_tryon", "name": "Try-on Batch", "draft": {},
@@ -263,7 +263,7 @@ async def test_project_asset_reference_blocks_delete_and_project_delete_keeps_ob
 
 async def test_project_asset_links_sort_mixed_datetimes_and_retry_idempotently(identity_test_context) -> None:
     client = identity_test_context["client"]
-    headers = await auth_headers(client, "first-admin@example.com", "correct-password")
+    headers = await auth_headers(client, "first-admin", "correct-password")
     first_asset = (await upload(client, headers, filename="first.png")).json()
     second_asset = (await upload(client, headers, filename="second.png")).json()
     project = (await client.post("/api/v1/projects", headers=headers, json={
@@ -309,7 +309,7 @@ async def test_project_asset_links_sort_mixed_datetimes_and_retry_idempotently(i
 
 async def test_compact_project_asset_link_does_not_serialize_entire_project(identity_test_context) -> None:
     client = identity_test_context["client"]
-    headers = await auth_headers(client, "first-admin@example.com", "correct-password")
+    headers = await auth_headers(client, "first-admin", "correct-password")
     asset = (await upload(client, headers, filename="reference.png")).json()
     project = (await client.post("/api/v1/projects", headers=headers, json={
         "project_type": "batch_tryon", "name": "Compact links", "draft": {},
@@ -328,15 +328,15 @@ async def test_compact_project_asset_link_does_not_serialize_entire_project(iden
 
 async def test_projects_are_tenant_isolated_and_viewer_read_only(identity_test_context) -> None:
     client = identity_test_context["client"]
-    first = await auth_headers(client, "first-admin@example.com", "correct-password")
+    first = await auth_headers(client, "first-admin", "correct-password")
     project = (await client.post("/api/v1/projects", headers=first, json={
         "project_type": "aplus", "name": "A+ Draft", "draft": {},
     })).json()
-    viewer = await auth_headers(client, "first-viewer@example.com", "viewer-password")
+    viewer = await auth_headers(client, "first-viewer", "viewer-password")
     assert (await client.get(f"/api/v1/projects/{project['id']}", headers=viewer)).status_code == 200
     denied = await client.post("/api/v1/projects", headers=viewer, json={
         "project_type": "listing", "name": "Denied", "draft": {},
     })
     assert denied.status_code == 403
-    second = await auth_headers(client, "second-admin@example.com", "second-password")
+    second = await auth_headers(client, "second-admin", "second-password")
     assert (await client.get(f"/api/v1/projects/{project['id']}", headers=second)).status_code == 404

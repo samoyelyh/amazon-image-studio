@@ -31,8 +31,9 @@ class RoleScope(str, Enum):
 
 class User(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("account", name="uq_users_account"),)
 
-    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
+    account: Mapped[str] = mapped_column(String(32), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default=UserStatus.ACTIVE.value, nullable=False)
@@ -137,7 +138,7 @@ class LoginAudit(UuidPrimaryKeyMixin, Base):
 
     user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     organization_id: Mapped[str | None] = mapped_column(ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True)
-    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    account: Mapped[str | None] = mapped_column(String(32), nullable=True)
     event: Mapped[str] = mapped_column(String(40), nullable=False)
     outcome: Mapped[str] = mapped_column(String(20), nullable=False)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)

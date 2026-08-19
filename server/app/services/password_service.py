@@ -11,7 +11,7 @@ COMMON_WEAK_PARTS = {
 }
 
 
-def validate_password(password: str, *, email: str = "", display_name: str = "") -> None:
+def validate_password(password: str, *, account: str = "", display_name: str = "") -> None:
     failures: list[str] = []
     if len(password) < 12:
         failures.append("至少12位")
@@ -29,11 +29,11 @@ def validate_password(password: str, *, email: str = "", display_name: str = "")
     if any(part in compact for part in COMMON_WEAK_PARTS):
         failures.append("不能包含常见弱密码")
 
-    identity_parts = [email.partition("@")[0], display_name]
+    identity_parts = [account, display_name]
     for part in identity_parts:
         normalized = re.sub(r"[^a-z0-9]", "", part.casefold())
         if len(normalized) >= 4 and normalized in compact:
-            failures.append("不能包含邮箱或姓名的主要部分")
+            failures.append("不能包含账号或姓名的主要部分")
             break
 
     if failures:
