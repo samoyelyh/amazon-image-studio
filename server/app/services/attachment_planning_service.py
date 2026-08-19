@@ -85,6 +85,7 @@ def _compact_listing(listing: dict[str, object]) -> dict[str, object]:
 def build_attachment_module_context(
     *, module_key: str, analysis_snapshot: dict[str, object], listing_snapshot: dict[str, object],
     skill_snapshot: dict[str, object], aspect_ratio: str, operator_requirement_cn: str,
+    reference_understanding: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if module_key not in MODULE_INDEX:
         raise AppError("attachment_planning.module_invalid", "选择了不支持的附图模块", 422, {"module_key": module_key})
@@ -106,6 +107,8 @@ def build_attachment_module_context(
         "listing_context": _compact_listing(listing_snapshot),
         "aspect_ratio": aspect_ratio,
         "operator_requirement_cn": operator_requirement_cn.strip(),
+        "reference_understanding": reference_understanding,
+        "reference_priority": ["PRODUCT", "PRINT", "module_rule", "TEMPLATE", "SCENE", "OTHER"],
         "truth_constraints": [
             "商品参考图是商品外观的最高优先级事实来源",
             "不得改变颜色、结构、版型、领口、袖口、Logo、文字、号码、图案、印花和定制内容",
@@ -117,6 +120,7 @@ def build_attachment_module_context(
 def build_suite_planning_input(
     *, version: ListingVersion, modules: list[AttachmentPlanningModuleInput], visual_direction_cn: str,
     current_modules: dict[str, AttachmentWorkbenchModulePlan] | None = None,
+    reference_understandings: dict[str, dict[str, object]] | None = None,
 ) -> tuple[str, str, dict[str, dict[str, object]]]:
     skill_snapshot = dict(version.category_skill_snapshot or {})
     contexts: dict[str, dict[str, object]] = {}
@@ -128,6 +132,7 @@ def build_suite_planning_input(
             skill_snapshot=skill_snapshot,
             aspect_ratio=item.aspect_ratio,
             operator_requirement_cn=item.operator_requirement_cn,
+            reference_understanding=(reference_understandings or {}).get(item.module_key),
         )
         current = (current_modules or {}).get(item.module_key)
         if current is not None:
@@ -153,6 +158,7 @@ def build_suite_planning_input(
 def build_module_planning_input(
     *, version: ListingVersion, module: AttachmentWorkbenchModulePlan, visual_direction_cn: str,
     action: str,
+    reference_understanding: dict[str, object] | None = None,
 ) -> tuple[str, str, dict[str, object]]:
     context = build_attachment_module_context(
         module_key=module.module_key,
@@ -161,6 +167,7 @@ def build_module_planning_input(
         skill_snapshot=dict(version.category_skill_snapshot or {}),
         aspect_ratio=module.aspect_ratio,
         operator_requirement_cn=module.operator_requirement_cn,
+        reference_understanding=reference_understanding,
     )
     payload = {
         "visual_direction_cn": visual_direction_cn,
@@ -315,6 +322,7 @@ async def add_module_version(
     db: AsyncSession, *, plan: AttachmentWorkbenchPlan, module: AttachmentWorkbenchModulePlan,
     action: str, user_id: str, rule_snapshot: dict[str, object], job: Job | None = None,
     plan_summary_cn: str, prompt_cn: str,
+    reference_understanding_id: str | None = None,
 ) -> AttachmentWorkbenchPlanVersion:
     scope = f"module:{module.module_key}"
     previous = await _previous_version(db, plan.id, scope, module.current_version_number)
@@ -327,6 +335,7 @@ async def add_module_version(
         selected_module_keys=[module.module_key], skill_version_id=plan.skill_version_id,
         skill_rule_snapshot=rule_snapshot, source_version_id=previous.id if previous else None,
         ai_job_id=job.id if job else None, ai_model=job.model_code if job else None, created_by=user_id,
+        reference_understanding_id=reference_understanding_id,
     )
     db.add(row)
     module.plan_summary_cn = plan_summary_cn
@@ -346,16 +355,31 @@ async def start_suite_planning(
     if invalid:
         raise AppError("attachment_planning.module_invalid", "选择了不支持的附图模块", 422, {"invalid": invalid})
     indexed = {item.module_key: item for item in module_rows}
+    from app.services.attachment_reference_service import current_understanding_context, effective_reference_snapshot
+
+    understanding_ids: dict[str, str] = {}
+    understanding_contexts: dict[str, dict[str, object]] = {}
+    references: list[str] = []
+    for key in selected_keys:
+        understanding_id, understanding = await current_understanding_context(db, indexed[key])
+        if understanding_id and understanding:
+            understanding_ids[key] = understanding_id
+            understanding_contexts[key] = understanding
+        grouped, _ = await effective_reference_snapshot(db, plan=plan, module=indexed[key])
+        for slot in ("PRODUCT", "PRINT", "TEMPLATE", "SCENE", "OTHER"):
+            references.extend(grouped.get(slot, []))
+    references = list(dict.fromkeys(references))
     system_prompt, user_prompt, _ = build_suite_planning_input(
         version=version, modules=modules, visual_direction_cn=visual_direction_cn,
-        current_modules=indexed,
+        current_modules=indexed, reference_understandings=understanding_contexts,
     )
     target_plan_version = plan.state_version + 1
     target_module_versions = {key: indexed[key].state_version + 1 for key in selected_keys}
     model_code = await resolve_bound_model_code(
         db, organization_id=project.organization_id, operation_code="listing.plan", capability="text_generation",
     )
-    references = [session.primary_asset_id] if session.primary_asset_id else list(session.source_asset_ids or [])[:1]
+    if not references:
+        references = [session.primary_asset_id] if session.primary_asset_id else list(session.source_asset_ids or [])[:1]
     job, created = await submit_job(db, settings, organization_id=project.organization_id, user_id=user_id, payload=JobSubmitRequest(
         operation_code="listing.plan", workspace_type="listing", queue_name="planning_queue",
         capability="text_generation", model_code=model_code, idempotency_key=idempotency_key,
@@ -364,6 +388,7 @@ async def start_suite_planning(
                "response_format": "json_object", "reference_asset_ids": references,
                "metadata": {"workflow": "attachment_workbench_planning", "action": "suite_plan",
                             "planning_id": plan.id, "selected_modules": selected_keys,
+                            "reference_understanding_ids": understanding_ids,
                             "expected_plan_state_version": target_plan_version,
                             "expected_module_state_versions": target_module_versions}},
         billing_factors={"quality": "standard", "resolution": "text"}, client_item_id="attachment-suite",
@@ -399,14 +424,24 @@ async def start_module_planning(
 ) -> tuple[Job, bool]:
     module.aspect_ratio = aspect_ratio
     module.operator_requirement_cn = operator_requirement_cn
+    from app.services.attachment_reference_service import current_understanding_context, effective_reference_snapshot
+
+    understanding_id, understanding = await current_understanding_context(db, module)
     system_prompt, user_prompt, _ = build_module_planning_input(
         version=version, module=module, visual_direction_cn=plan.visual_direction_cn, action=action,
+        reference_understanding=understanding,
     )
     target_module_version = module.state_version + 1
     model_code = await resolve_bound_model_code(
         db, organization_id=project.organization_id, operation_code="listing.plan", capability="text_generation",
     )
-    references = [session.primary_asset_id] if session.primary_asset_id else list(session.source_asset_ids or [])[:1]
+    grouped, _ = await effective_reference_snapshot(db, plan=plan, module=module)
+    references = list(dict.fromkeys(
+        asset_id for slot in ("PRODUCT", "PRINT", "TEMPLATE", "SCENE", "OTHER")
+        for asset_id in grouped.get(slot, [])
+    ))
+    if not references:
+        references = [session.primary_asset_id] if session.primary_asset_id else list(session.source_asset_ids or [])[:1]
     job, created = await submit_job(db, settings, organization_id=project.organization_id, user_id=user_id, payload=JobSubmitRequest(
         operation_code="listing.plan", workspace_type="listing", queue_name="planning_queue",
         capability="text_generation", model_code=model_code, idempotency_key=idempotency_key,
@@ -415,6 +450,7 @@ async def start_module_planning(
                "response_format": "json_object", "reference_asset_ids": references,
                "metadata": {"workflow": "attachment_workbench_planning", "action": action,
                             "planning_id": plan.id, "module_key": module.module_key,
+                            "reference_understanding_ids": {module.module_key: understanding_id} if understanding_id else {},
                             "expected_plan_state_version": plan.state_version,
                             "expected_module_state_versions": {module.module_key: target_module_version}}},
         billing_factors={"quality": "standard", "resolution": "text"},
@@ -469,6 +505,8 @@ async def reconcile_attachment_planning(
         expected_plan = int(metadata.get("expected_plan_state_version") or -1)
         expected_modules = metadata.get("expected_module_state_versions")
         expected_modules = expected_modules if isinstance(expected_modules, dict) else {}
+        understanding_ids = metadata.get("reference_understanding_ids")
+        understanding_ids = understanding_ids if isinstance(understanding_ids, dict) else {}
         stale = plan.state_version != expected_plan or any(
             item.planning_job_id != job.id or item.state_version != int(expected_modules.get(item.module_key, -1))
             for item in affected
@@ -498,6 +536,7 @@ async def reconcile_attachment_planning(
                         db, plan=plan, module=item, action="ai_suite_plan", user_id=job.created_by,
                         rule_snapshot=definition, job=job, plan_summary_cn=result["plan_summary_cn"],
                         prompt_cn=result["prompt_cn"],
+                        reference_understanding_id=str(understanding_ids.get(item.module_key) or "") or None,
                     )
                 plan.planning_status = "ready"; plan.error_message = None
             else:
@@ -511,6 +550,7 @@ async def reconcile_attachment_planning(
                     user_id=job.created_by, rule_snapshot=definition, job=job,
                     plan_summary_cn=item.plan_summary_cn if optimize_only else result["plan_summary_cn"],
                     prompt_cn=result["prompt_cn"],
+                    reference_understanding_id=str(understanding_ids.get(item.module_key) or "") or None,
                 )
             for item in affected:
                 item.status = "ready"; item.error_message = None; item.state_version += 1; item.last_saved_at = now

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UuidPrimaryKeyMixin
@@ -51,6 +51,9 @@ class AttachmentWorkbenchModulePlan(UuidPrimaryKeyMixin, TimestampMixin, Base):
     planning_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="draft", nullable=False)
     error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    reference_context_dirty: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    reference_state_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reference_analysis_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
     state_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_saved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
@@ -81,4 +84,76 @@ class AttachmentWorkbenchPlanVersion(UuidPrimaryKeyMixin, TimestampMixin, Base):
     source_version_id: Mapped[str | None] = mapped_column(ForeignKey("attachment_workbench_plan_versions.id", ondelete="SET NULL"), nullable=True)
     ai_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
     ai_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    reference_understanding_id: Mapped[str | None] = mapped_column(
+        ForeignKey("attachment_reference_understandings.id", ondelete="SET NULL", use_alter=True), nullable=True
+    )
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+
+class AttachmentProductReferenceGroup(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "attachment_product_reference_groups"
+    __table_args__ = (
+        UniqueConstraint("workbench_plan_id", name="uq_attachment_product_group_plan"),
+        Index("ix_attachment_product_groups_org_plan", "organization_id", "workbench_plan_id"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    workbench_plan_id: Mapped[str] = mapped_column(ForeignKey("attachment_workbench_plans.id", ondelete="CASCADE"), nullable=False)
+    state_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+
+class AttachmentProductReferenceItem(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "attachment_product_reference_items"
+    __table_args__ = (
+        UniqueConstraint("product_group_id", "asset_id", "view_role", name="uq_attachment_product_item_role"),
+        Index("ix_attachment_product_items_org_group", "organization_id", "product_group_id", "sort_order"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    product_group_id: Mapped[str] = mapped_column(ForeignKey("attachment_product_reference_groups.id", ondelete="CASCADE"), nullable=False)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False)
+    source_asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=True)
+    view_role: Mapped[str] = mapped_column(String(20), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    source: Mapped[str] = mapped_column(String(30), default="session", nullable=False)
+    transform_metadata: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+
+class AttachmentModuleReference(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "attachment_module_references"
+    __table_args__ = (
+        UniqueConstraint("module_plan_id", "slot_type", "asset_id", name="uq_attachment_module_reference_asset"),
+        Index("ix_attachment_module_refs_org_module", "organization_id", "module_plan_id", "slot_type", "sort_order"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    module_plan_id: Mapped[str] = mapped_column(ForeignKey("attachment_workbench_module_plans.id", ondelete="CASCADE"), nullable=False)
+    slot_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    metadata_json: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+
+class AttachmentReferenceUnderstanding(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "attachment_reference_understandings"
+    __table_args__ = (
+        UniqueConstraint("module_plan_id", "version_number", name="uq_attachment_understanding_version"),
+        Index("ix_attachment_understandings_org_module", "organization_id", "module_plan_id", "version_number"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    module_plan_id: Mapped[str] = mapped_column(ForeignKey("attachment_workbench_module_plans.id", ondelete="CASCADE"), nullable=False)
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="analyzing", nullable=False)
+    structured_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    source_snapshot_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    ai_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+    ai_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)

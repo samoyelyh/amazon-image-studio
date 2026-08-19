@@ -97,8 +97,8 @@ async def upload_garment_reference(
     """
     org_id = organization_id(principal)
     source = await get_asset(session, org_id, source_asset_id)
-    if source.category != "garment":
-        raise AppError("asset.invalid_reference_source", "服装参考图必须来源于服装原图。", 422)
+    if source.category not in {"garment", "product_reference"}:
+        raise AppError("asset.invalid_reference_source", "参考派生图必须来源于服装原图或商品原图。", 422)
     try:
         parsed = json.loads(transform_metadata)
     except (TypeError, ValueError) as error:
@@ -117,13 +117,14 @@ async def upload_garment_reference(
     data = await read_upload(file, settings.asset_max_upload_bytes)
     metadata = {
         **parsed,
-        "asset_role": "garment_reference",
+        "asset_role": "garment_reference" if source.category == "garment" else "product_reference",
         "garment_view": garment_view,
         "transform_type": transform_type,
     }
     asset = await create_asset(
         session, storage, settings,
-        organization_id=org_id, user_id=principal.user.id, category="garment_reference",
+        organization_id=org_id, user_id=principal.user.id,
+        category="garment_reference" if source.category == "garment" else "product_reference",
         filename=file.filename, declared_mime=file.content_type, data=data,
         source_asset_id=source.id, metadata_json=metadata,
     )

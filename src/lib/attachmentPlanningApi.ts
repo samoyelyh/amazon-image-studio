@@ -1,5 +1,6 @@
 import { authenticatedFetch } from './authApi'
 import type { AttachmentModuleCode } from './attachmentImageWorkbench'
+import type { Asset } from './contentApi'
 
 export interface AttachmentSkillSource {
   skill_name: string
@@ -22,6 +23,9 @@ export interface AttachmentModulePlan {
   status: string
   planning_job_id: string | null
   error_message: string | null
+  reference_context_dirty: boolean
+  reference_state_version: number
+  reference_analysis_job_id: string | null
   state_version: number
   last_saved_at: string | null
   skill_source: AttachmentSkillSource
@@ -58,8 +62,63 @@ export interface AttachmentPlanVersion {
   source_version_id: string | null
   ai_job_id: string | null
   ai_model: string | null
+  reference_understanding_id: string | null
   created_by: string
   created_at: string
+}
+
+export type AttachmentReferenceSlotType = 'PRODUCT' | 'TEMPLATE' | 'SCENE' | 'PRINT' | 'OTHER'
+
+export interface AttachmentReferenceUnderstanding {
+  id: string
+  version_number: number
+  status: string
+  structured: Record<string, unknown>
+  source_snapshot: Record<string, unknown>
+  ai_job_id: string | null
+  ai_model: string | null
+  error_message: string | null
+  created_at: string
+}
+
+export interface AttachmentProductReferenceItem {
+  id: string
+  asset: Asset
+  source_asset_id: string | null
+  view_role: 'front' | 'back' | 'detail'
+  sort_order: number
+  source: 'session' | 'override'
+  transform_metadata: Record<string, unknown>
+}
+
+export interface AttachmentModuleReference {
+  id: string
+  slot_type: AttachmentReferenceSlotType
+  asset: Asset
+  sort_order: number
+  metadata: Record<string, unknown>
+}
+
+export interface AttachmentModuleReferenceState {
+  module_key: AttachmentModuleCode
+  slot_definitions: Array<{
+    slot_type: AttachmentReferenceSlotType
+    required: boolean
+    recommended: boolean
+    max_items: number
+  }>
+  references: AttachmentModuleReference[]
+  reference_context_dirty: boolean
+  reference_state_version: number
+  reference_analysis_job_id: string | null
+  understanding: AttachmentReferenceUnderstanding | null
+}
+
+export interface AttachmentReferenceState {
+  product_group_id: string
+  product_state_version: number
+  product_references: AttachmentProductReferenceItem[]
+  modules: AttachmentModuleReferenceState[]
 }
 
 export interface AttachmentPlanningModuleInput {
@@ -70,6 +129,43 @@ export interface AttachmentPlanningModuleInput {
 
 export function getAttachmentPlanning(projectId: string) {
   return authenticatedFetch<AttachmentPlanningState>(`/attachment-workbench/projects/${projectId}/planning`)
+}
+
+export function getAttachmentReferences(projectId: string) {
+  return authenticatedFetch<AttachmentReferenceState>(`/attachment-workbench/projects/${projectId}/references`)
+}
+
+export function addAttachmentReference(projectId: string, moduleKey: AttachmentModuleCode, input: {
+  slot_type: AttachmentReferenceSlotType
+  asset_id: string
+  metadata?: Record<string, unknown>
+}) {
+  return authenticatedFetch<AttachmentReferenceState>(`/attachment-workbench/projects/${projectId}/modules/${moduleKey}/references`, {
+    method: 'POST', body: JSON.stringify({ ...input, metadata: input.metadata || {} }),
+  })
+}
+
+export function removeAttachmentReference(projectId: string, moduleKey: AttachmentModuleCode, referenceId: string) {
+  return authenticatedFetch<AttachmentReferenceState>(`/attachment-workbench/projects/${projectId}/modules/${moduleKey}/references/${referenceId}`, {
+    method: 'DELETE',
+  })
+}
+
+export function analyzeAttachmentReferences(projectId: string, moduleKey: AttachmentModuleCode, idempotencyKey: string) {
+  return authenticatedFetch<AttachmentReferenceState>(`/attachment-workbench/projects/${projectId}/modules/${moduleKey}/references/analyze`, {
+    method: 'POST', body: JSON.stringify({ idempotency_key: idempotencyKey }),
+  })
+}
+
+export function putAttachmentProductReference(projectId: string, input: {
+  asset_id: string
+  source_asset_id?: string
+  view_role: 'front' | 'back' | 'detail'
+  transform_metadata?: Record<string, unknown>
+}) {
+  return authenticatedFetch<AttachmentReferenceState>(`/attachment-workbench/projects/${projectId}/product-references/${input.view_role}`, {
+    method: 'PUT', body: JSON.stringify({ ...input, transform_metadata: input.transform_metadata || {} }),
+  })
 }
 
 export function planAttachmentSuite(projectId: string, input: {

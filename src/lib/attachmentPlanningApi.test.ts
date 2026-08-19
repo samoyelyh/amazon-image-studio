@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clearAccessToken } from './authApi'
 import {
   getAttachmentPlanning,
+  getAttachmentReferences,
+  addAttachmentReference,
+  removeAttachmentReference,
+  analyzeAttachmentReferences,
   listAttachmentPlanVersions,
   optimizeAttachmentModulePrompt,
   planAttachmentSuite,
@@ -23,6 +27,24 @@ function ok(body: unknown = {}) {
 }
 
 describe('attachment planning API', () => {
+  it('keeps reference upload, unlink and analysis as separate durable operations', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(ok({ modules: [] })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getAttachmentReferences('project-1')
+    await addAttachmentReference('project-1', 'gift_scene', { slot_type: 'PRINT', asset_id: 'asset-1' })
+    await removeAttachmentReference('project-1', 'gift_scene', 'reference-1')
+    await analyzeAttachmentReferences('project-1', 'gift_scene', 'attachment-reference:test')
+
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      '/api/v1/attachment-workbench/projects/project-1/references',
+      '/api/v1/attachment-workbench/projects/project-1/modules/gift_scene/references',
+      '/api/v1/attachment-workbench/projects/project-1/modules/gift_scene/references/reference-1',
+      '/api/v1/attachment-workbench/projects/project-1/modules/gift_scene/references/analyze',
+    ])
+    expect((fetchMock.mock.calls[2][1] as RequestInit).method).toBe('DELETE')
+  })
+
   it('uses one suite request and keeps selected module context structured', async () => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(ok({ modules: [] })))
     vi.stubGlobal('fetch', fetchMock)

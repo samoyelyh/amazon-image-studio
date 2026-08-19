@@ -33,6 +33,10 @@ from app.models.tasks import (
 )
 from app.models.print_design import PrintAssetGroup, PrintAssetLibraryItem, ProductPrintMapping
 from app.models.attachment_planning import (
+    AttachmentModuleReference,
+    AttachmentProductReferenceGroup,
+    AttachmentProductReferenceItem,
+    AttachmentReferenceUnderstanding,
     AttachmentWorkbenchModulePlan,
     AttachmentWorkbenchPlan,
     AttachmentWorkbenchPlanVersion,
@@ -68,4 +72,6 @@ __all__ = [
     "BatchTryOnReviewItem", "BatchTryOnVersion",
     "PrintAssetGroup", "PrintAssetLibraryItem", "ProductPrintMapping",
     "AttachmentWorkbenchPlan", "AttachmentWorkbenchModulePlan", "AttachmentWorkbenchPlanVersion",
+    "AttachmentProductReferenceGroup", "AttachmentProductReferenceItem",
+    "AttachmentModuleReference", "AttachmentReferenceUnderstanding",
 ]

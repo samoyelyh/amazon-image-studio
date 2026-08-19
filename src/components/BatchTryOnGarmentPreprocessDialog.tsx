@@ -27,6 +27,9 @@ interface Props {
   saving?: boolean
   onClose: () => void
   onSave: (items: GarmentReferencePreview[]) => Promise<void>
+  sourceUrls?: Record<string, string>
+  title?: string
+  description?: string
 }
 
 type Tool = 'crop' | 'keep' | 'erase'
@@ -60,7 +63,7 @@ function clampCropRect(rect: BatchTryOnGarmentTransform['crop']): BatchTryOnGarm
 }
 
 export default function BatchTryOnGarmentPreprocessDialog({
-  open, garments, initialGarmentId, saving, onClose, onSave,
+  open, garments, initialGarmentId, saving, onClose, onSave, sourceUrls, title, description,
 }: Props) {
   const [currentId, setCurrentId] = useState('')
   const [view, setView] = useState<BatchTryOnGarmentView>('front')
@@ -104,11 +107,13 @@ export default function BatchTryOnGarmentPreprocessDialog({
     let cancelled = false
     setSourceUrl('')
     if (!currentGarment) return
-    void ensureImageCached(currentGarment.garmentImageId).then((url) => {
+    const direct = sourceUrls?.[currentGarment.garmentImageId]
+    const request = direct ? Promise.resolve(direct) : ensureImageCached(currentGarment.garmentImageId)
+    void request.then((url) => {
       if (!cancelled) setSourceUrl(url || '')
     })
     return () => { cancelled = true }
-  }, [currentGarment?.id, currentGarment?.garmentImageId])
+  }, [currentGarment?.id, currentGarment?.garmentImageId, sourceUrls])
 
   const liveCurrentTransform = () => {
     if (!currentGarment) return defaultTransform()
@@ -230,7 +235,7 @@ export default function BatchTryOnGarmentPreprocessDialog({
       setDrafts(appliedDrafts)
       const jobs: Array<Promise<GarmentReferencePreview>> = []
       for (const garment of garments) {
-        const dataUrl = await ensureImageCached(garment.garmentImageId)
+        const dataUrl = sourceUrls?.[garment.garmentImageId] || await ensureImageCached(garment.garmentImageId)
         if (!dataUrl) continue
         for (const [garmentView, transform] of Object.entries(appliedDrafts[garment.id] || {})) {
           if (!transform || !['front', 'back', 'detail'].includes(garmentView)) continue
@@ -258,14 +263,14 @@ export default function BatchTryOnGarmentPreprocessDialog({
   return <div className="fixed inset-0 z-[120] flex items-center justify-center bg-gray-950/55 p-3 backdrop-blur-sm">
     <div className="flex max-h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-950">
       <header className="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-white/[0.08]">
-        <div><h2 className="text-base font-bold">服装参考图预处理</h2><p className="mt-1 text-xs text-gray-500">原图永久保留；这里生成的是 Luna 与生图共同使用的干净参考图，不是 Provider 编辑 Mask。</p></div>
+        <div><h2 className="text-base font-bold">{title || '服装参考图预处理'}</h2><p className="mt-1 text-xs text-gray-500">{description || '原图永久保留；这里生成的是 Luna 与生图共同使用的干净参考图，不是 Provider 编辑 Mask。'}</p></div>
         <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 dark:hover:bg-white/[0.06]">关闭</button>
       </header>
       <div className="grid min-h-0 flex-1 lg:grid-cols-[250px_minmax(0,1fr)_260px]">
         <aside className="overflow-y-auto border-r border-gray-200 p-3 dark:border-white/[0.08]">
           <div className="mb-2"><b className="text-xs">已勾选服装（{garments.length}）</b><p className="mt-1 text-[11px] text-gray-400">范围来自上传区的服装勾选状态</p></div>
           <div className="space-y-2">{garments.map((garment) => <div key={garment.id} className={`flex items-center gap-2 rounded-xl border p-2 ${currentGarment?.id === garment.id ? 'border-blue-400 bg-blue-50/60 dark:bg-blue-500/10' : 'border-gray-200 dark:border-white/[0.08]'}`}>
-            <button type="button" onClick={() => { setCurrentId(garment.id); setHistory([]) }} className="flex min-w-0 flex-1 items-center gap-2 text-left"><BatchTryOnImage imageId={garment.garmentImageId} alt="" className="h-10 w-10 rounded-lg object-cover" /><span className="min-w-0 flex-1 truncate text-xs" title={garment.garmentFileName}>{garment.garmentFileName}</span></button>
+            <button type="button" onClick={() => { setCurrentId(garment.id); setHistory([]) }} className="flex min-w-0 flex-1 items-center gap-2 text-left">{sourceUrls?.[garment.garmentImageId] ? <img src={sourceUrls[garment.garmentImageId]} alt="" className="h-10 w-10 rounded-lg object-cover" /> : <BatchTryOnImage imageId={garment.garmentImageId} alt="" className="h-10 w-10 rounded-lg object-cover" />}<span className="min-w-0 flex-1 truncate text-xs" title={garment.garmentFileName}>{garment.garmentFileName}</span></button>
           </div>)}</div>
         </aside>
         <main className="flex min-h-[520px] flex-col bg-gray-100 p-4 dark:bg-gray-900">

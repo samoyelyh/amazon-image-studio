@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AttachmentImageModuleCard from '../components/attachment-image/AttachmentImageModuleCard'
+import BatchTryOnGarmentPreprocessDialog, { type GarmentReferencePreview } from '../components/BatchTryOnGarmentPreprocessDialog'
 import AuthenticatedImage from '../components/category-listing/AuthenticatedImage'
 import {
   ATTACHMENT_WORKBENCH_CONFIG_KEY,
@@ -14,6 +15,9 @@ import {
   type AttachmentWorkbenchDraft,
 } from '../lib/attachmentImageWorkbench'
 import { getAsset, type Asset } from '../lib/contentApi'
+import { uploadGarmentReferenceDataUrl } from '../lib/serverImageAssets'
+import { garmentTransformMetadata } from '../lib/batchTryOnGarmentPreprocess'
+import type { BatchTryOnGarment } from '../types'
 import {
   createCategoryOutputProject,
   getCategoryOutputProject,
@@ -31,6 +35,11 @@ import { useStore } from '../store'
 import { AuthApiError } from '../lib/authApi'
 import {
   getAttachmentPlanning,
+  getAttachmentReferences,
+  addAttachmentReference,
+  removeAttachmentReference,
+  analyzeAttachmentReferences,
+  putAttachmentProductReference,
   listAttachmentPlanVersions,
   optimizeAttachmentModulePrompt,
   planAttachmentSuite,
@@ -39,6 +48,8 @@ import {
   updateAttachmentVisualDirection,
   type AttachmentPlanningState,
   type AttachmentPlanVersion,
+  type AttachmentReferenceState,
+  type AttachmentReferenceSlotType,
 } from '../lib/attachmentPlanningApi'
 import { randomUuid } from '../lib/randomUuid'
 
@@ -122,6 +133,10 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'failed'>('idle')
   const [pollingPaused, setPollingPaused] = useState(false)
   const [planning, setPlanning] = useState<AttachmentPlanningState | null>(null)
+  const [referenceState, setReferenceState] = useState<AttachmentReferenceState | null>(null)
+  const [referenceBusy, setReferenceBusy] = useState('')
+  const [productPreprocessOpen, setProductPreprocessOpen] = useState(false)
+  const [productPreprocessSaving, setProductPreprocessSaving] = useState(false)
   const [planningBusy, setPlanningBusy] = useState('')
   const [visualDirection, setVisualDirection] = useState('')
   const [visualDirty, setVisualDirty] = useState(false)
@@ -155,16 +170,18 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         const availableCodes = backendModules.filter((item) => item.available !== false).map((item) => String(item.code))
         const stored = projectValue.prompt_config?.[ATTACHMENT_WORKBENCH_CONFIG_KEY]
         const nextDraft = normalizeAttachmentWorkbenchDraft(stored, availableCodes)
-        const [loadedAssets, taskGroups, planningValue] = await Promise.all([
+        const [loadedAssets, taskGroups, planningValue, referenceValue] = await Promise.all([
           Promise.all(projectValue.source_asset_ids.map((id) => getAsset(id).catch(() => null))),
           listListingImageTaskGroups(projectValue.id),
           getAttachmentPlanning(projectValue.id),
+          getAttachmentReferences(projectValue.id),
         ])
         if (!active) return
         setSession(sessionValue); setProject(projectValue); projectRef.current = projectValue
         setAssets(loadedAssets.filter((item): item is Asset => Boolean(item)))
         setGroups(taskGroups.items); setDraft(nextDraft); draftRef.current = nextDraft
         setPlanning(planningValue); setVisualDirection(planningValue.visual_direction_cn)
+        setReferenceState(referenceValue)
         setVisualDirty(false); visualDirtyRef.current = false
         lastSavedSignature.current = JSON.stringify(nextDraft)
         setSaveStatus('saved'); hydrated.current = true
@@ -260,6 +277,16 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     }, 1600)
     return () => { active = false; window.clearInterval(timer) }
   }, [project?.id, planningActive])
+
+  const referenceAnalysisActive = referenceState?.modules.some((item) => Boolean(item.reference_analysis_job_id))
+  useEffect(() => {
+    if (!project || !referenceAnalysisActive) return
+    let active = true
+    const timer = window.setInterval(() => {
+      void getAttachmentReferences(project.id).then((value) => { if (active) setReferenceState(value) }).catch(() => undefined)
+    }, 1600)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [project?.id, referenceAnalysisActive])
 
   const moduleBackend = useMemo(() => Object.fromEntries((project?.modules || []).map((item) => [String(item.code || ''), item])), [project?.modules])
   const selectedModules = selectedAttachmentModules(draft)
@@ -408,6 +435,81 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     }
   }
 
+  const addReference = async (moduleKey: AttachmentModuleCode, slot: AttachmentReferenceSlotType, assetId: string) => {
+    if (!project) return
+    setReferenceBusy(`add:${moduleKey}:${slot}`)
+    try {
+      setReferenceState(await addAttachmentReference(project.id, moduleKey, { slot_type: slot, asset_id: assetId }))
+      showToast('参考素材已添加。需要时请重新分析参考素材。', 'success')
+    } finally {
+      setReferenceBusy('')
+    }
+  }
+
+  const removeReference = async (moduleKey: AttachmentModuleCode, referenceId: string) => {
+    if (!project) return
+    setReferenceBusy(`remove:${referenceId}`)
+    try {
+      setReferenceState(await removeAttachmentReference(project.id, moduleKey, referenceId))
+      showToast('已从当前模块移除参考素材，原始图片仍保留。', 'success')
+    } finally {
+      setReferenceBusy('')
+    }
+  }
+
+  const analyzeReferences = async (moduleKey: AttachmentModuleCode) => {
+    if (!project) return
+    setReferenceBusy(`analyze:${moduleKey}`)
+    try {
+      setReferenceState(await analyzeAttachmentReferences(project.id, moduleKey, `attachment-reference:${moduleKey}:${randomUuid()}`))
+      showToast('参考素材分析已提交，完成后会自动显示理解摘要。', 'success')
+    } finally {
+      setReferenceBusy('')
+    }
+  }
+
+  const productPreprocessGarments = useMemo<BatchTryOnGarment[]>(() => assets.slice(0, 1).map((asset, index) => ({
+    id: asset.id,
+    batchId: project?.id || '',
+    garmentImageId: asset.id,
+    serverAssetId: asset.id,
+    garmentFileName: asset.filename,
+    index,
+    selected: true,
+    createdAt: Date.now(),
+  })), [assets, project?.id])
+  const productPreprocessUrls = useMemo(() => Object.fromEntries(assets.flatMap((asset) => asset.url ? [[asset.id, asset.url]] : [])), [assets])
+
+  const saveProductReferences = async (previews: GarmentReferencePreview[]) => {
+    if (!project) return
+    setProductPreprocessSaving(true)
+    try {
+      let next = referenceState
+      for (const preview of previews) {
+        const source = assets.find((asset) => asset.id === preview.garmentId)
+        if (!source) continue
+        const transformMetadata = { ...garmentTransformMetadata(preview.transform), transform: preview.transform }
+        const derived = await uploadGarmentReferenceDataUrl(preview.dataUrl, source.filename, {
+          sourceAssetId: source.id,
+          garmentView: preview.garmentView,
+          transformType: preview.transform.eraseStrokes.length ? 'crop_mask' : preview.transform.mode,
+          transformMetadata,
+        })
+        next = await putAttachmentProductReference(project.id, {
+          asset_id: derived.id, source_asset_id: source.id,
+          view_role: preview.garmentView, transform_metadata: transformMetadata,
+        })
+      }
+      if (next) setReferenceState(next)
+      setProductPreprocessOpen(false)
+      showToast('商品正反面参考已保存；原始商品图没有被覆盖。', 'success')
+    } catch (reason) {
+      showToast(errorText(reason), 'error')
+    } finally {
+      setProductPreprocessSaving(false)
+    }
+  }
+
   if (loading) return <div className={`${panel} mt-6`}>正在恢复附图项目与任务状态…</div>
   if (error && (!session || !project)) return <div className="space-y-4 pt-6"><div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</div><Link className={button} to="/workspaces/attachment-images">返回商品列表</Link></div>
   if (!session || !project) return null
@@ -422,8 +524,8 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
 
     <section className={panel}>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,.65fr)]">
-        <div><div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-gray-950 dark:text-white">当前商品</h2><p className="mt-1 text-xs text-gray-500">产品图来自当前 Session，原 Asset 不会被新工作台复制或删除。</p></div><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{session.category_name}</span></div>
-          <div className="mt-4 flex gap-3 overflow-x-auto pb-1">{assets.map((asset) => <div key={asset.id} className="relative w-24 shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/[0.08]"><AuthenticatedImage url={asset.url} alt={asset.filename} className="aspect-square w-full object-contain" placeholderClassName="aspect-square" />{asset.id === session.primary_asset_id && <span className="absolute left-1.5 top-1.5 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">主图</span>}</div>)}</div>
+        <div><div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-gray-950 dark:text-white">当前商品</h2><p className="mt-1 text-xs text-gray-500">产品图来自当前 Session，原 Asset 不会被新工作台复制或删除。</p></div><div className="flex gap-2"><button type="button" disabled={!assets.length} onClick={() => setProductPreprocessOpen(true)} className={button}>区分正面 / 背面</button><span className="rounded-full bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">{session.category_name}</span></div></div>
+          <div className="mt-4 flex gap-3 overflow-x-auto pb-1">{(referenceState?.product_references || []).map((item) => <div key={item.id} className="relative w-24 shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/[0.08]"><AuthenticatedImage url={item.asset.url} alt={item.asset.filename} className="aspect-square w-full object-contain" placeholderClassName="aspect-square" /><span className="absolute bottom-1.5 left-1.5 rounded-full bg-gray-950/70 px-2 py-0.5 text-[10px] font-semibold text-white">{item.view_role === 'front' ? '正面' : item.view_role === 'back' ? '背面' : '细节'}{item.source === 'override' ? '参考' : ''}</span>{item.asset.id === session.primary_asset_id && <span className="absolute left-1.5 top-1.5 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">主图</span>}</div>)}</div>
           {!assets.length && <div className="mt-4 rounded-xl bg-amber-50 p-4 text-xs text-amber-800">产品 Asset 暂时无法读取，请回到品类 Listing 检查源图片。</div>}
         </div>
         <div><h2 className="truncate text-lg font-semibold text-gray-950 dark:text-white">{productTitle(session)}</h2><div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">产品图</div><div className="mt-1 font-semibold">{assets.length} 张</div></div><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">已选模块</div><div className="mt-1 font-semibold">{selectedModules.length} / 6</div></div><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">已有结果模块</div><div className="mt-1 font-semibold">{resultModuleCount} 个</div></div><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">当前状态</div><div className="mt-1 font-semibold">{statusLabels[project.status] || project.status}</div></div></div><div className="mt-3 text-xs text-gray-400">最终采用模块将在 Phase 5 接入 Output 级审核后显示。</div></div>
@@ -457,13 +559,23 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         const tasks = groups.flatMap((group) => group.tasks).filter((task) => task.image_type === definition.code)
         const available = phaseOneSupported && backend.available !== false
         const modulePlanning = planning?.modules.find((item) => item.module_key === definition.code)
-        return <AttachmentImageModuleCard key={definition.code} index={index + 1} definition={definition} draft={draft.modules[definition.code]} expanded={expanded.has(definition.code)} available={available} unavailableReason={phaseOneSupported ? String(backend.unavailable_reason || '') : '首期仅支持橄榄球衣。'} objective={String(backend.objective || '')} projectId={project.id} planning={modulePlanning} planningBusy={planningBusy !== '' || planningActive} tasks={tasks} onToggleExpanded={() => setExpanded((current) => { const next = new Set(current); next.has(definition.code) ? next.delete(definition.code) : next.add(definition.code); return next })} onChange={(next) => updateModule(definition.code, next)} onSavePlanning={(input) => saveModulePlanning(definition.code, input)} onReplan={(requirement) => runModulePlanning(definition.code, requirement, false)} onOptimizePrompt={(requirement) => runModulePlanning(definition.code, requirement, true)} />
+        return <AttachmentImageModuleCard key={definition.code} index={index + 1} definition={definition} draft={draft.modules[definition.code]} expanded={expanded.has(definition.code)} available={available} unavailableReason={phaseOneSupported ? String(backend.unavailable_reason || '') : '首期仅支持橄榄球衣。'} objective={String(backend.objective || '')} projectId={project.id} planning={modulePlanning} planningBusy={planningBusy !== '' || planningActive || referenceBusy !== ''} referenceState={referenceState?.modules.find((item) => item.module_key === definition.code)} productReferences={referenceState?.product_references || []} tasks={tasks} onToggleExpanded={() => setExpanded((current) => { const next = new Set(current); next.has(definition.code) ? next.delete(definition.code) : next.add(definition.code); return next })} onChange={(next) => updateModule(definition.code, next)} onSavePlanning={(input) => saveModulePlanning(definition.code, input)} onReplan={(requirement) => runModulePlanning(definition.code, requirement, false)} onOptimizePrompt={(requirement) => runModulePlanning(definition.code, requirement, true)} onAddReference={(slot, assetId) => addReference(definition.code, slot, assetId)} onRemoveReference={(referenceId) => removeReference(definition.code, referenceId)} onAnalyzeReferences={() => analyzeReferences(definition.code)} onReferenceError={(message) => showToast(message, 'error')} />
       })}</div>
     </section>
 
     <div className="sticky bottom-20 z-20 border border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/[0.08] dark:bg-gray-950/95 lg:bottom-4">
       <div className="mx-auto flex max-w-[1320px] flex-wrap items-center justify-between gap-3"><div><div className="text-sm font-semibold text-gray-950 dark:text-white">已选 {selectedModules.length} 个模块 · 计划 {requestedImages} 张图片</div><div className="mt-1 text-xs text-gray-500">{saveStatus === 'saving' ? '正在保存工作台设置…' : saveStatus === 'dirty' ? '有未保存修改' : saveStatus === 'failed' ? '保存失败，请重试' : '工作台设置已保存'} · 正式生成将在 Phase 4 接入</div></div><div className="flex gap-2"><button className={button} disabled={saveStatus === 'saving' || !phaseOneSupported} onClick={() => void saveDraft(true)}>{saveStatus === 'saving' ? '保存中…' : '立即保存'}</button><button className={primary} disabled title="Phase 4 接入现有任务系统后开放">生成选中模块</button></div></div>
     </div>
+    <BatchTryOnGarmentPreprocessDialog
+      open={productPreprocessOpen}
+      garments={productPreprocessGarments}
+      sourceUrls={productPreprocessUrls}
+      saving={productPreprocessSaving}
+      title="商品正反面参考处理"
+      description="复用批量套图的裁剪与擦除画布；原始商品图永久保留，保存后只新增带来源关系的正面/背面参考。"
+      onClose={() => setProductPreprocessOpen(false)}
+      onSave={saveProductReferences}
+    />
   </div>
 }
 

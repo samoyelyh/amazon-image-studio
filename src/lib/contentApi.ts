@@ -2,7 +2,7 @@ import { authenticatedFetch, authenticatedFetchResponse } from './authApi'
 
 export type UploadAssetCategory = 'product_reference' | 'model_template' | 'garment' | 'style_reference' | 'temporary' | 'print_asset'
 export type GeneratedAssetCategory = 'listing_output' | 'batch_tryon_output' | 'aplus_output' | 'material_extract_output' | 'print_design_output'
-export type AssetCategory = UploadAssetCategory | GeneratedAssetCategory
+export type AssetCategory = UploadAssetCategory | GeneratedAssetCategory | 'garment_reference'
 export type ProjectType = 'listing' | 'batch_tryon' | 'aplus' | 'print_design'
 
 export interface Asset {

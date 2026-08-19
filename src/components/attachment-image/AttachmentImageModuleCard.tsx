@@ -6,6 +6,12 @@ import type {
   AttachmentModuleDefinition,
   AttachmentModuleDraft,
 } from '../../lib/attachmentImageWorkbench'
+import type {
+  AttachmentModuleReferenceState,
+  AttachmentProductReferenceItem,
+  AttachmentReferenceSlotType,
+} from '../../lib/attachmentPlanningApi'
+import AttachmentReferencePanel from './AttachmentReferencePanel'
 
 const statusLabels: Record<string, string> = {
   queued: '等待中',
@@ -29,12 +35,18 @@ interface Props {
   projectId: string
   planning?: AttachmentModulePlan
   planningBusy?: boolean
+  referenceState?: AttachmentModuleReferenceState
+  productReferences?: AttachmentProductReferenceItem[]
   tasks: ListingImageTask[]
   onToggleExpanded: () => void
   onChange: (next: AttachmentModuleDraft) => void
   onSavePlanning: (input: { plan_summary_cn: string; prompt_cn: string; operator_requirement_cn: string; aspect_ratio: string; expected_state_version: number }) => Promise<void>
   onReplan: (operatorRequirement: string) => Promise<void>
   onOptimizePrompt: (operatorRequirement: string) => Promise<void>
+  onAddReference: (slot: AttachmentReferenceSlotType, assetId: string) => Promise<void>
+  onRemoveReference: (referenceId: string) => Promise<void>
+  onAnalyzeReferences: () => Promise<void>
+  onReferenceError: (message: string) => void
 }
 
 export default function AttachmentImageModuleCard({
@@ -48,12 +60,18 @@ export default function AttachmentImageModuleCard({
   projectId,
   planning,
   planningBusy = false,
+  referenceState,
+  productReferences = [],
   tasks,
   onToggleExpanded,
   onChange,
   onSavePlanning,
   onReplan,
   onOptimizePrompt,
+  onAddReference,
+  onRemoveReference,
+  onAnalyzeReferences,
+  onReferenceError,
 }: Props) {
   const [planSummary, setPlanSummary] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -167,6 +185,15 @@ export default function AttachmentImageModuleCard({
             </select>
           </label>
         </div>
+        {referenceState && <AttachmentReferencePanel
+          state={referenceState}
+          productReferences={productReferences}
+          busy={planningBusy}
+          onAdd={onAddReference}
+          onRemove={onRemoveReference}
+          onAnalyze={onAnalyzeReferences}
+          onError={onReferenceError}
+        />}
         <div className="space-y-4 rounded-xl border border-gray-200 p-4 dark:border-white/[0.08]">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-xs font-semibold text-gray-500">模块方案</div><p className="mt-1 text-xs text-gray-400">回答“这张图准备做成什么样”。</p></div><button type="button" className="text-xs font-semibold text-blue-600 disabled:opacity-50" disabled={!planning || historyLoading} onClick={() => { const next = !historyOpen; setHistoryOpen(next); if (next) { setHistoryLoading(true); void listAttachmentPlanVersions(projectId, definition.code).then(setVersions).catch(() => setVersions([])).finally(() => setHistoryLoading(false)) } }}>{historyOpen ? '收起版本' : '查看版本'}</button></div>
           <textarea className="min-h-20 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm leading-6 dark:border-white/[0.1] dark:bg-gray-950" value={planSummary} placeholder="尚未策划" onChange={(event) => { setPlanSummary(event.target.value); setDirty(true) }} />

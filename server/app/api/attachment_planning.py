@@ -9,7 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError
 from app.db.session import get_db_session
-from app.models.attachment_planning import AttachmentWorkbenchModulePlan, AttachmentWorkbenchPlan
+from app.models.attachment_planning import (
+    AttachmentModuleReference,
+    AttachmentProductReferenceGroup,
+    AttachmentProductReferenceItem,
+    AttachmentWorkbenchModulePlan,
+    AttachmentWorkbenchPlan,
+)
+from app.models.content import Asset
 from app.models.listing_workflow import ListingGenerationSession, ListingImageProject, ListingVersion
 from app.schemas.attachment_planning import (
     AttachmentModulePlanRequest,
@@ -20,6 +27,15 @@ from app.schemas.attachment_planning import (
     AttachmentSkillSourceResponse,
     AttachmentSuitePlanRequest,
     AttachmentVisualDirectionUpdate,
+    AttachmentModuleReferenceResponse,
+    AttachmentModuleReferenceStateResponse,
+    AttachmentProductReferenceItemResponse,
+    AttachmentProductReferenceRequest,
+    AttachmentReferenceAnalyzeRequest,
+    AttachmentReferenceCreateRequest,
+    AttachmentReferenceSlotDefinitionResponse,
+    AttachmentReferenceStateResponse,
+    AttachmentReferenceUnderstandingResponse,
 )
 from app.security.principal import Principal, require_permissions
 from app.services.attachment_planning_service import (
@@ -34,6 +50,19 @@ from app.services.attachment_planning_service import (
     start_suite_planning,
 )
 from app.services.task_service import dispatch_jobs, due_jobs
+from app.services.asset_service import signed_asset_response
+from app.services.attachment_reference_service import (
+    add_module_reference,
+    ensure_product_reference_group,
+    latest_reference_understanding,
+    list_module_references,
+    reconcile_reference_understandings,
+    remove_module_reference,
+    replace_product_reference,
+    slot_definitions,
+    start_reference_analysis,
+)
+from app.services.storage_service import StorageService, get_storage_service
 
 
 router = APIRouter(prefix="/attachment-workbench", tags=["attachment-workbench"])
@@ -68,6 +97,7 @@ async def _context(
     plan, modules = await get_or_create_attachment_plan(
         db, project=project, session=session, version=version, user_id=user_id,
     )
+    await ensure_product_reference_group(db, plan=plan, session=session, user_id=user_id)
     return project, session, version, plan, modules
 
 
@@ -99,6 +129,9 @@ def _response(
             operator_requirement_cn=item.operator_requirement_cn, aspect_ratio=item.aspect_ratio,
             source=item.source, current_version_number=item.current_version_number,
             status=item.status, planning_job_id=item.planning_job_id, error_message=item.error_message,
+            reference_context_dirty=item.reference_context_dirty,
+            reference_state_version=item.reference_state_version,
+            reference_analysis_job_id=item.reference_analysis_job_id,
             state_version=item.state_version, last_saved_at=item.last_saved_at,
             skill_source=AttachmentSkillSourceResponse(
                 skill_name=str(snapshot.get("skill_name") or ""),
@@ -118,9 +151,71 @@ async def _load_and_reconcile(
         db, organization_id=_organization_id(principal), project_id=project_id, user_id=principal.user.id,
     )
     project, _, version, plan, modules = context
+    await reconcile_reference_understandings(db, plan=plan, modules=modules)
     await reconcile_attachment_planning(db, plan=plan, modules=modules, version=version)
     await db.commit()
     return project, context[1], version, plan, modules
+
+
+async def _reference_response(
+    db: AsyncSession, storage: StorageService, settings: Settings, *,
+    plan: AttachmentWorkbenchPlan, modules: list[AttachmentWorkbenchModulePlan],
+) -> AttachmentReferenceStateResponse:
+    group = await db.scalar(select(AttachmentProductReferenceGroup).where(
+        AttachmentProductReferenceGroup.workbench_plan_id == plan.id,
+        AttachmentProductReferenceGroup.organization_id == plan.organization_id,
+    ))
+    if group is None:
+        raise AppError("attachment_reference.group_missing", "商品参考组尚未初始化", 409)
+    all_product_items = list((await db.scalars(select(AttachmentProductReferenceItem).where(
+        AttachmentProductReferenceItem.product_group_id == group.id,
+    ).order_by(AttachmentProductReferenceItem.sort_order, AttachmentProductReferenceItem.created_at))).all())
+    product_items: list[AttachmentProductReferenceItem] = []
+    for role in ("front", "back", "detail"):
+        matching = [item for item in all_product_items if item.view_role == role]
+        overrides = [item for item in matching if item.source == "override"]
+        product_items.extend(overrides or [item for item in matching if item.source == "session"])
+    references_by_module = {
+        module.id: await list_module_references(db, module.id) for module in modules
+    }
+    asset_ids = {item.asset_id for item in product_items}
+    asset_ids.update(item.asset_id for rows in references_by_module.values() for item in rows)
+    assets = list((await db.scalars(select(Asset).where(
+        Asset.organization_id == plan.organization_id,
+        Asset.id.in_(asset_ids) if asset_ids else Asset.id == "",
+        Asset.deleted_at.is_(None),
+    ))).all())
+    signed = {item.id: await signed_asset_response(item, storage, settings) for item in assets}
+    module_states: list[AttachmentModuleReferenceStateResponse] = []
+    for module in modules:
+        understanding = await latest_reference_understanding(db, module.id)
+        module_states.append(AttachmentModuleReferenceStateResponse(
+            module_key=module.module_key,
+            slot_definitions=[AttachmentReferenceSlotDefinitionResponse(**item) for item in slot_definitions(module.module_key)],
+            references=[AttachmentModuleReferenceResponse(
+                id=item.id, slot_type=item.slot_type, asset=signed[item.asset_id],
+                sort_order=item.sort_order, metadata=dict(item.metadata_json or {}),
+            ) for item in references_by_module[module.id] if item.asset_id in signed],
+            reference_context_dirty=module.reference_context_dirty,
+            reference_state_version=module.reference_state_version,
+            reference_analysis_job_id=module.reference_analysis_job_id,
+            understanding=AttachmentReferenceUnderstandingResponse(
+                id=understanding.id, version_number=understanding.version_number,
+                status=understanding.status, structured=dict(understanding.structured_json or {}),
+                source_snapshot=dict(understanding.source_snapshot_json or {}),
+                ai_job_id=understanding.ai_job_id, ai_model=understanding.ai_model,
+                error_message=understanding.error_message, created_at=understanding.created_at,
+            ) if understanding else None,
+        ))
+    return AttachmentReferenceStateResponse(
+        product_group_id=group.id, product_state_version=group.state_version,
+        product_references=[AttachmentProductReferenceItemResponse(
+            id=item.id, asset=signed[item.asset_id], source_asset_id=item.source_asset_id,
+            view_role=item.view_role, sort_order=item.sort_order, source=item.source,
+            transform_metadata=dict(item.transform_metadata or {}),
+        ) for item in product_items if item.asset_id in signed],
+        modules=module_states,
+    )
 
 
 @router.get("/projects/{project_id}/planning", response_model=AttachmentPlanningResponse)
@@ -130,6 +225,95 @@ async def get_planning(
 ) -> AttachmentPlanningResponse:
     project, _, version, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
     return _response(project=project, version=version, plan=plan, modules=modules, principal=principal)
+
+
+@router.get("/projects/{project_id}/references", response_model=AttachmentReferenceStateResponse)
+async def get_references(
+    project_id: str, db: AsyncSession = Depends(get_db_session),
+    storage: StorageService = Depends(get_storage_service), settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.read")),
+) -> AttachmentReferenceStateResponse:
+    _, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    return await _reference_response(db, storage, settings, plan=plan, modules=modules)
+
+
+@router.post("/projects/{project_id}/modules/{module_key}/references", response_model=AttachmentReferenceStateResponse)
+async def create_reference(
+    project_id: str, module_key: str, payload: AttachmentReferenceCreateRequest,
+    db: AsyncSession = Depends(get_db_session), storage: StorageService = Depends(get_storage_service),
+    settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentReferenceStateResponse:
+    _, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    module = next((item for item in modules if item.module_key == module_key), None)
+    if module is None:
+        raise AppError("attachment_reference.module_invalid", "选择了不支持的附图模块", 422)
+    await add_module_reference(
+        db, module=module, slot_type=payload.slot_type, asset_id=payload.asset_id,
+        metadata=payload.metadata, user_id=principal.user.id,
+    )
+    await db.commit()
+    return await _reference_response(db, storage, settings, plan=plan, modules=modules)
+
+
+@router.delete("/projects/{project_id}/modules/{module_key}/references/{reference_id}", response_model=AttachmentReferenceStateResponse)
+async def delete_reference(
+    project_id: str, module_key: str, reference_id: str,
+    db: AsyncSession = Depends(get_db_session), storage: StorageService = Depends(get_storage_service),
+    settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentReferenceStateResponse:
+    _, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    module = next((item for item in modules if item.module_key == module_key), None)
+    if module is None:
+        raise AppError("attachment_reference.module_invalid", "选择了不支持的附图模块", 422)
+    await remove_module_reference(db, module=module, reference_id=reference_id)
+    await db.commit()
+    return await _reference_response(db, storage, settings, plan=plan, modules=modules)
+
+
+@router.put("/projects/{project_id}/product-references/{view_role}", response_model=AttachmentReferenceStateResponse)
+async def put_product_reference(
+    project_id: str, view_role: str, payload: AttachmentProductReferenceRequest,
+    db: AsyncSession = Depends(get_db_session), storage: StorageService = Depends(get_storage_service),
+    settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentReferenceStateResponse:
+    _, session, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    if view_role != payload.view_role:
+        raise AppError("attachment_reference.product_role_mismatch", "商品参考角色不一致", 422)
+    group, _ = await ensure_product_reference_group(db, plan=plan, session=session, user_id=principal.user.id)
+    await replace_product_reference(
+        db, group=group, asset_id=payload.asset_id, source_asset_id=payload.source_asset_id,
+        view_role=payload.view_role, transform_metadata=payload.transform_metadata,
+        user_id=principal.user.id,
+    )
+    await db.commit()
+    return await _reference_response(db, storage, settings, plan=plan, modules=modules)
+
+
+@router.post(
+    "/projects/{project_id}/modules/{module_key}/references/analyze",
+    response_model=AttachmentReferenceStateResponse, status_code=status.HTTP_202_ACCEPTED,
+)
+async def analyze_references(
+    project_id: str, module_key: str, payload: AttachmentReferenceAnalyzeRequest,
+    db: AsyncSession = Depends(get_db_session), storage: StorageService = Depends(get_storage_service),
+    settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentReferenceStateResponse:
+    project, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    module = next((item for item in modules if item.module_key == module_key), None)
+    if module is None:
+        raise AppError("attachment_reference.module_invalid", "选择了不支持的附图模块", 422)
+    job, _, created = await start_reference_analysis(
+        db, settings, project=project, plan=plan, module=module,
+        idempotency_key=payload.idempotency_key, user_id=principal.user.id,
+    )
+    await db.commit()
+    if created:
+        await dispatch_jobs(db, await due_jobs(db, settings, limit=1))
+    return await _reference_response(db, storage, settings, plan=plan, modules=modules)
 
 
 @router.post("/projects/{project_id}/plan", response_model=AttachmentPlanningResponse, status_code=status.HTTP_202_ACCEPTED)
