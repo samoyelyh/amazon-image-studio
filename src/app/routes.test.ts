@@ -8,12 +8,13 @@ describe('application routes', () => {
     expect(new Set(paths).size).toBe(paths.length)
   })
 
-  it('registers the three workspaces as independent routes', () => {
+  it('registers the image workspaces as independent routes', () => {
     const workspacePaths = navigationSections
       .find((section) => section.label === '图片工作台')
       ?.items.map((item) => item.path)
     expect(workspacePaths).toEqual([
       '/workspaces/listing',
+      '/workspaces/attachment-images',
       '/workspaces/listing/legacy',
       '/workspaces/listing/variations',
       '/workspaces/batch-tryon',

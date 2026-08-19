@@ -23,6 +23,7 @@ import SmartImageVariationHubPage from '../pages/SmartImageVariationHubPage'
 import MaterialExtractPage from '../pages/MaterialExtractPage'
 import BatchTryOnRegionReplacePage from '../pages/BatchTryOnRegionReplacePage'
 import PrintDesignPage from '../pages/PrintDesignPage'
+import AttachmentImageWorkbenchPage from '../pages/AttachmentImageWorkbenchPage'
 import { useAuth } from './AuthContext'
 
 function ProtectedRoutes() {
@@ -51,6 +52,8 @@ function AppRoutes() {
           <Route index element={<Navigate to={appRoutes.listing} replace />} />
           <Route path={appRoutes.dashboard} element={<DashboardPage />} />
           <Route path={appRoutes.listing} element={<ListingWorkspacePage />} />
+          <Route path={appRoutes.attachmentImages} element={<AttachmentImageWorkbenchPage />} />
+          <Route path={appRoutes.attachmentImageWorkbench} element={<AttachmentImageWorkbenchPage />} />
           <Route path={appRoutes.listingQuick} element={<QuickListingGenerationPage />} />
           <Route path={appRoutes.listingQuickProgress} element={<QuickListingGenerationPage />} />
           <Route path={appRoutes.smartImageVariationHub} element={<SmartImageVariationHubPage />} />

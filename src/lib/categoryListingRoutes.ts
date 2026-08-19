@@ -7,4 +7,5 @@ export function canEnterCategoryOutput(session: Pick<ListingWorkflowSession, 'st
 export const categoryListingPath = (sessionId: string) => `/listing-workbench/${sessionId}`
 export const categoryOutputPath = (sessionId: string) => `/listing-workbench/${sessionId}/select-output`
 export const listingImagePath = (sessionId: string) => `/listing-image-workbench/${sessionId}`
+export const attachmentImageWorkbenchPath = (sessionId: string) => `/attachment-image-workbench/${sessionId}`
 export const categoryAPlusPath = (sessionId: string) => `/a-plus-workbench/${sessionId}`
