@@ -164,6 +164,37 @@ export interface AttachmentGenerationResult {
   created: boolean
 }
 
+export interface AttachmentModuleResultState {
+  module_key: AttachmentModuleCode
+  current_final_output_id: string | null
+  results_cleared_at: string | null
+  state_version: number
+  visible_output_count: number
+  history_output_count: number
+  pending_review_count: number
+  approved_count: number
+  rejected_count: number
+}
+
+export interface AttachmentResultState {
+  project_id: string
+  total_outputs: number
+  reviewed_outputs: number
+  final_module_count: number
+  modules: AttachmentModuleResultState[]
+}
+
+export interface AttachmentOutputState {
+  output_id: string
+  module_key: AttachmentModuleCode
+  review_status: 'pending_review' | 'approved' | 'rejected'
+  review_state_version: number
+  reviewed_at: string | null
+  discarded_at: string | null
+  is_final: boolean
+  module_state_version: number
+}
+
 export function previewAttachmentGeneration(projectId: string, selectedModuleKeys: AttachmentModuleCode[]) {
   return authenticatedFetch<AttachmentGenerationPreview>(`/attachment-workbench/projects/${projectId}/generation-preview`, {
     method: 'POST', body: JSON.stringify({ selected_module_keys: selectedModuleKeys }),
@@ -177,6 +208,50 @@ export function generateAttachments(projectId: string, input: {
 }) {
   return authenticatedFetch<AttachmentGenerationResult>(`/attachment-workbench/projects/${projectId}/generate`, {
     method: 'POST', body: JSON.stringify(input),
+  })
+}
+
+export function getAttachmentResultState(projectId: string) {
+  return authenticatedFetch<AttachmentResultState>(`/attachment-workbench/projects/${projectId}/results`)
+}
+
+export function reviewAttachmentOutput(projectId: string, outputId: string, input: {
+  status: 'approved' | 'rejected'
+  expected_review_state_version: number
+  clear_final_if_rejected?: boolean
+}) {
+  return authenticatedFetch<AttachmentOutputState>(`/attachment-workbench/projects/${projectId}/outputs/${outputId}/review`, {
+    method: 'POST', body: JSON.stringify({ ...input, clear_final_if_rejected: input.clear_final_if_rejected || false }),
+  })
+}
+
+export function setAttachmentFinal(projectId: string, outputId: string) {
+  return authenticatedFetch<AttachmentOutputState>(`/attachment-workbench/projects/${projectId}/outputs/${outputId}/final`, {
+    method: 'POST',
+  })
+}
+
+export function clearAttachmentFinal(projectId: string, moduleKey: AttachmentModuleCode) {
+  return authenticatedFetch<AttachmentResultState>(`/attachment-workbench/projects/${projectId}/modules/${moduleKey}/final`, {
+    method: 'DELETE',
+  })
+}
+
+export function discardAttachmentResults(projectId: string, moduleKeys: AttachmentModuleCode[]) {
+  return authenticatedFetch<AttachmentResultState>(`/attachment-workbench/projects/${projectId}/discard-results`, {
+    method: 'POST', body: JSON.stringify({ module_keys: moduleKeys }),
+  })
+}
+
+export function resetAttachmentModule(projectId: string, moduleKey: AttachmentModuleCode) {
+  return authenticatedFetch<AttachmentPlanningState>(`/attachment-workbench/projects/${projectId}/modules/${moduleKey}/reset`, {
+    method: 'POST',
+  })
+}
+
+export function retryAttachmentJob(projectId: string, jobId: string, idempotencyKey: string) {
+  return authenticatedFetch<import('./listingWorkflowApi').ListingImageTaskGroup>(`/attachment-workbench/projects/${projectId}/jobs/${jobId}/retry`, {
+    method: 'POST', body: JSON.stringify({ idempotency_key: idempotencyKey }),
   })
 }
 

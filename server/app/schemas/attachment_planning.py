@@ -232,3 +232,54 @@ class AttachmentGenerationResponse(BaseModel):
     module_keys: list[str]
     total_images: int
     created: bool
+
+
+class AttachmentOutputReviewRequest(BaseModel):
+    status: Literal["approved", "rejected"]
+    expected_review_state_version: int = Field(ge=0)
+    clear_final_if_rejected: bool = False
+
+
+class AttachmentOutputStateResponse(BaseModel):
+    output_id: str
+    module_key: str
+    review_status: Literal["pending_review", "approved", "rejected"]
+    review_state_version: int
+    reviewed_at: datetime | None
+    discarded_at: datetime | None
+    is_final: bool
+    module_state_version: int
+
+
+class AttachmentModuleResultStateResponse(BaseModel):
+    module_key: str
+    current_final_output_id: str | None
+    results_cleared_at: datetime | None
+    state_version: int
+    visible_output_count: int
+    history_output_count: int
+    pending_review_count: int
+    approved_count: int
+    rejected_count: int
+
+
+class AttachmentResultStateResponse(BaseModel):
+    project_id: str
+    total_outputs: int
+    reviewed_outputs: int
+    final_module_count: int
+    modules: list[AttachmentModuleResultStateResponse]
+
+
+class AttachmentModuleKeysRequest(BaseModel):
+    module_keys: list[str] = Field(min_length=1, max_length=6)
+
+    @model_validator(mode="after")
+    def unique_result_modules(self) -> "AttachmentModuleKeysRequest":
+        if len(self.module_keys) != len(set(self.module_keys)):
+            raise ValueError("module_keys must be unique")
+        return self
+
+
+class AttachmentRetryJobRequest(BaseModel):
+    idempotency_key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$", min_length=8, max_length=160)

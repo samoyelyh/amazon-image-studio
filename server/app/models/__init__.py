@@ -33,6 +33,7 @@ from app.models.tasks import (
 )
 from app.models.print_design import PrintAssetGroup, PrintAssetLibraryItem, ProductPrintMapping
 from app.models.attachment_planning import (
+    AttachmentModuleResultState,
     AttachmentModuleReference,
     AttachmentProductReferenceGroup,
     AttachmentProductReferenceItem,
@@ -74,4 +75,5 @@ __all__ = [
     "AttachmentWorkbenchPlan", "AttachmentWorkbenchModulePlan", "AttachmentWorkbenchPlanVersion",
     "AttachmentProductReferenceGroup", "AttachmentProductReferenceItem",
     "AttachmentModuleReference", "AttachmentReferenceUnderstanding",
+    "AttachmentModuleResultState",
 ]

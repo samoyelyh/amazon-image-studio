@@ -59,6 +59,25 @@ class AttachmentWorkbenchModulePlan(UuidPrimaryKeyMixin, TimestampMixin, Base):
     updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
 
 
+class AttachmentModuleResultState(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "attachment_module_result_states"
+    __table_args__ = (
+        UniqueConstraint("listing_image_project_id", "module_key", name="uq_attachment_result_state_project_module"),
+        Index("ix_attachment_result_states_org_project", "organization_id", "listing_image_project_id"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    listing_image_project_id: Mapped[str] = mapped_column(ForeignKey("listing_image_projects.id", ondelete="CASCADE"), nullable=False)
+    module_key: Mapped[str] = mapped_column(String(60), nullable=False)
+    current_final_output_id: Mapped[str | None] = mapped_column(
+        ForeignKey("generated_outputs.id", ondelete="SET NULL"), nullable=True,
+    )
+    results_cleared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    state_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+
 class AttachmentWorkbenchPlanVersion(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "attachment_workbench_plan_versions"
     __table_args__ = (

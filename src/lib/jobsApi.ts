@@ -17,6 +17,11 @@ export interface JobOutput {
   sequence_number: number
   url: string
   url_expires_at: string | null
+  review_status?: 'pending_review' | 'approved' | 'rejected'
+  review_state_version?: number
+  reviewed_at?: string | null
+  discarded_at?: string | null
+  is_final?: boolean
 }
 
 export interface ServerJob {

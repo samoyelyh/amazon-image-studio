@@ -290,6 +290,11 @@ class JobOutputResponse(BaseModel):
     sequence_number: int
     url: str
     url_expires_at: datetime | None = None
+    review_status: str = "pending_review"
+    review_state_version: int = 0
+    reviewed_at: datetime | None = None
+    discarded_at: datetime | None = None
+    is_final: bool = False
 
 
 class JobPage(BaseModel):

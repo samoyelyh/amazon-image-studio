@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.models.attachment_planning import AttachmentModuleResultState
 from app.models.content import Asset
 from app.models.listing_workflow import (
     CategorySkillVersion, ImagePromptItem, ListingImageProject, ListingImageTaskGroup,
@@ -229,6 +230,13 @@ async def task_group_response(
     variation_jobs = [item for item in job_metadata if item.get("workflow") == "smart_image_variation"]
     attachment_jobs = [item for item in job_metadata if item.get("workflow") == "attachment_workbench_generation"]
     workflow_mode = "attachment_standard" if attachment_jobs else "smart_image_variation" if variation_jobs else "standard"
+    final_output_ids: set[str] = set()
+    if workflow_mode == "attachment_standard":
+        final_output_ids = set((await db.scalars(select(AttachmentModuleResultState.current_final_output_id).where(
+            AttachmentModuleResultState.organization_id == group.organization_id,
+            AttachmentModuleResultState.listing_image_project_id == group.listing_image_project_id,
+            AttachmentModuleResultState.current_final_output_id.is_not(None),
+        ))).all())
     variation_types = list(dict.fromkeys(
         str(item.get("variation_type_name") or item.get("variation_type_code") or "")
         for item in variation_jobs if item.get("variation_type_name") or item.get("variation_type_code")
@@ -253,7 +261,7 @@ async def task_group_response(
             model_code=job.model_code, error_code=job.error_code, error_message=job.error_message,
             created_at=job.created_at, started_at=job.started_at, finished_at=job.finished_at,
             input_assets=await _asset_responses(db, organization_id=group.organization_id, snapshot=snapshot, asset_ids=job_asset_ids),
-            outputs=response.outputs,
+            outputs=[output.model_copy(update={"is_final": output.id in final_output_ids}) for output in response.outputs],
             variation_type_code=str(metadata.get("variation_type_code") or "") or None,
             variation_type_name=str(metadata.get("variation_type_name") or "") or None,
             variation_plan_code=str(metadata.get("variation_plan_code") or "") or None,

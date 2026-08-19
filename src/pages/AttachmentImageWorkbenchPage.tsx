@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AttachmentImageModuleCard from '../components/attachment-image/AttachmentImageModuleCard'
+import type { AttachmentResultEntry } from '../components/attachment-image/AttachmentResultReviewPanel'
 import BatchTryOnGarmentPreprocessDialog, { type GarmentReferencePreview } from '../components/BatchTryOnGarmentPreprocessDialog'
 import AuthenticatedImage from '../components/category-listing/AuthenticatedImage'
 import {
@@ -30,6 +31,7 @@ import {
   updateCategoryOutputProject,
   type CategoryOutputProject,
   type ListingImageTaskGroup,
+  type ListingImageTask,
   type ListingWorkflowSession,
   type ListingWorkflowSessionSummary,
 } from '../lib/listingWorkflowApi'
@@ -55,6 +57,13 @@ import {
   type AttachmentGenerationPreview,
   previewAttachmentGeneration,
   generateAttachments,
+  discardAttachmentResults,
+  getAttachmentResultState,
+  resetAttachmentModule,
+  retryAttachmentJob,
+  reviewAttachmentOutput,
+  setAttachmentFinal,
+  type AttachmentResultState,
 } from '../lib/attachmentPlanningApi'
 import { randomUuid } from '../lib/randomUuid'
 
@@ -150,13 +159,16 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
   const [generationPreview, setGenerationPreview] = useState<AttachmentGenerationPreview | null>(null)
   const [generationSelection, setGenerationSelection] = useState<AttachmentModuleCode[]>([])
   const [generationBusy, setGenerationBusy] = useState('')
+  const [resultState, setResultState] = useState<AttachmentResultState | null>(null)
   const generationIdempotencyRef = useRef('')
   const visualDirtyRef = useRef(false)
   const suitePlanningAwaitingResultRef = useRef(false)
 
   const refreshGroups = async (projectId: string) => {
-    const response = await listListingImageTaskGroups(projectId)
-    setGroups(response.items)
+    const [response, results] = await Promise.all([
+      listListingImageTaskGroups(projectId), getAttachmentResultState(projectId),
+    ])
+    setGroups(response.items); setResultState(results)
   }
 
   useEffect(() => {
@@ -179,11 +191,12 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         const availableCodes = backendModules.filter((item) => item.available !== false).map((item) => String(item.code))
         const stored = projectValue.prompt_config?.[ATTACHMENT_WORKBENCH_CONFIG_KEY]
         const nextDraft = normalizeAttachmentWorkbenchDraft(stored, availableCodes)
-        const [loadedAssets, taskGroups, planningValue, referenceValue] = await Promise.all([
+        const [loadedAssets, taskGroups, planningValue, referenceValue, resultsValue] = await Promise.all([
           Promise.all(projectValue.source_asset_ids.map((id) => getAsset(id).catch(() => null))),
           listListingImageTaskGroups(projectValue.id),
           getAttachmentPlanning(projectValue.id),
           getAttachmentReferences(projectValue.id),
+          getAttachmentResultState(projectValue.id),
         ])
         if (!active) return
         setSession(sessionValue); setProject(projectValue); projectRef.current = projectValue
@@ -191,6 +204,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         setGroups(taskGroups.items); setDraft(nextDraft); draftRef.current = nextDraft
         setPlanning(planningValue); setVisualDirection(planningValue.visual_direction_cn)
         setReferenceState(referenceValue)
+        setResultState(resultsValue)
         setVisualDirty(false); visualDirtyRef.current = false
         lastSavedSignature.current = JSON.stringify(nextDraft)
         setSaveStatus('saved'); hydrated.current = true
@@ -302,9 +316,10 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
   const selectedModules = selectedAttachmentModules(draft)
   const requestedImages = countRequestedAttachmentImages(draft)
   const attachmentModuleCodes = new Set<string>(attachmentModuleDefinitions.map((definition) => definition.code))
-  const resultModuleCount = new Set(groups.flatMap((group) => group.tasks
-    .filter((task) => task.outputs.length && attachmentModuleCodes.has(task.image_type))
-    .map((task) => task.image_type))).size
+  const resultModuleCount = resultState?.modules.filter((item) => item.visible_output_count > 0).length
+    ?? new Set(groups.flatMap((group) => group.tasks
+      .filter((task) => task.outputs.length && attachmentModuleCodes.has(task.image_type))
+      .map((task) => task.image_type))).size
   const phaseOneSupported = session?.category_code === 'football_jersey'
 
   const updateModule = (code: AttachmentModuleCode, next: AttachmentWorkbenchDraft['modules'][AttachmentModuleCode]) => {
@@ -378,6 +393,68 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
       setPollingPaused(false)
       await refreshGroups(project.id)
       showToast('失败任务已创建新的重试任务组。', 'success')
+    } catch (reason) { showToast(errorText(reason), 'error') } finally { setGenerationBusy('') }
+  }
+
+  const approveResult = async (entry: AttachmentResultEntry, makeFinal: boolean) => {
+    if (!project) return
+    setGenerationBusy(`review:${entry.output.id}`)
+    try {
+      if (makeFinal) await setAttachmentFinal(project.id, entry.output.id)
+      else await reviewAttachmentOutput(project.id, entry.output.id, {
+        status: 'approved', expected_review_state_version: entry.output.review_state_version || 0,
+      })
+      await refreshGroups(project.id)
+      showToast(makeFinal ? '已审核通过，并设为当前最终采用版本。' : '已审核通过；当前最终采用版本保持不变。', 'success')
+    } catch (reason) { showToast(errorText(reason), 'error'); await refreshGroups(project.id).catch(() => undefined) } finally { setGenerationBusy('') }
+  }
+
+  const rejectResult = async (entry: AttachmentResultEntry, clearFinal: boolean) => {
+    if (!project) return
+    setGenerationBusy(`review:${entry.output.id}`)
+    try {
+      await reviewAttachmentOutput(project.id, entry.output.id, {
+        status: 'rejected', expected_review_state_version: entry.output.review_state_version || 0,
+        clear_final_if_rejected: clearFinal,
+      })
+      await refreshGroups(project.id)
+      showToast(clearFinal ? '图片已打回，最终采用状态也已清除。' : '图片已打回。', 'success')
+    } catch (reason) { showToast(errorText(reason), 'error'); await refreshGroups(project.id).catch(() => undefined) } finally { setGenerationBusy('') }
+  }
+
+  const retryTask = async (task: ListingImageTask) => {
+    if (!project) return
+    setGenerationBusy(`retry-job:${task.id}`)
+    try {
+      await retryAttachmentJob(project.id, task.id, `attachment-slot-retry:${randomUuid()}`)
+      setPollingPaused(false); await refreshGroups(project.id)
+      showToast(`候选 ${task.slot_index || '-'} 已按原任务快照单独重试。`, 'success')
+    } catch (reason) { showToast(errorText(reason), 'error') } finally { setGenerationBusy('') }
+  }
+
+  const clearResults = async (moduleKeys: AttachmentModuleCode[]) => {
+    if (!project || !moduleKeys.length) return
+    if (!window.confirm(`确认清空 ${moduleKeys.length} 个模块的当前结果吗？历史输出、任务、Asset 和对象存储文件都会保留。`)) return
+    setGenerationBusy('clear-results')
+    try {
+      const next = await discardAttachmentResults(project.id, moduleKeys)
+      setResultState(next); await refreshGroups(project.id)
+      showToast('当前结果区域已清空，历史数据仍可追溯。', 'success')
+    } catch (reason) { showToast(errorText(reason), 'error') } finally { setGenerationBusy('') }
+  }
+
+  const resetModuleState = async (moduleKey: AttachmentModuleCode) => {
+    if (!project) return
+    if (!window.confirm('重置会清空该模块当前结果、方案、Prompt、模块参考素材和生成参数，但不会删除历史任务与图片。确认继续吗？')) return
+    setGenerationBusy(`reset:${moduleKey}`)
+    try {
+      const nextPlanning = await resetAttachmentModule(project.id, moduleKey)
+      applyPlanning(nextPlanning)
+      const definition = attachmentModuleDefinitions.find((item) => item.code === moduleKey)!
+      updateModule(moduleKey, { selected: draft.modules[moduleKey].selected, aspectRatio: definition.defaultAspectRatio, imageCount: 1, generationMode: 'standard' })
+      setReferenceState(await getAttachmentReferences(project.id))
+      await refreshGroups(project.id)
+      showToast('模块已恢复初始状态；历史版本和生成结果仍然保留。', 'success')
     } catch (reason) { showToast(errorText(reason), 'error') } finally { setGenerationBusy('') }
   }
 
@@ -598,7 +675,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
           <div className="mt-4 flex gap-3 overflow-x-auto pb-1">{(referenceState?.product_references || []).map((item) => <div key={item.id} className="relative w-24 shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/[0.08]"><AuthenticatedImage url={item.asset.url} alt={item.asset.filename} className="aspect-square w-full object-contain" placeholderClassName="aspect-square" /><span className="absolute bottom-1.5 left-1.5 rounded-full bg-gray-950/70 px-2 py-0.5 text-[10px] font-semibold text-white">{item.view_role === 'front' ? '正面' : item.view_role === 'back' ? '背面' : '细节'}{item.source === 'override' ? '参考' : ''}</span>{item.asset.id === session.primary_asset_id && <span className="absolute left-1.5 top-1.5 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">主图</span>}</div>)}</div>
           {!assets.length && <div className="mt-4 rounded-xl bg-amber-50 p-4 text-xs text-amber-800">产品 Asset 暂时无法读取，请回到品类 Listing 检查源图片。</div>}
         </div>
-        <div><h2 className="truncate text-lg font-semibold text-gray-950 dark:text-white">{productTitle(session)}</h2><div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">产品图</div><div className="mt-1 font-semibold">{assets.length} 张</div></div><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">已选模块</div><div className="mt-1 font-semibold">{selectedModules.length} / 6</div></div><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">已有结果模块</div><div className="mt-1 font-semibold">{resultModuleCount} 个</div></div><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">当前状态</div><div className="mt-1 font-semibold">{statusLabels[project.status] || project.status}</div></div></div><div className="mt-3 text-xs text-gray-400">最终采用模块将在 Phase 5 接入 Output 级审核后显示。</div></div>
+        <div><h2 className="truncate text-lg font-semibold text-gray-950 dark:text-white">{productTitle(session)}</h2><div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">产品图</div><div className="mt-1 font-semibold">{assets.length} 张</div></div><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">已选模块</div><div className="mt-1 font-semibold">{selectedModules.length} / 6</div></div><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">已有结果模块</div><div className="mt-1 font-semibold">{resultModuleCount} 个</div></div><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">最终采用</div><div className="mt-1 font-semibold">{resultState?.final_module_count || 0} 个模块</div></div></div><div className="mt-3 text-xs text-gray-400">已审核 {resultState?.reviewed_outputs || 0} / {resultState?.total_outputs || 0} 张；审核通过与最终采用是两个独立状态。</div></div>
       </div>
     </section>
 
@@ -617,8 +694,8 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
 
     <section className={panel}>
       <div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold text-gray-950 dark:text-white">任务状态</h2><p className="mt-1 text-xs text-gray-500">直接读取现有 Listing 图片 TaskGroup；生成状态与后续审核状态分开。</p></div><div className="flex gap-2"><button className={button} onClick={() => { setPollingPaused(false); void refreshGroups(project.id) }}>刷新状态</button>{pollingPaused && <span className="self-center text-xs text-amber-700">自动刷新已暂停</span>}</div></div>
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">{[
-        ['总任务', taskSummary.total], ['运行中', taskSummary.running], ['排队', taskSummary.queued], ['成功', taskSummary.succeeded], ['失败', taskSummary.failed], ['已中止', taskSummary.cancelled], ['活动批次', taskSummary.activeGroups],
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-9">{[
+        ['总任务', taskSummary.total], ['运行中', taskSummary.running], ['排队', taskSummary.queued], ['成功', taskSummary.succeeded], ['失败', taskSummary.failed], ['已中止', taskSummary.cancelled], ['已审核', `${resultState?.reviewed_outputs || 0}/${resultState?.total_outputs || 0}`], ['最终采用', resultState?.final_module_count || 0], ['活动批次', taskSummary.activeGroups],
       ].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-3 text-center dark:bg-white/[0.03]"><div className="text-xs text-gray-500">{label}</div><div className="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{value}</div></div>)}</div>
       {attachmentGroups.length > 0 && <div className="mt-4 space-y-2">{attachmentGroups.slice(0, 5).map((group) => <div key={group.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 px-3 py-2.5 text-xs dark:border-white/[0.06]">
         <div><span className="font-semibold text-gray-800 dark:text-gray-100">{group.group_name}</span><span className="ml-2 text-gray-500">{group.statistics.succeeded + group.statistics.failed + group.statistics.cancelled}/{group.statistics.total} · {statusLabels[group.status] || group.status}</span></div>
@@ -630,7 +707,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     </section>
 
     <section>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-semibold text-gray-950 dark:text-white">附图模块</h2><p className="mt-1 text-xs text-gray-500">首期固定六个模块；模块参数独立保存，不为每个模块创建新 Project。</p></div><div className="flex gap-2"><button className={button} disabled={!phaseOneSupported} onClick={() => selectAvailable(true)}>全选可用模块</button><button className={button} disabled={!phaseOneSupported} onClick={() => selectAvailable(false)}>清空选择</button></div></div>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-semibold text-gray-950 dark:text-white">附图模块</h2><p className="mt-1 text-xs text-gray-500">首期固定六个模块；模块参数独立保存，不为每个模块创建新 Project。</p></div><div className="flex flex-wrap gap-2"><button className={button} disabled={!phaseOneSupported} onClick={() => selectAvailable(true)}>全选可用模块</button><button className={button} disabled={!phaseOneSupported} onClick={() => selectAvailable(false)}>清空选择</button><button className={button} disabled={!selectedModules.length || generationBusy !== ''} onClick={() => void clearResults(selectedModules.map((item) => item.code))}>清空已选模块当前结果</button></div></div>
       <div className="space-y-3">{attachmentModuleDefinitions.map((definition, index) => {
         const backend = moduleBackend[definition.code] || {}
         const latestGroup = [...attachmentGroups]
@@ -639,7 +716,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         const tasks = (latestGroup?.tasks || []).filter((task) => task.image_type === definition.code)
         const available = phaseOneSupported && backend.available !== false
         const modulePlanning = planning?.modules.find((item) => item.module_key === definition.code)
-        return <AttachmentImageModuleCard key={definition.code} index={index + 1} definition={definition} draft={draft.modules[definition.code]} expanded={expanded.has(definition.code)} available={available} unavailableReason={phaseOneSupported ? String(backend.unavailable_reason || '') : '首期仅支持橄榄球衣。'} objective={String(backend.objective || '')} projectId={project.id} planning={modulePlanning} planningBusy={planningBusy !== '' || planningActive || referenceBusy !== ''} referenceState={referenceState?.modules.find((item) => item.module_key === definition.code)} productReferences={referenceState?.product_references || []} tasks={tasks} onToggleExpanded={() => setExpanded((current) => { const next = new Set(current); next.has(definition.code) ? next.delete(definition.code) : next.add(definition.code); return next })} onChange={(next) => updateModule(definition.code, next)} onSavePlanning={(input) => saveModulePlanning(definition.code, input)} onReplan={(requirement) => runModulePlanning(definition.code, requirement, false)} onOptimizePrompt={(requirement) => runModulePlanning(definition.code, requirement, true)} onAddReference={(slot, assetId) => addReference(definition.code, slot, assetId)} onRemoveReference={(referenceId) => removeReference(definition.code, referenceId)} onAnalyzeReferences={() => analyzeReferences(definition.code)} onReferenceError={(message) => showToast(message, 'error')} onGenerate={() => prepareGeneration([definition.code])} generationBusy={generationBusy === definition.code || generationBusy === 'submit'} />
+        return <AttachmentImageModuleCard key={definition.code} index={index + 1} definition={definition} draft={draft.modules[definition.code]} expanded={expanded.has(definition.code)} available={available} unavailableReason={phaseOneSupported ? String(backend.unavailable_reason || '') : '首期仅支持橄榄球衣。'} objective={String(backend.objective || '')} projectId={project.id} planning={modulePlanning} planningBusy={planningBusy !== '' || planningActive || referenceBusy !== ''} referenceState={referenceState?.modules.find((item) => item.module_key === definition.code)} productReferences={referenceState?.product_references || []} tasks={tasks} groups={attachmentGroups} resultState={resultState?.modules.find((item) => item.module_key === definition.code)} onToggleExpanded={() => setExpanded((current) => { const next = new Set(current); next.has(definition.code) ? next.delete(definition.code) : next.add(definition.code); return next })} onChange={(next) => updateModule(definition.code, next)} onSavePlanning={(input) => saveModulePlanning(definition.code, input)} onReplan={(requirement) => runModulePlanning(definition.code, requirement, false)} onOptimizePrompt={(requirement) => runModulePlanning(definition.code, requirement, true)} onAddReference={(slot, assetId) => addReference(definition.code, slot, assetId)} onRemoveReference={(referenceId) => removeReference(definition.code, referenceId)} onAnalyzeReferences={() => analyzeReferences(definition.code)} onReferenceError={(message) => showToast(message, 'error')} onGenerate={() => prepareGeneration([definition.code])} generationBusy={generationBusy !== ''} onApproveResult={approveResult} onRejectResult={rejectResult} onRetryTask={retryTask} onClearResults={() => clearResults([definition.code])} onResetModule={() => resetModuleState(definition.code)} />
       })}</div>
     </section>
 

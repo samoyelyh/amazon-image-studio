@@ -163,6 +163,10 @@ async def job_response(
             width=asset.width, height=asset.height, size=asset.size,
             sequence_number=generated.sequence_number, url=signed.url or "",
             url_expires_at=signed.url_expires_at,
+            review_status=generated.review_status,
+            review_state_version=generated.review_state_version,
+            reviewed_at=generated.reviewed_at,
+            discarded_at=generated.discarded_at,
         ))
     snapshot = job.input_json
     review_item = None

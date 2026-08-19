@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import AuthenticatedImage from '../category-listing/AuthenticatedImage'
-import type { ListingImageTask } from '../../lib/listingWorkflowApi'
-import { listAttachmentPlanVersions, type AttachmentModulePlan, type AttachmentPlanVersion } from '../../lib/attachmentPlanningApi'
+import type { ListingImageTask, ListingImageTaskGroup } from '../../lib/listingWorkflowApi'
+import { listAttachmentPlanVersions, type AttachmentModulePlan, type AttachmentModuleResultState, type AttachmentPlanVersion } from '../../lib/attachmentPlanningApi'
 import type {
   AttachmentModuleDefinition,
   AttachmentModuleDraft,
@@ -12,6 +11,7 @@ import type {
   AttachmentReferenceSlotType,
 } from '../../lib/attachmentPlanningApi'
 import AttachmentReferencePanel from './AttachmentReferencePanel'
+import AttachmentResultReviewPanel, { type AttachmentResultEntry } from './AttachmentResultReviewPanel'
 
 const statusLabels: Record<string, string> = {
   queued: '等待中',
@@ -38,6 +38,8 @@ interface Props {
   referenceState?: AttachmentModuleReferenceState
   productReferences?: AttachmentProductReferenceItem[]
   tasks: ListingImageTask[]
+  groups: ListingImageTaskGroup[]
+  resultState?: AttachmentModuleResultState
   onToggleExpanded: () => void
   onChange: (next: AttachmentModuleDraft) => void
   onSavePlanning: (input: { plan_summary_cn: string; prompt_cn: string; operator_requirement_cn: string; aspect_ratio: string; expected_state_version: number }) => Promise<void>
@@ -49,6 +51,11 @@ interface Props {
   onReferenceError: (message: string) => void
   onGenerate: () => Promise<void>
   generationBusy?: boolean
+  onApproveResult: (entry: AttachmentResultEntry, setFinal: boolean) => Promise<void>
+  onRejectResult: (entry: AttachmentResultEntry, clearFinal: boolean) => Promise<void>
+  onRetryTask: (task: ListingImageTask) => Promise<void>
+  onClearResults: () => Promise<void>
+  onResetModule: () => Promise<void>
 }
 
 export default function AttachmentImageModuleCard({
@@ -65,6 +72,8 @@ export default function AttachmentImageModuleCard({
   referenceState,
   productReferences = [],
   tasks,
+  groups,
+  resultState,
   onToggleExpanded,
   onChange,
   onSavePlanning,
@@ -76,6 +85,11 @@ export default function AttachmentImageModuleCard({
   onReferenceError,
   onGenerate,
   generationBusy = false,
+  onApproveResult,
+  onRejectResult,
+  onRetryTask,
+  onClearResults,
+  onResetModule,
 }: Props) {
   const [planSummary, setPlanSummary] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -115,10 +129,6 @@ export default function AttachmentImageModuleCard({
   }
 
   const latestStatus = tasks[0]?.status || 'draft'
-  const taskBySlot = new Map(tasks.map((task, index) => [task.slot_index || index + 1, task]))
-  const latestSlot = tasks.reduce((highest, task) => Math.max(highest, task.slot_index || 0), 0)
-  const slotCount = Math.max(draft.imageCount, Math.min(4, latestSlot))
-  const outputCount = tasks.reduce((total, task) => total + task.outputs.length, 0)
   const readyToGenerate = Boolean(
     available && planning?.prompt_cn.trim() && planning?.plan_summary_cn.trim()
     && referenceState?.understanding?.status === 'ready' && !referenceState.reference_context_dirty,
@@ -154,22 +164,7 @@ export default function AttachmentImageModuleCard({
 
     {expanded && <div className="grid gap-5 border-t border-gray-100 p-4 dark:border-white/[0.06] sm:p-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(300px,.95fr)]">
       <section>
-        <div className="flex items-center justify-between gap-3">
-          <div><h3 className="text-sm font-semibold text-gray-900 dark:text-white">结果槽位</h3><p className="mt-1 text-xs text-gray-500">固定按任务顺序显示，已完成结果不会因返回先后跳位。</p></div>
-          <span className="text-xs text-gray-500">已有 {outputCount} 张</span>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          {Array.from({ length: slotCount }, (_, slot) => {
-            const task = taskBySlot.get(slot + 1)
-            const output = task?.outputs[0]
-            return <div key={slot} className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.03]">
-              {output
-                ? <AuthenticatedImage url={output.url} alt={`${definition.name}结果${slot + 1}`} className="aspect-square w-full object-contain" placeholderClassName="aspect-square" />
-                : <div className="flex aspect-square items-center justify-center px-3 text-center text-xs text-gray-400">候选 {slot + 1} · {task ? statusLabels[task.status] || task.status : '尚未生成'}</div>}
-              {task?.error_message && <div className="border-t border-red-100 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">{task.error_message}</div>}
-            </div>
-          })}
-        </div>
+        <AttachmentResultReviewPanel moduleKey={definition.code} moduleName={definition.name} groups={groups} state={resultState} busy={generationBusy} onApprove={onApproveResult} onReject={onRejectResult} onRetry={onRetryTask} onClear={onClearResults} onReset={onResetModule} />
       </section>
 
       <section className="space-y-4">

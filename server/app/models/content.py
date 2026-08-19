@@ -133,6 +133,8 @@ class GeneratedOutput(UuidPrimaryKeyMixin, Base):
         Index("ix_generated_outputs_organization_project", "organization_id", "project_id", "created_at"),
         Index("ix_generated_outputs_organization_created", "organization_id", "created_at"),
         Index("ix_generated_outputs_job", "job_id", "sequence_number"),
+        Index("ix_generated_outputs_review_status", "organization_id", "review_status", "created_at"),
+        Index("ix_generated_outputs_discarded_at", "organization_id", "discarded_at"),
     )
 
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
@@ -147,6 +149,12 @@ class GeneratedOutput(UuidPrimaryKeyMixin, Base):
     output_type: Mapped[str] = mapped_column(String(60), nullable=False)
     module_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
     metadata_json: Mapped[dict[str, object] | None] = mapped_column("metadata", JSON, nullable=True)
+    review_status: Mapped[str] = mapped_column(String(30), default="pending_review", nullable=False)
+    review_state_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reviewed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    discarded_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    discarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

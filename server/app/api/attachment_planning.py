@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,7 +41,13 @@ from app.schemas.attachment_planning import (
     AttachmentGenerationModulePreviewResponse,
     AttachmentGenerationPreviewResponse,
     AttachmentGenerationResponse,
+    AttachmentModuleKeysRequest,
+    AttachmentOutputReviewRequest,
+    AttachmentOutputStateResponse,
+    AttachmentResultStateResponse,
+    AttachmentRetryJobRequest,
 )
+from app.schemas.listing_workflow import ListingImageTaskGroupResponse
 from app.security.principal import Principal, require_permissions
 from app.services.attachment_planning_service import (
     STANDARD_MODULE_CODES,
@@ -73,6 +79,18 @@ from app.services.attachment_generation_service import (
     build_attachment_generation_preview,
     create_attachment_generation,
 )
+from app.services.attachment_result_service import (
+    clear_attachment_final,
+    discard_attachment_results,
+    ensure_attachment_result_states,
+    reset_attachment_module,
+    result_state_response,
+    retry_attachment_job,
+    review_attachment_output,
+    set_attachment_final,
+)
+from app.services.audit_service import add_audit_log
+from app.services.listing_image_task_group_service import task_group_response
 
 
 router = APIRouter(prefix="/attachment-workbench", tags=["attachment-workbench"])
@@ -108,6 +126,9 @@ async def _context(
         db, project=project, session=session, version=version, user_id=user_id,
     )
     await ensure_product_reference_group(db, plan=plan, session=session, user_id=user_id)
+    await ensure_attachment_result_states(
+        db, project=project, module_keys=list(STANDARD_MODULE_CODES), user_id=user_id,
+    )
     return project, session, version, plan, modules
 
 
@@ -548,3 +569,142 @@ async def list_versions(
         db, organization_id=_organization_id(principal), plan_id=plan.id, module_key=module_key,
     )
     return [AttachmentPlanVersionResponse.model_validate(row, from_attributes=True) for row in rows]
+
+
+@router.get("/projects/{project_id}/results", response_model=AttachmentResultStateResponse)
+async def get_result_state(
+    project_id: str, db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.read")),
+) -> AttachmentResultStateResponse:
+    project, _, _, _, _ = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    response = await result_state_response(db, project=project, user_id=principal.user.id)
+    await db.commit()
+    return response
+
+
+@router.post(
+    "/projects/{project_id}/outputs/{output_id}/review", response_model=AttachmentOutputStateResponse,
+)
+async def review_output(
+    project_id: str, output_id: str, payload: AttachmentOutputReviewRequest, request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentOutputStateResponse:
+    project, _, _, _, _ = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    response = await review_attachment_output(
+        db, project=project, output_id=output_id, status=payload.status,
+        expected_review_state_version=payload.expected_review_state_version,
+        clear_final_if_rejected=payload.clear_final_if_rejected, user_id=principal.user.id,
+    )
+    add_audit_log(
+        db, request=request, actor_user_id=principal.user.id, organization_id=project.organization_id,
+        action=f"attachment_result.{payload.status}", resource_type="generated_output", resource_id=output_id,
+        metadata={"project_id": project.id, "module_key": response.module_key},
+    )
+    await db.commit()
+    return response
+
+
+@router.post(
+    "/projects/{project_id}/outputs/{output_id}/final", response_model=AttachmentOutputStateResponse,
+)
+async def set_final_output(
+    project_id: str, output_id: str, request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentOutputStateResponse:
+    project, _, _, _, _ = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    response = await set_attachment_final(db, project=project, output_id=output_id, user_id=principal.user.id)
+    add_audit_log(
+        db, request=request, actor_user_id=principal.user.id, organization_id=project.organization_id,
+        action="attachment_result.set_final", resource_type="generated_output", resource_id=output_id,
+        metadata={"project_id": project.id, "module_key": response.module_key},
+    )
+    await db.commit()
+    return response
+
+
+@router.delete("/projects/{project_id}/modules/{module_key}/final", response_model=AttachmentResultStateResponse)
+async def clear_final_output(
+    project_id: str, module_key: str, request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentResultStateResponse:
+    project, _, _, _, _ = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    if module_key not in STANDARD_MODULE_CODES:
+        raise AppError("attachment_result.module_invalid", "选择了不支持的附图模块", 422)
+    await clear_attachment_final(db, project=project, module_key=module_key, user_id=principal.user.id)
+    add_audit_log(
+        db, request=request, actor_user_id=principal.user.id, organization_id=project.organization_id,
+        action="attachment_result.clear_final", resource_type="listing_image_project", resource_id=project.id,
+        metadata={"module_key": module_key},
+    )
+    response = await result_state_response(db, project=project, user_id=principal.user.id)
+    await db.commit()
+    return response
+
+
+@router.post("/projects/{project_id}/discard-results", response_model=AttachmentResultStateResponse)
+async def discard_results(
+    project_id: str, payload: AttachmentModuleKeysRequest, request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentResultStateResponse:
+    project, _, _, _, _ = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    changed = await discard_attachment_results(
+        db, project=project, module_keys=payload.module_keys, user_id=principal.user.id,
+    )
+    add_audit_log(
+        db, request=request, actor_user_id=principal.user.id, organization_id=project.organization_id,
+        action="attachment_result.discard", resource_type="listing_image_project", resource_id=project.id,
+        metadata={"module_keys": payload.module_keys, "discarded_outputs": changed},
+    )
+    response = await result_state_response(db, project=project, user_id=principal.user.id)
+    await db.commit()
+    return response
+
+
+@router.post("/projects/{project_id}/modules/{module_key}/reset", response_model=AttachmentPlanningResponse)
+async def reset_module(
+    project_id: str, module_key: str, request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentPlanningResponse:
+    project, _, version, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    module = next((item for item in modules if item.module_key == module_key), None)
+    if module is None:
+        raise AppError("attachment_result.module_invalid", "选择了不支持的附图模块", 422)
+    await reset_attachment_module(db, project=project, plan=plan, module=module, user_id=principal.user.id)
+    add_audit_log(
+        db, request=request, actor_user_id=principal.user.id, organization_id=project.organization_id,
+        action="attachment_result.reset_module", resource_type="listing_image_project", resource_id=project.id,
+        metadata={"module_key": module_key},
+    )
+    await db.commit()
+    return _response(project=project, version=version, plan=plan, modules=modules, principal=principal)
+
+
+@router.post(
+    "/projects/{project_id}/jobs/{job_id}/retry", response_model=ListingImageTaskGroupResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def retry_failed_slot(
+    project_id: str, job_id: str, payload: AttachmentRetryJobRequest, request: Request,
+    db: AsyncSession = Depends(get_db_session), settings: Settings = Depends(get_settings),
+    storage: StorageService = Depends(get_storage_service),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> ListingImageTaskGroupResponse:
+    project, _, _, _, _ = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    batch, jobs, group, created = await retry_attachment_job(
+        db, settings, project=project, source_job_id=job_id,
+        idempotency_key=payload.idempotency_key, user_id=principal.user.id,
+    )
+    add_audit_log(
+        db, request=request, actor_user_id=principal.user.id, organization_id=project.organization_id,
+        action="attachment_result.retry_slot", resource_type="job", resource_id=job_id,
+        metadata={"retry_group_id": group.id},
+    )
+    await db.commit()
+    if created:
+        await dispatch_jobs(db, await due_jobs(db, settings, limit=1, batch_id=batch.id))
+    return await task_group_response(db, storage, settings, group)
