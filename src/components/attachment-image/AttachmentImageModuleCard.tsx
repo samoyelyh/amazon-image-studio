@@ -67,6 +67,7 @@ interface Props {
   onClearResults: () => Promise<void>
   onResetModule: () => Promise<void>
   onAdoptDirection: (entry: AttachmentResultEntry, expectedStateVersion: number) => Promise<void>
+  onSaveSingle?: (entry: AttachmentResultEntry) => Promise<void>
 }
 
 export default function AttachmentImageModuleCard({
@@ -109,6 +110,7 @@ export default function AttachmentImageModuleCard({
   onClearResults,
   onResetModule,
   onAdoptDirection,
+  onSaveSingle,
 }: Props) {
   const [planSummary, setPlanSummary] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -185,7 +187,7 @@ export default function AttachmentImageModuleCard({
 
     {expanded && <div className="grid gap-5 border-t border-gray-100 p-4 dark:border-white/[0.06] sm:p-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(300px,.95fr)]">
       <section>
-        <AttachmentResultReviewPanel moduleKey={definition.code} moduleName={definition.name} groups={groups} state={resultState} busy={generationBusy} moduleStateVersion={planning?.state_version || 0} onApprove={onApproveResult} onReject={onRejectResult} onRetry={onRetryTask} onClear={onClearResults} onReset={onResetModule} onAdoptDirection={onAdoptDirection} />
+        <AttachmentResultReviewPanel moduleKey={definition.code} moduleName={definition.name} groups={groups} state={resultState} busy={generationBusy} moduleStateVersion={planning?.state_version || 0} onApprove={onApproveResult} onReject={onRejectResult} onRetry={onRetryTask} onClear={onClearResults} onReset={onResetModule} onAdoptDirection={onAdoptDirection} onSaveSingle={onSaveSingle} />
       </section>
 
       <section className="space-y-4">

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AttachmentImageModuleCard from '../components/attachment-image/AttachmentImageModuleCard'
 import type { AttachmentResultEntry } from '../components/attachment-image/AttachmentResultReviewPanel'
+import AttachmentMaterialSaveDialog from '../components/attachment-image/AttachmentMaterialSaveDialog'
 import BatchTryOnGarmentPreprocessDialog, { type GarmentReferencePreview } from '../components/BatchTryOnGarmentPreprocessDialog'
 import AuthenticatedImage from '../components/category-listing/AuthenticatedImage'
 import {
@@ -75,6 +76,14 @@ import {
   type AttachmentProductComposition,
 } from '../lib/attachmentPlanningApi'
 import { randomUuid } from '../lib/randomUuid'
+import {
+  getAttachmentMaterialSaveContext,
+  getAttachmentMaterialSet,
+  saveAttachmentMaterialOutput,
+  saveAttachmentMaterialSet,
+  type AttachmentMaterialSaveContext,
+  type AttachmentMaterialSaveInput,
+} from '../lib/attachmentMaterialApi'
 
 const panel = 'rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-gray-900'
 const button = 'rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[0.1] dark:bg-gray-950 dark:text-gray-200'
@@ -173,6 +182,10 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
   const [generationBusy, setGenerationBusy] = useState('')
   const [generationCreativePlanningJobId, setGenerationCreativePlanningJobId] = useState<string | null>(null)
   const [resultState, setResultState] = useState<AttachmentResultState | null>(null)
+  const [materialSaveContext, setMaterialSaveContext] = useState<AttachmentMaterialSaveContext | null>(null)
+  const [materialSaveOutputId, setMaterialSaveOutputId] = useState<string | null>(null)
+  const [materialSaveOpen, setMaterialSaveOpen] = useState(false)
+  const [materialSaving, setMaterialSaving] = useState(false)
   const generationIdempotencyRef = useRef('')
   const visualDirtyRef = useRef(false)
   const suitePlanningAwaitingResultRef = useRef(false)
@@ -364,6 +377,42 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         selected: selected && phaseOneSupported && moduleBackend[definition.code]?.available !== false,
       }])) as AttachmentWorkbenchDraft['modules'],
     }))
+  }
+
+  const openMaterialSave = async (outputId: string | null = null) => {
+    if (!project) return
+    try {
+      const context = await getAttachmentMaterialSaveContext(project.id)
+      const existing = !outputId && context.existing_material_set_id
+        ? await getAttachmentMaterialSet(context.existing_material_set_id)
+        : null
+      setMaterialSaveContext(outputId ? {
+        ...context,
+        default_name: `${context.default_name}_单张`,
+        existing_material_set_id: null,
+        existing_display_name: null,
+      } : {
+        ...context,
+        suggested_tags: existing?.tags || context.suggested_tags,
+        existing_note: existing?.note || '',
+      })
+      setMaterialSaveOutputId(outputId)
+      setMaterialSaveOpen(true)
+    } catch (reason) { showToast(errorText(reason), 'error') }
+  }
+
+  const submitMaterialSave = async (input: AttachmentMaterialSaveInput) => {
+    if (!project) return
+    setMaterialSaving(true)
+    try {
+      const result = materialSaveOutputId
+        ? await saveAttachmentMaterialOutput(project.id, materialSaveOutputId, input)
+        : await saveAttachmentMaterialSet(project.id, input)
+      setMaterialSaveOpen(false)
+      showToast(result.unchanged
+        ? `素材套装内容没有变化，继续保留 V${result.material_set.current_version_number}。`
+        : `已保存到个人素材库 · V${result.material_set.current_version_number}。`, 'success')
+    } catch (reason) { showToast(errorText(reason), 'error') } finally { setMaterialSaving(false) }
   }
 
   const prepareGeneration = async (moduleKeys: AttachmentModuleCode[]) => {
@@ -797,7 +846,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
 
   return <div className="space-y-5 pb-28 pt-6">
     <header className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-gray-900">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Attachment Image Workbench</div><h1 className="mt-2 text-2xl font-bold text-gray-950 dark:text-white">附图生成工作台</h1><p className="mt-2 text-sm text-gray-500">{session.category_name} · {session.skill_name} V{session.skill_version_number || '-'} · Listing V{session.listing_version_number}</p></div><div className="flex flex-wrap gap-2"><Link className={button} to="/workspaces/attachment-images">切换商品</Link><Link className={button} to={`/listing-image-workbench/${session.id}`}>打开旧图片工作台</Link></div></div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Attachment Image Workbench</div><h1 className="mt-2 text-2xl font-bold text-gray-950 dark:text-white">附图生成工作台</h1><p className="mt-2 text-sm text-gray-500">{session.category_name} · {session.skill_name} V{session.skill_version_number || '-'} · Listing V{session.listing_version_number}</p></div><div className="flex flex-wrap gap-2"><Link className={button} to="/materials">个人素材库</Link><button className={button} disabled={!resultState?.final_module_count || materialSaving} onClick={() => void openMaterialSave()}>保存整套</button><Link className={button} to="/workspaces/attachment-images">切换商品</Link><Link className={button} to={`/listing-image-workbench/${session.id}`}>打开旧图片工作台</Link></div></div>
     </header>
 
     {error && <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}<button className="ml-3 font-semibold underline" onClick={() => setError('')}>关闭</button></div>}
@@ -878,12 +927,13 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
           onApproveResult={approveResult} onRejectResult={rejectResult} onRetryTask={retryTask}
           onClearResults={() => clearResults([definition.code])} onResetModule={() => resetModuleState(definition.code)}
           onAdoptDirection={adoptCreativeDirection}
+          onSaveSingle={(entry) => openMaterialSave(entry.output.id)}
         />
       })}</div>
     </section>
 
     <div className="sticky bottom-20 z-20 border border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/[0.08] dark:bg-gray-950/95 lg:bottom-4">
-      <div className="mx-auto flex max-w-[1320px] flex-wrap items-center justify-between gap-3"><div><div className="text-sm font-semibold text-gray-950 dark:text-white">已选 {selectedModules.length} 个模块 · 计划 {requestedImages} 张图片</div><div className="mt-1 text-xs text-gray-500">{saveStatus === 'saving' ? '正在保存工作台设置…' : saveStatus === 'dirty' ? '有未保存修改' : saveStatus === 'failed' ? '保存失败，请重试' : '工作台设置已保存'} · 提交前会核对Prompt版本、参考素材和真实模型比例能力</div></div><div className="flex gap-2"><button className={button} disabled={saveStatus === 'saving' || !phaseOneSupported} onClick={() => void saveDraft(true)}>{saveStatus === 'saving' ? '保存中…' : '立即保存'}</button><button className={primary} disabled={!phaseOneSupported || !selectedModules.length || generationBusy !== '' || saveStatus === 'saving'} onClick={() => void prepareGeneration(selectedModules.map((item) => item.code))}>{generationBusy === 'all' ? '正在核对…' : '生成选中模块'}</button></div></div>
+      <div className="mx-auto flex max-w-[1320px] flex-wrap items-center justify-between gap-3"><div><div className="text-sm font-semibold text-gray-950 dark:text-white">已选 {selectedModules.length} 个模块 · 计划 {requestedImages} 张图片</div><div className="mt-1 text-xs text-gray-500">{saveStatus === 'saving' ? '正在保存工作台设置…' : saveStatus === 'dirty' ? '有未保存修改' : saveStatus === 'failed' ? '保存失败，请重试' : '工作台设置已保存'} · 已设为最终的 {resultState?.final_module_count || 0} 个模块可随时保存为版本</div></div><div className="flex flex-wrap gap-2"><button className={button} disabled={!resultState?.final_module_count || materialSaving} onClick={() => void openMaterialSave()}>保存整套</button><button className={button} disabled={saveStatus === 'saving' || !phaseOneSupported} onClick={() => void saveDraft(true)}>{saveStatus === 'saving' ? '保存中…' : '立即保存'}</button><button className={primary} disabled={!phaseOneSupported || !selectedModules.length || generationBusy !== '' || saveStatus === 'saving'} onClick={() => void prepareGeneration(selectedModules.map((item) => item.code))}>{generationBusy === 'all' ? '正在核对…' : '生成选中模块'}</button></div></div>
     </div>
     {generationPreview && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="确认正式生成">
       <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-5 shadow-2xl dark:bg-gray-900">
@@ -902,6 +952,14 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
       description="复用批量套图的裁剪与擦除画布；原始商品图永久保留，保存后只新增带来源关系的正面/背面参考。"
       onClose={() => setProductPreprocessOpen(false)}
       onSave={saveProductReferences}
+    />
+    <AttachmentMaterialSaveDialog
+      open={materialSaveOpen}
+      context={materialSaveContext}
+      title={materialSaveOutputId ? '保存单张到个人素材库' : '保存整套到个人素材库'}
+      saving={materialSaving}
+      onClose={() => setMaterialSaveOpen(false)}
+      onSubmit={submitMaterialSave}
     />
   </div>
 }

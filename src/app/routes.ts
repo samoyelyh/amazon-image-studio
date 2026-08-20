@@ -22,6 +22,8 @@ export const appRoutes = {
   printDesign: '/workspaces/print-design',
   tasks: '/tasks',
   assets: '/assets',
+  attachmentMaterials: '/materials',
+  attachmentMaterialDetail: '/materials/:materialSetId',
   projects: '/projects',
   history: '/history',
   quota: '/quota',
@@ -67,6 +69,7 @@ export const navigationSections: NavigationSection[] = [
     items: [
       { label: '任务中心', path: appRoutes.tasks },
       { label: '素材中心', path: appRoutes.assets },
+      { label: '个人素材库', path: appRoutes.attachmentMaterials },
       { label: '项目系统', path: appRoutes.projects, multiuserOnly: true },
       { label: '生成历史', path: appRoutes.history },
       { label: '额度中心', path: appRoutes.quota, multiuserOnly: true },

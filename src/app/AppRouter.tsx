@@ -24,6 +24,7 @@ import MaterialExtractPage from '../pages/MaterialExtractPage'
 import BatchTryOnRegionReplacePage from '../pages/BatchTryOnRegionReplacePage'
 import PrintDesignPage from '../pages/PrintDesignPage'
 import AttachmentImageWorkbenchPage from '../pages/AttachmentImageWorkbenchPage'
+import AttachmentMaterialLibraryPage from '../pages/AttachmentMaterialLibraryPage'
 import { useAuth } from './AuthContext'
 
 function ProtectedRoutes() {
@@ -67,6 +68,8 @@ function AppRoutes() {
           <Route path={appRoutes.printDesign} element={<PrintDesignPage />} />
           <Route path={appRoutes.tasks} element={runtimeConfig.isStandalone ? <PlatformPage page="tasks" /> : <TasksPage />} />
           <Route path={appRoutes.assets} element={runtimeConfig.isStandalone ? <PlatformPage page="assets" /> : <AssetsPage />} />
+          <Route path={appRoutes.attachmentMaterials} element={runtimeConfig.isStandalone ? <PlatformPage page="assets" /> : <AttachmentMaterialLibraryPage />} />
+          <Route path={appRoutes.attachmentMaterialDetail} element={runtimeConfig.isStandalone ? <PlatformPage page="assets" /> : <AttachmentMaterialLibraryPage />} />
           <Route path={appRoutes.projects} element={runtimeConfig.isStandalone ? <PlatformPage page="projects" /> : <ProjectsPage />} />
           <Route path={appRoutes.history} element={runtimeConfig.isStandalone ? <PlatformPage page="history" /> : <HistoryPage />} />
           <Route path={appRoutes.quota} element={runtimeConfig.isStandalone ? <PlatformPage page="quota" /> : <QuotaPage />} />
