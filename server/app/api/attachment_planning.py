@@ -20,6 +20,7 @@ from app.models.attachment_planning import (
     AttachmentWorkbenchPlan,
 )
 from app.models.content import Asset
+from app.models.creative_presets import ThemePreset, ThemePresetVersion, VisualPreset, VisualPresetVersion
 from app.models.listing_workflow import ListingGenerationSession, ListingImageProject, ListingVersion
 from app.schemas.attachment_planning import (
     AttachmentModulePlanRequest,
@@ -60,6 +61,11 @@ from app.schemas.attachment_planning import (
     AttachmentRetryJobRequest,
 )
 from app.schemas.listing_workflow import ListingImageTaskGroupResponse
+from app.schemas.creative_presets import (
+    AttachmentCreativeContextResponse,
+    AttachmentCreativeContextUpdate,
+    ModelSelectionResponse,
+)
 from app.security.principal import Principal, require_permissions
 from app.services.attachment_planning_service import (
     STANDARD_MODULE_CODES,
@@ -117,6 +123,8 @@ from app.services.attachment_product_composition_service import (
 )
 from app.services.audit_service import add_audit_log
 from app.services.listing_image_task_group_service import task_group_response
+from app.services.creative_preset_service import selected_models, set_plan_creative_context
+from app.api.creative_presets import model_response, theme_response, visual_response
 
 
 router = APIRouter(prefix="/attachment-workbench", tags=["attachment-workbench"])
@@ -196,6 +204,7 @@ def _response(
             supports_multi_product=bool(
                 attachment_module_rule(snapshot, item.module_key).get("supports_multi_product")
             ),
+            supports_model=bool(attachment_module_rule(snapshot, item.module_key).get("supports_model")),
             derived_from_output_id=item.derived_from_output_id,
             current_version_number=item.current_version_number,
             status=item.status, planning_job_id=item.planning_job_id, error_message=item.error_message,
@@ -225,6 +234,30 @@ async def _load_and_reconcile(
     await reconcile_attachment_planning(db, plan=plan, modules=modules, version=version)
     await db.commit()
     return project, context[1], version, plan, modules
+
+
+async def _creative_context_response(
+    db: AsyncSession, *, plan: AttachmentWorkbenchPlan,
+) -> AttachmentCreativeContextResponse:
+    visual = await db.get(VisualPreset, plan.visual_preset_id)
+    visual_version = await db.get(VisualPresetVersion, plan.visual_preset_version_id)
+    if visual is None or visual_version is None:
+        raise AppError("creative_preset.visual_missing", "当前项目缺少可用的整套视觉模板", 409)
+    theme = await db.get(ThemePreset, plan.theme_preset_id) if plan.theme_preset_id else None
+    theme_version = await db.get(ThemePresetVersion, plan.theme_preset_version_id) if plan.theme_preset_version_id else None
+    rows = await selected_models(db, plan=plan)
+    return AttachmentCreativeContextResponse(
+        visual_preset=visual_response(visual, visual_version, include_prompt=False),
+        theme_preset=theme_response(theme, theme_version, include_prompt=False) if theme and theme_version else None,
+        model_selection_mode=plan.model_selection_mode,
+        selected_models=[ModelSelectionResponse(
+            product_slot=selection.product_slot, source=selection.source,
+            model=await model_response(db, model, include_private=False),
+            identity_version_id=identity.id,
+        ) for selection, identity, model in rows],
+        creative_context_version=plan.creative_context_version,
+        planning_stale=plan.planning_status == "stale",
+    )
 
 
 async def _reference_response(
@@ -398,6 +431,52 @@ async def get_planning(
 ) -> AttachmentPlanningResponse:
     project, _, version, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
     return _response(project=project, version=version, plan=plan, modules=modules, principal=principal)
+
+
+@router.get(
+    "/projects/{project_id}/creative-context",
+    response_model=AttachmentCreativeContextResponse,
+)
+async def get_creative_context(
+    project_id: str, db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.read")),
+) -> AttachmentCreativeContextResponse:
+    _, _, _, plan, _ = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    return await _creative_context_response(db, plan=plan)
+
+
+@router.patch(
+    "/projects/{project_id}/creative-context",
+    response_model=AttachmentCreativeContextResponse,
+)
+async def update_creative_context(
+    project_id: str, payload: AttachmentCreativeContextUpdate, request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentCreativeContextResponse:
+    _, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    await set_plan_creative_context(
+        db, plan=plan, modules=modules,
+        visual_preset_id=payload.visual_preset_id,
+        theme_preset_id=payload.theme_preset_id,
+        model_selection_mode=payload.model_selection_mode,
+        selected_model_identity_version_ids=payload.selected_model_identity_version_ids,
+        expected_version=payload.expected_creative_context_version,
+        user_id=principal.user.id,
+    )
+    add_audit_log(
+        db, request=request, actor_user_id=principal.user.id,
+        organization_id=plan.organization_id, action="attachment.creative_context.update",
+        resource_type="attachment_workbench_plan", resource_id=plan.id,
+        metadata={
+            "visual_preset_id": payload.visual_preset_id,
+            "theme_preset_id": payload.theme_preset_id,
+            "model_selection_mode": payload.model_selection_mode,
+            "model_count": len(payload.selected_model_identity_version_ids),
+        },
+    )
+    await db.commit()
+    return await _creative_context_response(db, plan=plan)
 
 
 @router.get("/projects/{project_id}/references", response_model=AttachmentReferenceStateResponse)

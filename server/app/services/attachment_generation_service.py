@@ -26,7 +26,8 @@ from app.services.resource_pool_service import validate_operation_binding
 from app.services.task_service import submit_batch
 
 
-REFERENCE_ROLE_ORDER = ("PRODUCT", "PRINT", "TEMPLATE", "SCENE", "OTHER")
+REFERENCE_ROLE_ORDER = ("PRODUCT", "PRINT", "MODEL", "TEMPLATE", "SCENE", "OTHER")
+MAX_PROVIDER_REFERENCES = 10
 MODULE_NAMES = {
     "pure_white": "纯白底图",
     "custom_process": "定制流程图",
@@ -121,14 +122,83 @@ def _reference_index(
 
 async def resolve_attachment_generation_references(
     db: AsyncSession, *, plan: AttachmentWorkbenchPlan, module: AttachmentWorkbenchModulePlan,
+    plan_version: AttachmentWorkbenchPlanVersion, supports_model: bool,
 ) -> tuple[dict[str, list[str]], dict[str, object], list[str]]:
     """Resolve the exact provider input order on the server and freeze it in the snapshot."""
     grouped, snapshot = await effective_reference_snapshot(db, plan=plan, module=module)
-    references = _flatten_references(grouped, snapshot)
     if not grouped.get("PRODUCT"):
         raise AppError("attachment_generation.product_required", f"{MODULE_NAMES[module.module_key]}缺少商品参考图", 409)
-    if len(references) > 8:
-        raise AppError("attachment_generation.reference_limit", "当前生成参考图超过8张，请减少非必要参考素材", 422)
+    grouped = {**grouped, "MODEL": []}
+    models = list(plan_version.selected_model_snapshot or []) if supports_model else []
+    product_count = int(snapshot.get("product_count") or 1)
+    product_mode = str(snapshot.get("product_mode") or "SINGLE")
+    if models and product_mode == "MULTI" and len(models) < product_count:
+        raise AppError("attachment_generation.model_count_invalid", "多人场景的已发布AI模特数量不足，请重新选择模特", 409)
+    preferred_roles = ("FULL_BODY_FRONT", "THREE_QUARTER_LEFT", "THREE_QUARTER_RIGHT", "PORTRAIT")
+    model_rows: list[dict[str, object]] = []
+    for model_index, model in enumerate(models[:product_count], 1):
+        if not isinstance(model, dict):
+            continue
+        refs = model.get("reference_assets")
+        refs = refs if isinstance(refs, list) else []
+        indexed = {str(item.get("role")): item for item in refs if isinstance(item, dict) and item.get("asset_id")}
+        max_per_model = 2 if product_count == 1 else 1
+        selected = [indexed[role] for role in preferred_roles if role in indexed][:max_per_model]
+        if not selected and model.get("identity_asset_id"):
+            selected = [{"role": "IDENTITY", "asset_id": model["identity_asset_id"]}]
+        for item in selected:
+            asset_id = str(item["asset_id"])
+            grouped["MODEL"].append(asset_id)
+            model_rows.append({
+                "asset_id": asset_id,
+                "slot_type": "MODEL",
+                "model_slot": model_index,
+                "model_name": model.get("model_name"),
+                "model_code": model.get("model_code"),
+                "identity_version_id": model.get("identity_version_id"),
+                "identity_reference_role": item.get("role"),
+            })
+
+    old_order = snapshot.get("execution_order")
+    old_order = [dict(item) for item in old_order if isinstance(item, dict)] if isinstance(old_order, list) else []
+    necessary_rows = [item for item in old_order if item.get("slot_type") in {"PRODUCT", "PRINT"}]
+    necessary_rows.extend(model_rows)
+    optional_rows = [item for item in old_order if item.get("slot_type") not in {"PRODUCT", "PRINT", "MODEL"}]
+    execution_order: list[dict[str, object]] = []
+    for item in necessary_rows:
+        asset_id = str(item.get("asset_id") or "")
+        if not asset_id or any(row.get("asset_id") == asset_id for row in execution_order):
+            continue
+        if len(execution_order) >= MAX_PROVIDER_REFERENCES:
+            raise AppError(
+                "attachment_generation.reference_limit",
+                "商品、印花和AI模特的必要参考图已超过10张，请减少商品或模特数量",
+                422,
+            )
+        execution_order.append({**item, "image_index": len(execution_order) + 1})
+    for item in optional_rows:
+        asset_id = str(item.get("asset_id") or "")
+        if (
+            not asset_id
+            or len(execution_order) >= MAX_PROVIDER_REFERENCES
+            or any(row.get("asset_id") == asset_id for row in execution_order)
+        ):
+            continue
+        execution_order.append({**item, "image_index": len(execution_order) + 1})
+    grouped = {
+        role: [str(item["asset_id"]) for item in execution_order if item.get("slot_type") == role]
+        for role in REFERENCE_ROLE_ORDER
+    }
+    snapshot = {
+        **snapshot,
+        "roles": grouped,
+        "priority": list(REFERENCE_ROLE_ORDER),
+        "selected_models": models,
+        "selected_model_count": len(models),
+        "execution_order": execution_order,
+        "provider_reference_limit": MAX_PROVIDER_REFERENCES,
+    }
+    references = _flatten_references(grouped, snapshot)
     return grouped, snapshot, references
 
 
@@ -149,14 +219,19 @@ def build_attachment_execution_prompt(
     products = (reference_snapshot or {}).get("products")
     products = products if isinstance(products, list) else []
     product_mapping = ""
+    selected_models = (reference_snapshot or {}).get("selected_models")
+    selected_models = selected_models if isinstance(selected_models, list) else []
     if product_mode == "MULTI":
         mappings = []
         for index, product in enumerate(products):
             if not isinstance(product, dict):
                 continue
             model = chr(ord("A") + index)
+            identity = selected_models[index] if index < len(selected_models) and isinstance(selected_models[index], dict) else {}
             mappings.append(
-                f"- Model {model} -> {product.get('product_role')} product #{product.get('display_order')}: {product.get('display_name')}"
+                f"- Model {model} -> {product.get('product_role')} product "
+                f"#{product.get('display_order')}: {product.get('display_name')}; "
+                f"person identity source: {identity.get('model_name') or 'generated person'}"
             )
         product_mapping = f"""MULTI-PRODUCT IDENTITY MAP (hard constraint):
 {chr(10).join(mappings)}
@@ -165,6 +240,12 @@ def build_attachment_execution_prompt(
 - PRIMARY product / Model A must be the clearest and most visually prominent subject near the core visual area.
 - SECONDARY products support the group scene and must remain individually recognizable.
 - Arrange positions, interaction and camera composition naturally, but never change the identity mapping above.
+"""
+    elif selected_models:
+        identity = selected_models[0] if isinstance(selected_models[0], dict) else {}
+        product_mapping = f"""PERSON / PRODUCT MAP (hard constraint):
+- The only person must preserve the identity of MODEL preset: {identity.get('model_name') or identity.get('model_code') or 'selected model'}.
+- That person must wear the current PRODUCT garment, never the neutral clothing visible in MODEL references.
 """
     understanding_text = json.dumps(understanding.structured_json or {}, ensure_ascii=False, separators=(",", ":"))
     if generation_mode == "creative":
@@ -202,6 +283,8 @@ REFERENCE ORDER (must follow exactly):
 ROLE RULES:
 - PRODUCT is the sole source of truth for product identity, colors, structure, logos, text, numbers and construction details.
 - PRINT is a high-fidelity reference for typography, numbers and artwork only; it must not replace the product structure.
+- MODEL controls only person identity: face, hair, skin, apparent age and body traits. Ignore all clothing visible in MODEL references.
+- Never inherit MODEL clothing, colors, logos, graphics, text or accessories. The garment must come exclusively from the matching PRODUCT reference.
 - TEMPLATE controls composition and layout only; never inherit the template's old product design.
 - SCENE controls environment, atmosphere and lighting only.
 - OTHER is supplemental and never overrides PRODUCT.
@@ -252,6 +335,8 @@ async def build_attachment_generation_preview(
         operation_code="listing.generate", model_code=model_code, capability="image_edit",
     )
     supported_ratios = _supported_ratios(dict(model.config_json or {}))
+    from app.services.creative_preset_service import selected_models as current_plan_models
+    current_model_identity_ids = [row[1].id for row in await current_plan_models(db, plan=plan)]
     indexed = {item.module_key: item for item in modules}
     prepared: list[AttachmentGenerationModule] = []
     creative_versions = list((await db.scalars(select(AttachmentWorkbenchPlanVersion).where(
@@ -299,6 +384,17 @@ async def build_attachment_generation_preview(
             ))
             if plan_version is None:
                 raise AppError("attachment_generation.version_missing", f"{MODULE_NAMES[module_key]}当前版本不存在，请重新保存", 409)
+            if plan.visual_preset_version_id and (
+                plan_version.visual_preset_version_id != plan.visual_preset_version_id
+                or plan_version.theme_preset_version_id != plan.theme_preset_version_id
+            ):
+                raise AppError("attachment_generation.plan_stale", f"{MODULE_NAMES[module_key]}的视觉或主题已变化，请重新策划", 409)
+            version_model_ids = [
+                str(item.get("identity_version_id")) for item in list(plan_version.selected_model_snapshot or [])
+                if isinstance(item, dict) and item.get("identity_version_id")
+            ]
+            if bool(module_rule.get("supports_model")) and plan.visual_preset_version_id and version_model_ids != current_model_identity_ids:
+                raise AppError("attachment_generation.model_stale", f"{MODULE_NAMES[module_key]}的AI模特已变化，请重新策划", 409)
             selected_versions = [plan_version] * image_count
         else:
             if not creative_planning_job_id:
@@ -313,7 +409,8 @@ async def build_attachment_generation_preview(
         if understanding is None:
             raise AppError("attachment_generation.reference_analysis_required", f"请先完成{MODULE_NAMES[module_key]}参考素材分析", 409)
         grouped, reference_snapshot, _reference_ids = await resolve_attachment_generation_references(
-            db, plan=plan, module=module,
+            db, plan=plan, module=module, plan_version=plan_version,
+            supports_model=bool(module_rule.get("supports_model")),
         )
         product_mode = str(reference_snapshot.get("product_mode") or "SINGLE")
         products = reference_snapshot.get("products")
@@ -332,7 +429,9 @@ async def build_attachment_generation_preview(
             raise AppError("attachment_generation.composition_stale", "商品组合已更新，需要重新策划后生成", 409)
         if product_mode == "MULTI" and understanding.product_composition_version_id != current_composition_version_id:
             raise AppError("attachment_generation.composition_analysis_stale", "商品组合已更新，需要重新分析参考素材", 409)
-        if reference_snapshot.get("roles") != (understanding.source_snapshot_json or {}).get("roles"):
+        generation_roles = dict(reference_snapshot.get("roles") or {})
+        generation_roles.pop("MODEL", None)
+        if generation_roles != (understanding.source_snapshot_json or {}).get("roles"):
             raise AppError("attachment_generation.reference_stale", f"{MODULE_NAMES[module_key]}参考素材与分析版本不一致，请重新分析", 409)
         width, height = DELIVERY_SIZES[aspect_ratio]
         directions = [AttachmentGenerationDirection(
@@ -434,6 +533,13 @@ async def create_attachment_generation(
                     "products": module.reference_snapshot.get("products", []),
                     "product_composition_version_id": module.reference_snapshot.get("product_composition_version_id"),
                     "reference_execution_order": module.reference_snapshot.get("execution_order", []),
+                    "visual_preset_id": direction.plan_version.visual_preset_id,
+                    "visual_preset_version_id": direction.plan_version.visual_preset_version_id,
+                    "visual_preset_prompt_snapshot": direction.plan_version.visual_preset_prompt_snapshot,
+                    "theme_preset_id": direction.plan_version.theme_preset_id,
+                    "theme_preset_version_id": direction.plan_version.theme_preset_version_id,
+                    "theme_prompt_snapshot": direction.plan_version.theme_prompt_snapshot,
+                    "model_identity_snapshot": list(direction.plan_version.selected_model_snapshot or []),
                     "effective_prompt_snapshot": direction.execution_prompt,
                     "requested_aspect_ratio": module.aspect_ratio,
                     "requested_width": module.width,
@@ -457,7 +563,7 @@ async def create_attachment_generation(
         asset_id for item in preview.modules for asset_id in item.grouped_references.get("TEMPLATE", [])
     ))
     reference_ids = list(dict.fromkeys(
-        asset_id for item in preview.modules for role in ("PRINT", "SCENE", "OTHER")
+        asset_id for item in preview.modules for role in ("PRINT", "MODEL", "SCENE", "OTHER")
         for asset_id in item.grouped_references.get(role, [])
     ))
     snapshot = await build_input_asset_snapshot(
@@ -489,6 +595,11 @@ async def create_attachment_generation(
         "products": item.reference_snapshot.get("products", []),
         "product_composition_version_id": item.reference_snapshot.get("product_composition_version_id"),
         "reference_execution_order": item.reference_snapshot.get("execution_order", []),
+        "visual_preset_id": item.plan_version.visual_preset_id,
+        "visual_preset_version_id": item.plan_version.visual_preset_version_id,
+        "theme_preset_id": item.plan_version.theme_preset_id,
+        "theme_preset_version_id": item.plan_version.theme_preset_version_id,
+        "model_identity_snapshot": list(item.plan_version.selected_model_snapshot or []),
         "reference_snapshot": item.reference_snapshot,
     } for item in preview.modules]
     group = await create_group_for_batch(

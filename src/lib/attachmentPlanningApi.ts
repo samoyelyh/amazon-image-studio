@@ -21,6 +21,7 @@ export interface AttachmentModulePlan {
   source: string
   supports_creative: boolean
   supports_multi_product: boolean
+  supports_model: boolean
   derived_from_output_id: string | null
   current_version_number: number
   status: string

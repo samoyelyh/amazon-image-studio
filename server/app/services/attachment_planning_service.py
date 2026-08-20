@@ -49,6 +49,8 @@ SUITE_SYSTEM_PROMPT = """你是亚马逊电商附图策划专家。根据已确�
 - prompt_cn必须包含当前目标比例与相应构图，并保护商品颜色、结构、Logo、文字、号码、图案、印花和定制内容。
 - 不得虚构图片或商品分析中不存在的材质、功能、授权、认证或性能。
 - 运营补充要求不能覆盖商品真实性硬约束。
+- Visual Preset是整套视觉策略的基础约束；Theme只能叠加环境与氛围，绝不能修改商品真实颜色。
+- MODEL参考只决定人物身份、脸部、发型和身体特征。必须忽略MODEL图中原有衣服，服装只能来自PRODUCT。
 - plan_summary_cn回答“这张图准备做成什么样”，不要写成技术说明。
 - prompt_cn不要机械复制整套视觉方向，要把方向转化为当前模块可执行的画面要求。
 - 如果product_composition.mode为MULTI，必须明确人物数量等于商品数量、Model A/B/C与PRIMARY/SECONDARY逐一对应、主商品视觉优先，并逐件写明不可串用的商品身份特征。"""
@@ -129,6 +131,7 @@ def build_suite_planning_input(
     current_modules: dict[str, AttachmentWorkbenchModulePlan] | None = None,
     reference_understandings: dict[str, dict[str, object]] | None = None,
     product_compositions: dict[str, dict[str, object]] | None = None,
+    creative_context: dict[str, object] | None = None,
 ) -> tuple[str, str, dict[str, dict[str, object]]]:
     skill_snapshot = dict(version.category_skill_snapshot or {})
     contexts: dict[str, dict[str, object]] = {}
@@ -159,6 +162,7 @@ def build_suite_planning_input(
             "name": skill_snapshot.get("skill_name"), "version": skill_snapshot.get("skill_version"),
         },
         "existing_visual_direction_cn": visual_direction_cn.strip(),
+        "creative_context": creative_context or {},
         "selected_modules": list(contexts.values()),
     }
     return SUITE_SYSTEM_PROMPT, json.dumps(payload, ensure_ascii=False), contexts
@@ -169,6 +173,7 @@ def build_module_planning_input(
     action: str,
     reference_understanding: dict[str, object] | None = None,
     product_composition: dict[str, object] | None = None,
+    creative_context: dict[str, object] | None = None,
 ) -> tuple[str, str, dict[str, object]]:
     context = build_attachment_module_context(
         module_key=module.module_key,
@@ -182,6 +187,7 @@ def build_module_planning_input(
     )
     payload = {
         "visual_direction_cn": visual_direction_cn,
+        "creative_context": creative_context or {},
         "module": context,
         "current_plan_summary_cn": module.plan_summary_cn,
         "current_prompt_cn": module.prompt_cn,
@@ -281,6 +287,8 @@ async def get_or_create_attachment_plan(
                 visual_direction_cn=visual, selected_module_keys=[], skill_version_id=session.skill_version_id,
                 skill_rule_snapshot={}, created_by=user_id,
             ))
+    from app.services.creative_preset_service import ensure_plan_creative_context
+    await ensure_plan_creative_context(db, plan=plan)
     existing = list((await db.scalars(select(AttachmentWorkbenchModulePlan).where(
         AttachmentWorkbenchModulePlan.workbench_plan_id == plan.id,
     ).with_for_update())).all())
@@ -319,14 +327,26 @@ async def _previous_version(db: AsyncSession, plan_id: str, scope: str, number: 
 async def add_suite_version(
     db: AsyncSession, *, plan: AttachmentWorkbenchPlan, action: str, selected: list[str], user_id: str,
     visual_direction_cn: str, job: Job | None = None,
+    creative_context: dict[str, object] | None = None,
 ) -> AttachmentWorkbenchPlanVersion:
     previous = await _previous_version(db, plan.id, "suite", plan.visual_direction_version)
     number = plan.visual_direction_version + 1
+    if creative_context is None:
+        from app.services.creative_preset_service import creative_context_snapshot
+        creative_context = await creative_context_snapshot(db, plan=plan)
+    creative = creative_context
     row = AttachmentWorkbenchPlanVersion(
         organization_id=plan.organization_id, workbench_plan_id=plan.id, version_scope="suite",
         version_number=number, action=action, visual_direction_cn=visual_direction_cn,
         selected_module_keys=selected, skill_version_id=plan.skill_version_id,
         skill_rule_snapshot={}, source_version_id=previous.id if previous else None,
+        visual_preset_id=creative.get("visual_preset_id"),
+        visual_preset_version_id=creative.get("visual_preset_version_id"),
+        visual_preset_prompt_snapshot=str(creative.get("visual_preset_prompt") or ""),
+        theme_preset_id=creative.get("theme_preset_id"),
+        theme_preset_version_id=creative.get("theme_preset_version_id"),
+        theme_prompt_snapshot=str(creative.get("theme_prompt") or ""),
+        selected_model_snapshot=list(creative.get("selected_models") or []),
         ai_job_id=job.id if job else None, ai_model=job.model_code if job else None, created_by=user_id,
     )
     db.add(row)
@@ -344,10 +364,15 @@ async def add_module_version(
     product_composition_version_id: str | None = None,
     source_version_id: str | None = None,
     derived_from_output_id: str | None = None,
+    creative_context: dict[str, object] | None = None,
 ) -> AttachmentWorkbenchPlanVersion:
     scope = f"module:{module.module_key}"
     previous = await _previous_version(db, plan.id, scope, module.current_version_number)
     number = module.current_version_number + 1
+    if creative_context is None:
+        from app.services.creative_preset_service import creative_context_snapshot
+        creative_context = await creative_context_snapshot(db, plan=plan)
+    creative = creative_context
     row = AttachmentWorkbenchPlanVersion(
         organization_id=plan.organization_id, workbench_plan_id=plan.id, module_plan_id=module.id,
         version_scope=scope, module_key=module.module_key, version_number=number, action=action,
@@ -355,6 +380,13 @@ async def add_module_version(
         operator_requirement_cn=module.operator_requirement_cn, aspect_ratio=module.aspect_ratio,
         selected_module_keys=[module.module_key], skill_version_id=plan.skill_version_id,
         skill_rule_snapshot=rule_snapshot,
+        visual_preset_id=creative.get("visual_preset_id"),
+        visual_preset_version_id=creative.get("visual_preset_version_id"),
+        visual_preset_prompt_snapshot=str(creative.get("visual_preset_prompt") or ""),
+        theme_preset_id=creative.get("theme_preset_id"),
+        theme_preset_version_id=creative.get("theme_preset_version_id"),
+        theme_prompt_snapshot=str(creative.get("theme_prompt") or ""),
+        selected_model_snapshot=list(creative.get("selected_models") or []),
         source_version_id=source_version_id if source_version_id is not None else (previous.id if previous else None),
         generation_mode="standard", derived_from_output_id=derived_from_output_id,
         ai_job_id=job.id if job else None, ai_model=job.model_code if job else None, created_by=user_id,
@@ -374,6 +406,10 @@ async def start_suite_planning(
     version: ListingVersion, plan: AttachmentWorkbenchPlan, module_rows: list[AttachmentWorkbenchModulePlan],
     modules: list[AttachmentPlanningModuleInput], visual_direction_cn: str, idempotency_key: str, user_id: str,
 ) -> tuple[Job, bool]:
+    from app.services.creative_preset_service import creative_context_snapshot
+    creative_context = await creative_context_snapshot(db, plan=plan)
+    if not creative_context.get("visual_preset_version_id"):
+        raise AppError("creative_preset.visual_required", "请先选择整套视觉模板", 409)
     selected_keys = [item.module_key for item in modules]
     invalid = sorted(set(selected_keys) - set(STANDARD_MODULE_CODES))
     if invalid:
@@ -413,6 +449,7 @@ async def start_suite_planning(
         version=version, modules=modules, visual_direction_cn=visual_direction_cn,
         current_modules=indexed, reference_understandings=understanding_contexts,
         product_compositions=product_compositions,
+        creative_context=creative_context,
     )
     target_plan_version = plan.state_version + 1
     target_module_versions = {key: indexed[key].state_version + 1 for key in selected_keys}
@@ -431,6 +468,8 @@ async def start_suite_planning(
                             "planning_id": plan.id, "selected_modules": selected_keys,
                             "reference_understanding_ids": understanding_ids,
                             "product_composition_version_ids": product_composition_version_ids,
+                            "creative_context_snapshot": creative_context,
+                            "creative_context_version": plan.creative_context_version,
                             "expected_plan_state_version": target_plan_version,
                             "expected_module_state_versions": target_module_versions}},
         billing_factors={"quality": "standard", "resolution": "text"}, client_item_id="attachment-suite",
@@ -464,6 +503,8 @@ async def start_module_planning(
     version: ListingVersion, plan: AttachmentWorkbenchPlan, module: AttachmentWorkbenchModulePlan,
     action: str, aspect_ratio: str, operator_requirement_cn: str, idempotency_key: str, user_id: str,
 ) -> tuple[Job, bool]:
+    from app.services.creative_preset_service import creative_context_snapshot
+    creative_context = await creative_context_snapshot(db, plan=plan)
     module.aspect_ratio = aspect_ratio
     module.operator_requirement_cn = operator_requirement_cn
     from app.services.attachment_reference_service import current_understanding_context, effective_reference_snapshot
@@ -480,6 +521,7 @@ async def start_module_planning(
             "model_count": reference_snapshot.get("model_count"),
             "products": reference_snapshot.get("products", []),
         },
+        creative_context=creative_context,
     )
     target_module_version = module.state_version + 1
     model_code = await resolve_bound_model_code(
@@ -505,6 +547,8 @@ async def start_module_planning(
                             "planning_id": plan.id, "module_key": module.module_key,
                             "reference_understanding_ids": {module.module_key: understanding_id} if understanding_id else {},
                             "product_composition_version_ids": {module.module_key: product_composition_version_id},
+                            "creative_context_snapshot": creative_context,
+                            "creative_context_version": plan.creative_context_version,
                             "expected_plan_state_version": plan.state_version,
                             "expected_module_state_versions": {module.module_key: target_module_version}}},
         billing_factors={"quality": "standard", "resolution": "text"},
@@ -565,7 +609,10 @@ async def reconcile_attachment_planning(
         product_composition_version_ids = (
             product_composition_version_ids if isinstance(product_composition_version_ids, dict) else {}
         )
-        stale = plan.state_version != expected_plan or any(
+        creative_context = metadata.get("creative_context_snapshot")
+        creative_context = creative_context if isinstance(creative_context, dict) else {}
+        expected_creative_context_version = int(metadata.get("creative_context_version") or -1)
+        stale = plan.state_version != expected_plan or plan.creative_context_version != expected_creative_context_version or any(
             item.planning_job_id != job.id or item.state_version != int(expected_modules.get(item.module_key, -1))
             for item in affected
         )
@@ -586,6 +633,7 @@ async def reconcile_attachment_planning(
                 await add_suite_version(
                     db, plan=plan, action="ai_suite_plan", selected=selected, user_id=job.created_by,
                     visual_direction_cn=visual, job=job,
+                    creative_context=creative_context,
                 )
                 for item in affected:
                     definition = _module_definition(dict(version.category_skill_snapshot or {}), item.module_key)
@@ -598,6 +646,7 @@ async def reconcile_attachment_planning(
                         product_composition_version_id=(
                             str(product_composition_version_ids.get(item.module_key) or "") or None
                         ),
+                        creative_context=creative_context,
                     )
                     item.derived_from_output_id = None
                 plan.planning_status = "ready"; plan.error_message = None
@@ -616,6 +665,7 @@ async def reconcile_attachment_planning(
                     product_composition_version_id=(
                         str(product_composition_version_ids.get(item.module_key) or "") or None
                     ),
+                    creative_context=creative_context,
                 )
                 if not optimize_only:
                     item.derived_from_output_id = None

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import AttachmentImageModuleCard from '../components/attachment-image/AttachmentImageModuleCard'
 import type { AttachmentResultEntry } from '../components/attachment-image/AttachmentResultReviewPanel'
 import AttachmentMaterialSaveDialog from '../components/attachment-image/AttachmentMaterialSaveDialog'
+import AttachmentCreativeContextPanel from '../components/attachment-image/AttachmentCreativeContextPanel'
 import BatchTryOnGarmentPreprocessDialog, { type GarmentReferencePreview } from '../components/BatchTryOnGarmentPreprocessDialog'
 import AuthenticatedImage from '../components/category-listing/AuthenticatedImage'
 import {
@@ -84,6 +85,17 @@ import {
   type AttachmentMaterialSaveContext,
   type AttachmentMaterialSaveInput,
 } from '../lib/attachmentMaterialApi'
+import {
+  getAttachmentCreativeContext,
+  listAIModelPresets,
+  listThemePresets,
+  listVisualPresets,
+  updateAttachmentCreativeContext,
+  type AIModelPreset,
+  type AttachmentCreativeContext,
+  type ThemePreset,
+  type VisualPreset,
+} from '../lib/creativePresetApi'
 
 const panel = 'rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-gray-900'
 const button = 'rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[0.1] dark:bg-gray-950 dark:text-gray-200'
@@ -129,8 +141,8 @@ function SessionHub() {
     <header className="overflow-hidden rounded-2xl bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-600 p-6 text-white shadow-sm">
       <div className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-100">Listing Visual Production</div>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-        <div><h1 className="text-2xl font-bold">附图生成工作台</h1><p className="mt-2 max-w-3xl text-sm text-blue-50">选择已确认的商品，统一编排六类附图模块、视觉方向和生成参数。旧品类 Listing 工作流继续保留。</p></div>
-        <Link className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm" to="/workspaces/listing">新建或继续商品</Link>
+        <div><h1 className="text-2xl font-bold">附图生成工作台</h1><p className="mt-2 max-w-3xl text-sm text-blue-50">选择已确认的商品，通过公司视觉模板、主题和AI模特完成整套附图策划与生成。</p></div>
+        <Link className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm" to="/workspaces/listing/quick">快速创建商品</Link>
       </div>
     </header>
 
@@ -142,7 +154,7 @@ function SessionHub() {
         <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="truncate text-sm font-semibold text-gray-950 dark:text-white">{summaryTitle(session)}</div><div className="mt-1 text-xs text-gray-500">{session.category_name} · {session.skill_name} V{session.skill_version_number || '-'}</div></div><span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">Listing V{session.listing_version_number}</span></div>
         <div className="mt-4 flex items-center justify-between text-xs text-gray-500"><span>{session.source_asset_ids.length} 张产品图</span><span>{new Date(session.updated_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}</span></div>
       </button>)}</div>}
-      {!loading && !readySessions.length && <div className="mt-5 rounded-xl border border-dashed border-gray-200 p-8 text-center dark:border-white/[0.08]"><div className="text-sm font-semibold text-gray-800 dark:text-gray-100">还没有可用的已确认商品</div><p className="mt-2 text-xs text-gray-500">先在品类 Listing 中完成商品分析和 Listing 确认，再回到这里制作附图。</p><Link className={`${primary} mt-4 inline-block`} to="/workspaces/listing">进入品类 Listing</Link></div>}
+      {!loading && !readySessions.length && <div className="mt-5 rounded-xl border border-dashed border-gray-200 p-8 text-center dark:border-white/[0.08]"><div className="text-sm font-semibold text-gray-800 dark:text-gray-100">还没有可用的已确认商品</div><p className="mt-2 text-xs text-gray-500">先使用快速创建完成商品分析和 Listing，再回到这里制作附图。</p><Link className={`${primary} mt-4 inline-block`} to="/workspaces/listing/quick">快速创建商品</Link></div>}
     </section>
   </div>
 }
@@ -173,6 +185,11 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
   const [productPreprocessOpen, setProductPreprocessOpen] = useState(false)
   const [productPreprocessSaving, setProductPreprocessSaving] = useState(false)
   const [planningBusy, setPlanningBusy] = useState('')
+  const [creativeContext, setCreativeContext] = useState<AttachmentCreativeContext | null>(null)
+  const [visualPresets, setVisualPresets] = useState<VisualPreset[]>([])
+  const [themePresets, setThemePresets] = useState<ThemePreset[]>([])
+  const [modelPresets, setModelPresets] = useState<AIModelPreset[]>([])
+  const [creativeContextBusy, setCreativeContextBusy] = useState(false)
   const [visualDirection, setVisualDirection] = useState('')
   const [visualDirty, setVisualDirty] = useState(false)
   const [suiteVersions, setSuiteVersions] = useState<AttachmentPlanVersion[]>([])
@@ -218,7 +235,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         const stored = projectValue.prompt_config?.[ATTACHMENT_WORKBENCH_CONFIG_KEY]
         let nextDraft = normalizeAttachmentWorkbenchDraft(stored, availableCodes)
         const storedDraftSignature = JSON.stringify(nextDraft)
-        const [loadedAssets, taskGroups, planningValue, referenceValue, resultsValue, compositionValue, sessionCandidates] = await Promise.all([
+        const [loadedAssets, taskGroups, planningValue, referenceValue, resultsValue, compositionValue, sessionCandidates, creativeValue, visualsValue, themesValue, modelsValue] = await Promise.all([
           Promise.all(projectValue.source_asset_ids.map((id) => getAsset(id).catch(() => null))),
           listListingImageTaskGroups(projectValue.id),
           getAttachmentPlanning(projectValue.id),
@@ -226,6 +243,10 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
           getAttachmentResultState(projectValue.id),
           getAttachmentProductCompositions(projectValue.id),
           listListingWorkflowSessions(100),
+          getAttachmentCreativeContext(projectValue.id),
+          listVisualPresets(),
+          listThemePresets(),
+          listAIModelPresets(),
         ])
         const candidateAssetRows = await Promise.all(sessionCandidates
           .filter((item) => item.primary_asset_id)
@@ -243,6 +264,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         setAssets(loadedAssets.filter((item): item is Asset => Boolean(item)))
         setGroups(taskGroups.items); setDraft(nextDraft); draftRef.current = nextDraft
         setPlanning(planningValue); setVisualDirection(planningValue.visual_direction_cn)
+        setCreativeContext(creativeValue); setVisualPresets(visualsValue); setThemePresets(themesValue); setModelPresets(modelsValue)
         setReferenceState(referenceValue)
         setProductCompositions(compositionValue)
         setProductCandidates(sessionCandidates.filter(isAttachmentSessionReady))
@@ -270,6 +292,35 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     const value = await getAttachmentPlanning(projectRef.current.id)
     applyPlanning(value)
     return value
+  }
+
+  const changeCreativeContext = async (input: {
+    visualPresetId: string
+    themePresetId: string | null
+    modelSelectionMode: 'recommended' | 'selected' | 'none'
+    modelIdentityIds: string[]
+  }) => {
+    if (!project || !creativeContext) return
+    setCreativeContextBusy(true)
+    try {
+      const value = await updateAttachmentCreativeContext(project.id, {
+        visual_preset_id: input.visualPresetId,
+        theme_preset_id: input.themePresetId,
+        model_selection_mode: input.modelSelectionMode,
+        selected_model_identity_version_ids: input.modelIdentityIds,
+        expected_creative_context_version: creativeContext.creative_context_version,
+      })
+      setCreativeContext(value)
+      const nextPlanning = await getAttachmentPlanning(project.id)
+      applyPlanning(nextPlanning)
+      showToast('创意设置已更新。已有图片和历史版本不会变化，当前方案需要重新策划后再生成。', 'success')
+    } catch (reason) {
+      showToast(errorText(reason), 'error')
+      const latest = await getAttachmentCreativeContext(project.id).catch(() => null)
+      if (latest) setCreativeContext(latest)
+    } finally {
+      setCreativeContextBusy(false)
+    }
   }
 
   const saveDraft = (force = false) => {
@@ -846,7 +897,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
 
   return <div className="space-y-5 pb-28 pt-6">
     <header className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-gray-900">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Attachment Image Workbench</div><h1 className="mt-2 text-2xl font-bold text-gray-950 dark:text-white">附图生成工作台</h1><p className="mt-2 text-sm text-gray-500">{session.category_name} · {session.skill_name} V{session.skill_version_number || '-'} · Listing V{session.listing_version_number}</p></div><div className="flex flex-wrap gap-2"><Link className={button} to="/materials">个人素材库</Link><button className={button} disabled={!resultState?.final_module_count || materialSaving} onClick={() => void openMaterialSave()}>保存整套</button><Link className={button} to="/workspaces/attachment-images">切换商品</Link><Link className={button} to={`/listing-image-workbench/${session.id}`}>打开旧图片工作台</Link></div></div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Attachment Image Workbench</div><h1 className="mt-2 text-2xl font-bold text-gray-950 dark:text-white">附图生成工作台</h1><p className="mt-2 text-sm text-gray-500">{session.category_name} · {session.skill_name} V{session.skill_version_number || '-'} · Listing V{session.listing_version_number}</p></div><div className="flex flex-wrap gap-2"><Link className={button} to="/materials">个人素材库</Link><button className={button} disabled={!resultState?.final_module_count || materialSaving} onClick={() => void openMaterialSave()}>保存整套</button><Link className={button} to="/workspaces/attachment-images">切换商品</Link></div></div>
     </header>
 
     {error && <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}<button className="ml-3 font-semibold underline" onClick={() => setError('')}>关闭</button></div>}
@@ -856,18 +907,28 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,.65fr)]">
         <div><div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-gray-950 dark:text-white">当前商品</h2><p className="mt-1 text-xs text-gray-500">产品图来自当前 Session，原 Asset 不会被新工作台复制或删除。</p></div><div className="flex gap-2"><button type="button" disabled={!assets.length} onClick={() => setProductPreprocessOpen(true)} className={button}>区分正面 / 背面</button><span className="rounded-full bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">{session.category_name}</span></div></div>
           <div className="mt-4 flex gap-3 overflow-x-auto pb-1">{(referenceState?.product_references || []).map((item) => <div key={item.id} className="relative w-24 shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/[0.08]"><AuthenticatedImage url={item.asset.url} alt={item.asset.filename} className="aspect-square w-full object-contain" placeholderClassName="aspect-square" /><span className="absolute bottom-1.5 left-1.5 rounded-full bg-gray-950/70 px-2 py-0.5 text-[10px] font-semibold text-white">{item.view_role === 'front' ? '正面' : item.view_role === 'back' ? '背面' : '细节'}{item.source === 'override' ? '参考' : ''}</span>{item.asset.id === session.primary_asset_id && <span className="absolute left-1.5 top-1.5 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">主图</span>}</div>)}</div>
-          {!assets.length && <div className="mt-4 rounded-xl bg-amber-50 p-4 text-xs text-amber-800">产品 Asset 暂时无法读取，请回到品类 Listing 检查源图片。</div>}
+          {!assets.length && <div className="mt-4 rounded-xl bg-amber-50 p-4 text-xs text-amber-800">产品图片暂时无法读取，请返回商品选择页重新创建或切换商品。</div>}
         </div>
         <div><h2 className="truncate text-lg font-semibold text-gray-950 dark:text-white">{productTitle(session)}</h2><div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">产品图</div><div className="mt-1 font-semibold">{assets.length} 张</div></div><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">已选模块</div><div className="mt-1 font-semibold">{selectedModules.length} / 6</div></div><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">已有结果模块</div><div className="mt-1 font-semibold">{resultModuleCount} 个</div></div><div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]"><div className="text-xs text-gray-500">最终采用</div><div className="mt-1 font-semibold">{resultState?.final_module_count || 0} 个模块</div></div></div><div className="mt-3 text-xs text-gray-400">已审核 {resultState?.reviewed_outputs || 0} / {resultState?.total_outputs || 0} 张；审核通过与最终采用是两个独立状态。</div></div>
       </div>
     </section>
+
+    {creativeContext && <AttachmentCreativeContextPanel
+      context={creativeContext}
+      visuals={visualPresets}
+      themes={themePresets}
+      models={modelPresets}
+      supportsModel={selectedModules.some((definition) => planning?.modules.find((item) => item.module_key === definition.code)?.supports_model)}
+      busy={creativeContextBusy || Boolean(planningActive)}
+      onChange={(value) => void changeCreativeContext(value)}
+    />}
 
     <section className={panel}>
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold text-gray-950 dark:text-white">整套视觉方向</h2><p className="mt-1 text-xs text-gray-500">统一约束当前已选标准模块；AI整套策划一次返回视觉方向、模块方案和中文Prompt。</p></div><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-semibold ${planning?.planning_status === 'failed' ? 'bg-red-50 text-red-700' : planning?.planning_status === 'planning' ? 'bg-violet-50 text-violet-700' : 'bg-gray-100 text-gray-600'}`}>{planning?.planning_status === 'planning' ? 'AI策划中' : planning?.visual_direction_version ? `方向 V${planning.visual_direction_version}` : '尚未策划'}</span><button className={button} disabled={!planning} onClick={() => void refreshPlanning()}>刷新策划</button></div></div>
       <textarea disabled={!phaseOneSupported} className="mt-4 min-h-28 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm leading-6 disabled:bg-gray-100 dark:border-white/[0.1] dark:bg-gray-950 dark:text-white" value={visualDirection} placeholder="尚未策划。可以直接填写，也可以点击AI策划生成2～4行统一视觉方向。" onChange={(event) => { setVisualDirection(event.target.value); setVisualDirty(true); visualDirtyRef.current = true }} />
       {planning?.error_message && <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{planning.error_message}</div>}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button className={primary} disabled={!phaseOneSupported || !planning || planningBusy !== '' || planningActive || !selectedModules.length} onClick={() => void runSuitePlanning()}>{planning?.visual_direction_version ? 'AI重新分析整套' : 'AI策划整套'}</button>
+        <button className={primary} disabled={!phaseOneSupported || !planning || !creativeContext?.visual_preset || planningBusy !== '' || planningActive || creativeContextBusy || !selectedModules.length} onClick={() => void runSuitePlanning()}>{planning?.visual_direction_version ? 'AI重新分析整套' : 'AI策划整套'}</button>
         <button className={button} disabled={!planning || !visualDirty || planningBusy !== ''} onClick={() => void saveVisualDirection()}>保存视觉方向</button>
         <button className={button} disabled={!planning} onClick={() => { const next = !suiteHistoryOpen; setSuiteHistoryOpen(next); if (next && project) void listAttachmentPlanVersions(project.id).then(setSuiteVersions).catch((reason) => showToast(errorText(reason), 'error')) }}>{suiteHistoryOpen ? '收起方向版本' : '查看方向版本'}</button>
         <span className="text-xs text-gray-400">{planning?.visual_direction_source ? `来源：${planning.visual_direction_source}` : ''}</span>

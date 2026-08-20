@@ -65,6 +65,7 @@ class AttachmentModulePlanResponse(BaseModel):
     source: str
     supports_creative: bool = False
     supports_multi_product: bool = False
+    supports_model: bool = False
     derived_from_output_id: str | None = None
     current_version_number: int
     status: str
@@ -109,6 +110,13 @@ class AttachmentPlanVersionResponse(BaseModel):
     aspect_ratio: str | None
     selected_module_keys: list[str]
     skill_version_id: str | None
+    visual_preset_id: str | None = None
+    visual_preset_version_id: str | None = None
+    visual_preset_prompt_snapshot: str = ""
+    theme_preset_id: str | None = None
+    theme_preset_version_id: str | None = None
+    theme_prompt_snapshot: str = ""
+    selected_model_snapshot: list[dict[str, object]] = Field(default_factory=list)
     source_version_id: str | None
     ai_job_id: str | None
     ai_model: str | None
