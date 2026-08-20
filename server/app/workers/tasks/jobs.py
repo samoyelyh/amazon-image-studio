@@ -347,6 +347,11 @@ async def _execute_job(
                     await sync_batch_try_on_version_for_job(
                         session, job, generated_asset_id=created_records[0][0].id if created_records else None,
                     )
+                    from app.services.ai_model_preset_service import continue_ai_model_generation
+                    await continue_ai_model_generation(
+                        session, job=job,
+                        generated_asset_id=created_records[0][0].id if created_records else None,
+                    )
                 if job.batch_id:
                     await refresh_batch_status(session, job.batch_id)
                 session.add(ApiKeyUsageStat(
@@ -462,6 +467,8 @@ async def _execute_job(
                         http_status=error.http_status,
                     )
                     await sync_batch_try_on_version_for_job(session, job)
+                    from app.services.ai_model_preset_service import fail_ai_model_generation
+                    await fail_ai_model_generation(session, job=job)
                     if job.batch_id:
                         await refresh_batch_status(session, job.batch_id)
                     await session.commit()
@@ -526,6 +533,8 @@ async def _execute_job(
                     http_status=retry_http_status,
                 )
                 await sync_batch_try_on_version_for_job(session, job)
+                from app.services.ai_model_preset_service import fail_ai_model_generation
+                await fail_ai_model_generation(session, job=job)
                 if job.batch_id:
                     await refresh_batch_status(session, job.batch_id)
                 await session.commit()
@@ -541,6 +550,8 @@ async def _execute_job(
         job = await get_job(session, job.organization_id, job.id, lock=True)
         await schedule_retry_or_fail(session, job, code="job.max_attempts", message="All provider attempts failed")
         await sync_batch_try_on_version_for_job(session, job)
+        from app.services.ai_model_preset_service import fail_ai_model_generation
+        await fail_ai_model_generation(session, job=job)
         if job.batch_id:
             await refresh_batch_status(session, job.batch_id)
         await session.commit()

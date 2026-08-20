@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { useAuth } from '../app/AuthContext'
 import UserManagementPanel from '../components/admin/UserManagementPanel'
 import CategoryListingManagementPanel from '../components/admin/CategoryListingManagementPanel'
+import CreativePresetManagementPanel from '../components/admin/CreativePresetManagementPanel'
 import {
   adjustAdminQuota,
   attachApiKey,
@@ -29,13 +30,14 @@ import {
 import { randomUuid } from '../lib/randomUuid'
 import { formatDuration } from '../lib/taskDuration'
 
-type Tab = 'overview' | 'users' | 'organizations' | 'categories' | 'resources' | 'diagnostics' | 'tasks' | 'audits'
+type Tab = 'overview' | 'users' | 'organizations' | 'categories' | 'creative' | 'resources' | 'diagnostics' | 'tasks' | 'audits'
 
 const tabs: Array<{ id: Tab; label: string }> = [
   { id: 'overview', label: '总览' },
   { id: 'users', label: '用户' },
   { id: 'organizations', label: '团队与额度' },
   { id: 'categories', label: '品类与 Skill' },
+  { id: 'creative', label: 'AI生图配置' },
   { id: 'resources', label: 'API 与资源池' },
   { id: 'diagnostics', label: '生成资源诊断' },
   { id: 'tasks', label: '队列与任务' },
@@ -353,6 +355,7 @@ export default function AdminPage() {
     if (tab === 'users') return <UsersTab notify={setMessage} />
     if (tab === 'organizations') return <OrganizationsTab notify={setMessage} />
     if (tab === 'categories') return <CategoryListingManagementPanel notify={setMessage} />
+    if (tab === 'creative') return <CreativePresetManagementPanel notify={setMessage} />
     if (tab === 'resources') return <ResourcesTab notify={setMessage} />
     if (tab === 'diagnostics') return <GenerationDiagnosticsTab />
     if (tab === 'tasks') return <TasksTab />

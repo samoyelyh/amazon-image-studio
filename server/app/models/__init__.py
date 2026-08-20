@@ -51,6 +51,11 @@ from app.models.attachment_material import (
     AttachmentMaterialSet,
     AttachmentMaterialSetVersion,
 )
+from app.models.creative_presets import (
+    AIModelIdentityVersion, AIModelPreset, AIModelPresetReference,
+    AttachmentPlanModelSelection, ThemePreset, ThemePresetVersion,
+    VisualPreset, VisualPresetVersion,
+)
 
 __all__ = [
     "AuditLog",
@@ -87,4 +92,7 @@ __all__ = [
     "AttachmentProductReferenceGroup", "AttachmentProductReferenceItem",
     "AttachmentModuleReference", "AttachmentReferenceUnderstanding",
     "AttachmentModuleResultState",
+    "VisualPreset", "VisualPresetVersion", "ThemePreset", "ThemePresetVersion",
+    "AIModelPreset", "AIModelIdentityVersion", "AIModelPresetReference",
+    "AttachmentPlanModelSelection",
 ]
