@@ -279,6 +279,7 @@ async def delete_asset(
     )
     project_link = await session.scalar(select(ProjectAsset.id).where(ProjectAsset.asset_id == asset.id).limit(1))
     generated_link = await session.scalar(select(GeneratedOutput.id).where(GeneratedOutput.asset_id == asset.id).limit(1))
+    from app.models.attachment_material import AttachmentMaterialItem
     from app.models.attachment_planning import AttachmentModuleReference, AttachmentProductReferenceItem
 
     attachment_product_link = await session.scalar(select(AttachmentProductReferenceItem.id).where(
@@ -288,10 +289,13 @@ async def delete_asset(
     attachment_module_link = await session.scalar(select(AttachmentModuleReference.id).where(
         AttachmentModuleReference.asset_id == asset.id
     ).limit(1))
+    material_link = await session.scalar(select(AttachmentMaterialItem.id).where(
+        AttachmentMaterialItem.source_asset_id == asset.id
+    ).limit(1))
     derived_link = await session.scalar(select(Asset.id).where(
         Asset.source_asset_id == asset.id, Asset.deleted_at.is_(None),
     ).limit(1))
-    if project_link or generated_link or attachment_product_link or attachment_module_link or derived_link:
+    if project_link or generated_link or attachment_product_link or attachment_module_link or material_link or derived_link:
         raise AppError("asset.in_use", "Asset is still referenced by a project or generated output", 409)
     try:
         await run_in_threadpool(storage.delete, asset.storage_key)

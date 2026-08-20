@@ -46,6 +46,11 @@ from app.models.attachment_planning import (
     AttachmentWorkbenchPlan,
     AttachmentWorkbenchPlanVersion,
 )
+from app.models.attachment_material import (
+    AttachmentMaterialItem,
+    AttachmentMaterialSet,
+    AttachmentMaterialSetVersion,
+)
 
 __all__ = [
     "AuditLog",
