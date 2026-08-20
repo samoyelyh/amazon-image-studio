@@ -270,6 +270,8 @@ async def task_group_response(
             chinese_prompt=str(metadata.get("chinese_prompt") or ""),
             slot_index=int(metadata.get("slot_index") or 0) or None,
             generation_mode=str(metadata.get("generation_mode") or "") or None,
+            product_mode=str(metadata.get("product_mode") or "") or None,
+            product_count=int(metadata.get("product_count") or 0) or None,
             requested_aspect_ratio=str(metadata.get("requested_aspect_ratio") or job.input_json.get("aspect_ratio") or "") or None,
             requested_width=int(metadata.get("requested_width") or job.input_json.get("requested_width") or 0) or None,
             requested_height=int(metadata.get("requested_height") or job.input_json.get("requested_height") or 0) or None,

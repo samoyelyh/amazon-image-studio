@@ -452,6 +452,8 @@ async def start_reference_analysis(
     grouped, snapshot = await effective_reference_snapshot(db, plan=plan, module=module)
     if not grouped["PRODUCT"]:
         raise AppError("attachment_reference.product_required", "当前模块缺少商品参考图", 409)
+    if snapshot.get("product_mode") == "MULTI" and not 2 <= int(snapshot.get("product_count") or 0) <= 3:
+        raise AppError("attachment_composition.product_count_invalid", "多件商品模式需要2到3件商品", 409)
     system_prompt, user_prompt, references = build_reference_analysis_input(module.module_key, grouped, snapshot)
     model_code = await resolve_bound_model_code(
         db, organization_id=project.organization_id, operation_code="listing.plan", capability="text_generation",
@@ -515,7 +517,16 @@ async def reconcile_reference_understandings(
         if job.status == JobStatus.SUCCEEDED.value:
             try:
                 text = str((job.result_json or {}).get("metadata", {}).get("text") or "")
-                understanding.structured_json = parse_reference_understanding(text)
+                parsed = parse_reference_understanding(text)
+                if understanding.source_snapshot_json.get("product_mode") == "MULTI":
+                    parsed_products = parsed.get("products")
+                    expected_count = int(understanding.source_snapshot_json.get("product_count") or 0)
+                    if not isinstance(parsed_products, list) or len(parsed_products) != expected_count:
+                        raise AppError(
+                            "attachment_reference.multi_product_result_invalid",
+                            "AI未按商品组合逐件返回理解结果，请重新分析", 422,
+                        )
+                understanding.structured_json = parsed
                 understanding.ai_model = job.model_code
                 _, current_snapshot = await effective_reference_snapshot(db, plan=plan, module=module)
                 if (

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.models.attachment_planning import (
+    AttachmentModuleReference,
     AttachmentProductReferenceGroup,
     AttachmentProductReferenceItem,
     AttachmentReferenceUnderstanding,
@@ -25,6 +26,13 @@ from app.services.attachment_generation_service import (
     build_attachment_generation_preview,
     create_attachment_generation,
 )
+from app.services.attachment_product_composition_service import (
+    add_secondary_product,
+    current_composition_version,
+    ensure_product_composition,
+    set_product_mode,
+)
+from app.services.attachment_reference_service import effective_reference_snapshot
 from app.services.resource_pool_service import create_api_key
 
 
@@ -263,3 +271,160 @@ async def test_generation_snapshots_versions_roles_slots_and_idempotency(identit
                 idempotency_key="attachment-generation-stale", user_id=user_id,
             )
         assert error.value.code == "attachment_generation.snapshot_changed"
+
+
+@pytest.mark.asyncio
+async def test_multi_product_generation_uses_stable_identity_order_and_snapshot(identity_test_context) -> None:
+    settings, user_id, project_id, session_id, version_id, plan_id, module_id = await _seed_generation_context(identity_test_context)
+    async with identity_test_context["session_factory"]() as db:
+        project = await db.get(ListingImageProject, project_id)
+        listing_session = await db.get(ListingGenerationSession, session_id)
+        version = await db.get(ListingVersion, version_id)
+        plan = await db.get(AttachmentWorkbenchPlan, plan_id)
+        module = await db.get(AttachmentWorkbenchModulePlan, module_id)
+        user = await db.get(User, user_id)
+        secondary_asset = Asset(
+            organization_id=project.organization_id, category="product_reference",
+            storage_key="tests/secondary.png", filename="secondary.png", mime_type="image/png",
+            size=128, width=100, height=100, sha256="3" * 64,
+            created_by=user.id, updated_by=user.id,
+        )
+        print_asset = Asset(
+            organization_id=project.organization_id, category="print_asset",
+            storage_key="tests/primary-print.png", filename="primary-print.png", mime_type="image/png",
+            size=128, width=100, height=100, sha256="4" * 64,
+            created_by=user.id, updated_by=user.id,
+        )
+        template_asset = Asset(
+            organization_id=project.organization_id, category="model_template",
+            storage_key="tests/group-template.png", filename="group-template.png", mime_type="image/png",
+            size=128, width=100, height=100, sha256="5" * 64,
+            created_by=user.id, updated_by=user.id,
+        )
+        db.add_all([secondary_asset, print_asset, template_asset])
+        await db.flush()
+        secondary_session = ListingGenerationSession(
+            organization_id=project.organization_id, category_id=listing_session.category_id,
+            skill_id=listing_session.skill_id, category_skill_snapshot=dict(listing_session.category_skill_snapshot or {}),
+            status="confirmed", primary_asset_id=secondary_asset.id, source_asset_ids=[secondary_asset.id],
+            listing_content={"title": {"zh": "蓝色27号球衣"}}, confirmed_at=datetime.now(UTC),
+            confirmed_by=user.id, created_by=user.id, updated_by=user.id,
+        )
+        db.add(secondary_session)
+        await db.flush()
+        product_references = list((await db.scalars(select(AttachmentProductReferenceItem).where(
+            AttachmentProductReferenceItem.product_group_id == select(AttachmentProductReferenceGroup.id).where(
+                AttachmentProductReferenceGroup.workbench_plan_id == plan.id,
+            ).scalar_subquery(),
+        ))).all())
+        composition = await ensure_product_composition(
+            db, module=module, session=listing_session,
+            product_references=product_references, user_id=user.id,
+        )
+        await set_product_mode(
+            db, module=module, mode="MULTI", expected_state_version=composition.state_version,
+            user_id=user.id, supports_multi_product=True,
+        )
+        await add_secondary_product(
+            db, module=module, source_session_id=secondary_session.id,
+            expected_state_version=composition.state_version, user_id=user.id,
+        )
+        db.add_all([
+            AttachmentModuleReference(
+                organization_id=project.organization_id, module_plan_id=module.id,
+                slot_type="PRINT", asset_id=print_asset.id, sort_order=0,
+                metadata_json={}, created_by=user.id, updated_by=user.id,
+            ),
+            AttachmentModuleReference(
+                organization_id=project.organization_id, module_plan_id=module.id,
+                slot_type="TEMPLATE", asset_id=template_asset.id, sort_order=0,
+                metadata_json={}, created_by=user.id, updated_by=user.id,
+            ),
+        ])
+        await db.flush()
+        grouped, reference_snapshot = await effective_reference_snapshot(db, plan=plan, module=module)
+        execution_ids = [item["asset_id"] for item in reference_snapshot["execution_order"]]
+        primary_id = product_references[0].asset_id
+        assert execution_ids == [primary_id, print_asset.id, secondary_asset.id, template_asset.id]
+        assert reference_snapshot["product_count"] == 2
+        assert reference_snapshot["model_count"] == 2
+
+        composition_version = await current_composition_version(db, composition)
+        understanding = await db.scalar(select(AttachmentReferenceUnderstanding).where(
+            AttachmentReferenceUnderstanding.module_plan_id == module.id,
+        ))
+        understanding.structured_json = {
+            "product": {"summary": "两件独立球衣", "constraints": []},
+            "products": [
+                {"product_role": "PRIMARY", "summary": "红色11号球衣"},
+                {"product_role": "SECONDARY", "summary": "蓝色27号球衣"},
+            ],
+            "combined_summary_cn": "两件商品身份独立",
+        }
+        understanding.source_snapshot_json = reference_snapshot
+        understanding.product_composition_version_id = composition_version.id
+        module.reference_context_dirty = False
+        plan_version = await db.scalar(select(AttachmentWorkbenchPlanVersion).where(
+            AttachmentWorkbenchPlanVersion.module_plan_id == module.id,
+            AttachmentWorkbenchPlanVersion.version_scope == "module:gift_scene",
+        ))
+        plan_version.product_composition_version_id = composition_version.id
+        project.prompt_config = {"attachment_workbench": {"modules": {"gift_scene": {
+            "selected": True, "aspectRatio": "4:5", "imageCount": 1, "generationMode": "standard",
+        }}}}
+        await db.flush()
+
+        preview = await build_attachment_generation_preview(
+            db, project=project, session=listing_session, version=version, plan=plan,
+            modules=[module], selected_module_keys=["gift_scene"],
+        )
+        prepared = preview.modules[0]
+        assert prepared.reference_snapshot["product_mode"] == "MULTI"
+        assert "Model A -> PRIMARY" in prepared.execution_prompt
+        assert "Model B -> SECONDARY" in prepared.execution_prompt
+        assert "Never transfer or mix" in prepared.execution_prompt
+
+        _, batch, jobs, group, created = await create_attachment_generation(
+            db, settings, project=project, session=listing_session, version=version, plan=plan,
+            modules=[module], selected_module_keys=["gift_scene"],
+            snapshot_signature=preview.snapshot_signature,
+            idempotency_key="attachment-multi-generation", user_id=user.id,
+        )
+        assert created is True and batch.total_jobs == 1
+        assert jobs[0].input_json["reference_asset_ids"] == execution_ids
+        metadata = jobs[0].input_json["metadata"]
+        assert metadata["product_mode"] == "MULTI"
+        assert metadata["product_count"] == 2
+        assert metadata["reference_execution_order"] == reference_snapshot["execution_order"]
+        assert group.input_asset_snapshot["product_mode"] == "MULTI"
+
+        third_asset = Asset(
+            organization_id=project.organization_id, category="product_reference",
+            storage_key="tests/third.png", filename="third.png", mime_type="image/png",
+            size=128, width=100, height=100, sha256="6" * 64,
+            created_by=user.id, updated_by=user.id,
+        )
+        db.add(third_asset); await db.flush()
+        third_session = ListingGenerationSession(
+            organization_id=project.organization_id, category_id=listing_session.category_id,
+            skill_id=listing_session.skill_id, category_skill_snapshot=dict(listing_session.category_skill_snapshot or {}),
+            status="confirmed", primary_asset_id=third_asset.id, source_asset_ids=[third_asset.id],
+            listing_content={"title": {"zh": "白色08号球衣"}}, confirmed_at=datetime.now(UTC),
+            confirmed_by=user.id, created_by=user.id, updated_by=user.id,
+        )
+        db.add(third_session); await db.flush()
+        await add_secondary_product(
+            db, module=module, source_session_id=third_session.id,
+            expected_state_version=composition.state_version, user_id=user.id,
+        )
+        _, latest_snapshot = await effective_reference_snapshot(db, plan=plan, module=module)
+        latest_version = await current_composition_version(db, composition)
+        understanding.source_snapshot_json = latest_snapshot
+        understanding.product_composition_version_id = latest_version.id
+        module.reference_context_dirty = False
+        with pytest.raises(AppError) as stale_error:
+            await build_attachment_generation_preview(
+                db, project=project, session=listing_session, version=version, plan=plan,
+                modules=[module], selected_module_keys=["gift_scene"],
+            )
+        assert stale_error.value.code == "attachment_generation.composition_stale"

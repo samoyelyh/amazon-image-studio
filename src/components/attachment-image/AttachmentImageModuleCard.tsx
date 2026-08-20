@@ -151,6 +151,7 @@ export default function AttachmentImageModuleCard({
   const readyToGenerate = Boolean(
     available
     && (draft.generationMode === 'creative' || (planning?.prompt_cn.trim() && planning?.plan_summary_cn.trim()))
+    && (draft.generationMode === 'creative' || planning?.status === 'ready')
     && referenceState?.understanding?.status === 'ready' && !referenceState.reference_context_dirty,
   )
 

@@ -465,6 +465,8 @@ class ListingImageTaskResponse(BaseModel):
     chinese_prompt: str = ""
     slot_index: int | None = None
     generation_mode: str | None = None
+    product_mode: str | None = None
+    product_count: int | None = None
     requested_aspect_ratio: str | None = None
     requested_width: int | None = None
     requested_height: int | None = None

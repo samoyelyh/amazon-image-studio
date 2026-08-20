@@ -155,6 +155,13 @@ async def ensure_product_composition(
     db: AsyncSession, *, module: AttachmentWorkbenchModulePlan,
     session: ListingGenerationSession, product_references: list[AttachmentProductReferenceItem], user_id: str,
 ) -> AttachmentProductComposition:
+    # Multiple workbench endpoints load in parallel. Lock the stable parent row
+    # before checking/creating the one-to-one composition so first-load requests
+    # cannot race each other into duplicate composition or PRIMARY rows.
+    await db.scalar(select(AttachmentWorkbenchModulePlan.id).where(
+        AttachmentWorkbenchModulePlan.id == module.id,
+        AttachmentWorkbenchModulePlan.organization_id == module.organization_id,
+    ).with_for_update())
     composition = await db.scalar(select(AttachmentProductComposition).where(
         AttachmentProductComposition.module_plan_id == module.id,
         AttachmentProductComposition.organization_id == module.organization_id,
@@ -191,12 +198,17 @@ async def ensure_product_composition(
         await db.flush()
         assets_by_item[primary.id] = []
         created = True
+    effective_references: list[AttachmentProductReferenceItem] = []
+    for role in ("front", "back", "detail"):
+        matching = [item for item in product_references if item.view_role == role]
+        overrides = [item for item in matching if item.source == "override"]
+        effective_references.extend(overrides or [item for item in matching if item.source == "session"])
     desired = [{
         "asset_id": ref.asset_id,
         "source_asset_id": ref.source_asset_id,
         "view_role": ref.view_role,
         "metadata": dict(ref.transform_metadata or {}),
-    } for ref in product_references]
+    } for ref in effective_references]
     current = [(row.asset_id, row.source_asset_id, row.view_role) for row in assets_by_item.get(primary.id, [])]
     target = [(str(row["asset_id"]), row.get("source_asset_id"), str(row["view_role"])) for row in desired]
     if current != target:

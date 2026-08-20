@@ -249,6 +249,13 @@ async def get_or_create_attachment_plan(
     db: AsyncSession, *, project: ListingImageProject, session: ListingGenerationSession,
     version: ListingVersion, user_id: str,
 ) -> tuple[AttachmentWorkbenchPlan, list[AttachmentWorkbenchModulePlan]]:
+    # The workbench loads several endpoints in parallel. Serialize first-time
+    # initialization on the already-existing project row before creating the
+    # one-to-one plan and its module rows.
+    await db.scalar(select(ListingImageProject.id).where(
+        ListingImageProject.id == project.id,
+        ListingImageProject.organization_id == project.organization_id,
+    ).with_for_update())
     plan = await db.scalar(select(AttachmentWorkbenchPlan).where(
         AttachmentWorkbenchPlan.organization_id == project.organization_id,
         AttachmentWorkbenchPlan.listing_image_project_id == project.id,

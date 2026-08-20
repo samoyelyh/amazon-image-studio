@@ -375,6 +375,10 @@ def _generation_preview_response(
             reference_understanding_id=item.understanding.id,
             reference_understanding_version=item.understanding.version_number,
             reference_count=sum(len(values) for values in item.grouped_references.values()),
+            product_mode=str(item.reference_snapshot.get("product_mode") or "SINGLE"),
+            product_count=int(item.reference_snapshot.get("product_count") or 1),
+            model_count=int(item.reference_snapshot.get("model_count") or 1),
+            products=list(item.reference_snapshot.get("products") or []),
             directions=[AttachmentCreativeDirectionResponse(
                 plan_version_id=direction.plan_version.id,
                 module_key=item.module_key,

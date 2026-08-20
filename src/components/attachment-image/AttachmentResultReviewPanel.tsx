@@ -71,7 +71,7 @@ function OutputCard({ entry, final, onOpen }: { entry: AttachmentResultEntry; fi
         {entry.task.generation_mode === 'creative' && <span className="rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white">创意 {entry.task.creative_direction_index || entry.task.slot_index}</span>}
       </div>
     </div>
-    <div className="p-2.5"><div className="text-xs font-semibold text-gray-800 dark:text-gray-100">{entry.task.generation_mode === 'creative' ? `创意方向 ${entry.task.creative_direction_index || entry.task.slot_index}` : `候选 ${entry.task.slot_index || entry.output.sequence_number + 1}`}</div><div className="mt-1 text-[11px] text-gray-500">任务组 #{entry.group.group_number} · {entry.task.generation_mode === 'creative' ? '创意' : '标准'} · {entry.output.width}×{entry.output.height}</div></div>
+    <div className="p-2.5"><div className="text-xs font-semibold text-gray-800 dark:text-gray-100">{entry.task.generation_mode === 'creative' ? `创意方向 ${entry.task.creative_direction_index || entry.task.slot_index}` : `候选 ${entry.task.slot_index || entry.output.sequence_number + 1}`}</div><div className="mt-1 text-[11px] text-gray-500">任务组 #{entry.group.group_number} · {entry.task.product_mode === 'MULTI' ? `多商品${entry.task.product_count || ''}` : '单商品'} · {entry.task.generation_mode === 'creative' ? '创意' : '标准'} · {entry.output.width}×{entry.output.height}</div></div>
   </article>
 }
 
@@ -104,7 +104,7 @@ export default function AttachmentResultReviewPanel({
             <div className="grid grid-cols-2 gap-2 text-xs">{[
               ['状态', reviewLabel[selected.output.review_status || 'pending_review']], ['最终采用', selected.output.id === state?.current_final_output_id ? '是' : '否'],
               ['任务组', `#${selected.group.group_number}`], ['候选槽位', String(selected.task.slot_index || '-')],
-              ['生成模式', selected.task.generation_mode === 'creative' ? `创意方向 ${selected.task.creative_direction_index || selected.task.slot_index}` : '标准生成'],
+              ['生成模式', `${selected.task.product_mode === 'MULTI' ? `多商品${selected.task.product_count || ''}` : '单商品'} · ${selected.task.generation_mode === 'creative' ? `创意方向 ${selected.task.creative_direction_index || selected.task.slot_index}` : '标准生成'}`],
               ['模型', selected.task.model_code], ['尺寸', `${selected.output.width}×${selected.output.height}`],
               ['提交时间', time(selected.task.created_at)], ['完成时间', time(selected.task.finished_at)],
             ].map(([label, value]) => <div key={label} className="rounded-lg bg-gray-50 p-2.5 dark:bg-white/[0.03]"><div className="text-gray-400">{label}</div><div className="mt-1 break-words font-semibold text-gray-700 dark:text-gray-200">{value}</div></div>)}</div>

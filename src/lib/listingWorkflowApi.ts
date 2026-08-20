@@ -285,6 +285,8 @@ export interface ListingImageTask {
   chinese_prompt: string
   slot_index: number | null
   generation_mode: string | null
+  product_mode?: string | null
+  product_count?: number | null
   requested_aspect_ratio: string | null
   requested_width: number | null
   requested_height: number | null

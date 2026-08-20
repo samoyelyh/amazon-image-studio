@@ -25,7 +25,7 @@ from app.schemas.attachment_planning import (
 from app.schemas.tasks import BatchJobItemRequest, JobBatchSubmitRequest
 from app.services.attachment_planning_service import MODULE_INDEX
 from app.services.attachment_planning_service import add_module_version, attachment_module_rule
-from app.services.attachment_reference_service import effective_reference_snapshot
+from app.services.attachment_reference_service import effective_reference_snapshot, latest_reference_understanding
 from app.services.listing_image_task_group_service import create_group_for_batch
 from app.services.task_service import submit_batch
 
@@ -203,16 +203,24 @@ async def adopt_attachment_creative_direction(
             "attachment_planning.state_version_conflict", "该模块已被更新，请刷新后再沿用创意方向", 409,
             {"expected": expected_state_version, "actual": module.state_version},
         )
-    grouped, _ = await effective_reference_snapshot(db, plan=plan, module=module)
+    grouped, reference_snapshot = await effective_reference_snapshot(db, plan=plan, module=module)
     if not grouped.get("PRODUCT"):
         raise AppError("attachment_creative.product_required", "当前模块缺少有效商品参考图，不能沿用方向", 409)
+    if module.reference_context_dirty:
+        raise AppError("attachment_creative.reference_stale", "当前商品或参考素材已更新，请先重新分析", 409)
+    current_understanding = await latest_reference_understanding(db, module.id, ready_only=True)
+    if current_understanding is None:
+        raise AppError("attachment_creative.reference_analysis_required", "请先完成当前商品组合的参考素材分析", 409)
 
     module.aspect_ratio = str(source.aspect_ratio or module.aspect_ratio)
     await add_module_version(
         db, plan=plan, module=module, action="derived_from_creative", user_id=user_id,
         rule_snapshot=attachment_module_rule(dict(version.category_skill_snapshot or {}), module_key),
         plan_summary_cn=str(source.plan_summary_cn), prompt_cn=str(source.prompt_cn),
-        reference_understanding_id=source.reference_understanding_id,
+        reference_understanding_id=current_understanding.id,
+        product_composition_version_id=(
+            str(reference_snapshot.get("product_composition_version_id") or "") or None
+        ),
         source_version_id=source.id, derived_from_output_id=output.id,
     )
     module.derived_from_output_id = output.id
