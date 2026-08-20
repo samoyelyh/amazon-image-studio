@@ -20,6 +20,7 @@ export interface AttachmentModulePlan {
   aspect_ratio: string
   source: string
   supports_creative: boolean
+  supports_multi_product: boolean
   derived_from_output_id: string | null
   current_version_number: number
   status: string
@@ -68,6 +69,7 @@ export interface AttachmentPlanVersion {
   ai_job_id: string | null
   ai_model: string | null
   reference_understanding_id: string | null
+  product_composition_version_id: string | null
   created_by: string
   created_at: string
 }
@@ -126,6 +128,35 @@ export interface AttachmentReferenceState {
   modules: AttachmentModuleReferenceState[]
 }
 
+export interface AttachmentProductCompositionAsset {
+  id: string
+  asset: Asset
+  source_asset_id: string | null
+  view_role: 'front' | 'back' | 'detail' | string
+  sort_order: number
+}
+
+export interface AttachmentProductCompositionItem {
+  id: string
+  product_role: 'PRIMARY' | 'SECONDARY'
+  source_session_id: string
+  source_project_id: string | null
+  display_name: string
+  category_name: string
+  display_order: number
+  assets: AttachmentProductCompositionAsset[]
+}
+
+export interface AttachmentProductComposition {
+  id: string
+  module_key: AttachmentModuleCode
+  mode: 'SINGLE' | 'MULTI'
+  current_version_id: string
+  current_version_number: number
+  state_version: number
+  products: AttachmentProductCompositionItem[]
+}
+
 export interface AttachmentPlanningModuleInput {
   module_key: AttachmentModuleCode
   aspect_ratio: string
@@ -147,6 +178,10 @@ export interface AttachmentGenerationModulePreview {
   reference_understanding_id: string
   reference_understanding_version: number
   reference_count: number
+  product_mode: 'SINGLE' | 'MULTI' | string
+  product_count: number
+  model_count: number
+  products: Array<Record<string, unknown>>
   directions: AttachmentCreativeDirection[]
 }
 
@@ -308,6 +343,43 @@ export function getAttachmentPlanning(projectId: string) {
 
 export function getAttachmentReferences(projectId: string) {
   return authenticatedFetch<AttachmentReferenceState>(`/attachment-workbench/projects/${projectId}/references`)
+}
+
+export function getAttachmentProductCompositions(projectId: string) {
+  return authenticatedFetch<AttachmentProductComposition[]>(`/attachment-workbench/projects/${projectId}/product-compositions`)
+}
+
+export function updateAttachmentProductMode(
+  projectId: string, moduleKey: AttachmentModuleCode, mode: 'SINGLE' | 'MULTI', expectedStateVersion: number,
+) {
+  return authenticatedFetch<AttachmentProductComposition>(`/attachment-workbench/projects/${projectId}/modules/${moduleKey}/product-composition`, {
+    method: 'PATCH', body: JSON.stringify({ mode, expected_state_version: expectedStateVersion }),
+  })
+}
+
+export function addAttachmentSecondaryProduct(
+  projectId: string, moduleKey: AttachmentModuleCode, sourceSessionId: string, expectedStateVersion: number,
+) {
+  return authenticatedFetch<AttachmentProductComposition>(`/attachment-workbench/projects/${projectId}/modules/${moduleKey}/product-composition/products`, {
+    method: 'POST', body: JSON.stringify({ source_session_id: sourceSessionId, expected_state_version: expectedStateVersion }),
+  })
+}
+
+export function replaceAttachmentSecondaryProduct(
+  projectId: string, moduleKey: AttachmentModuleCode, itemId: string,
+  sourceSessionId: string, expectedStateVersion: number,
+) {
+  return authenticatedFetch<AttachmentProductComposition>(`/attachment-workbench/projects/${projectId}/modules/${moduleKey}/product-composition/products/${itemId}`, {
+    method: 'PUT', body: JSON.stringify({ source_session_id: sourceSessionId, expected_state_version: expectedStateVersion }),
+  })
+}
+
+export function removeAttachmentSecondaryProduct(
+  projectId: string, moduleKey: AttachmentModuleCode, itemId: string, expectedStateVersion: number,
+) {
+  return authenticatedFetch<AttachmentProductComposition>(`/attachment-workbench/projects/${projectId}/modules/${moduleKey}/product-composition/products/${itemId}?expected_state_version=${expectedStateVersion}`, {
+    method: 'DELETE',
+  })
 }
 
 export function addAttachmentReference(projectId: string, moduleKey: AttachmentModuleCode, input: {

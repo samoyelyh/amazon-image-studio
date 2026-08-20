@@ -14,6 +14,11 @@ import {
   updateAttachmentVisualDirection,
   previewAttachmentGeneration,
   generateAttachments,
+  getAttachmentProductCompositions,
+  updateAttachmentProductMode,
+  addAttachmentSecondaryProduct,
+  replaceAttachmentSecondaryProduct,
+  removeAttachmentSecondaryProduct,
 } from './attachmentPlanningApi'
 
 afterEach(() => {
@@ -116,5 +121,26 @@ describe('attachment planning API', () => {
     expect(previewBody.selected_module_keys).toEqual(['gift_scene', 'detail_display'])
     expect(generationBody.snapshot_signature).toHaveLength(64)
     expect(generationBody.idempotency_key).toBe('attachment-generate:test')
+  })
+
+  it('keeps product composition mutations explicit and optimistic-lock safe', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(ok({ products: [] })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getAttachmentProductCompositions('project-1')
+    await updateAttachmentProductMode('project-1', 'stadium_scene', 'MULTI', 2)
+    await addAttachmentSecondaryProduct('project-1', 'stadium_scene', 'session-b', 3)
+    await replaceAttachmentSecondaryProduct('project-1', 'stadium_scene', 'item-b', 'session-c', 4)
+    await removeAttachmentSecondaryProduct('project-1', 'stadium_scene', 'item-b', 5)
+
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      '/api/v1/attachment-workbench/projects/project-1/product-compositions',
+      '/api/v1/attachment-workbench/projects/project-1/modules/stadium_scene/product-composition',
+      '/api/v1/attachment-workbench/projects/project-1/modules/stadium_scene/product-composition/products',
+      '/api/v1/attachment-workbench/projects/project-1/modules/stadium_scene/product-composition/products/item-b',
+      '/api/v1/attachment-workbench/projects/project-1/modules/stadium_scene/product-composition/products/item-b?expected_state_version=5',
+    ])
+    expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toEqual({ mode: 'MULTI', expected_state_version: 2 })
+    expect((fetchMock.mock.calls[4][1] as RequestInit).method).toBe('DELETE')
   })
 })

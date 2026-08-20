@@ -11,6 +11,7 @@ from app.core.config import Settings
 from app.core.errors import AppError
 from app.models.attachment_planning import (
     AttachmentModuleReference,
+    AttachmentProductComposition,
     AttachmentProductReferenceGroup,
     AttachmentProductReferenceItem,
     AttachmentReferenceUnderstanding,
@@ -22,6 +23,9 @@ from app.models.listing_workflow import ListingGenerationSession, ListingImagePr
 from app.models.tasks import Job, JobStatus
 from app.schemas.tasks import JobSubmitRequest
 from app.services.category_listing_service import resolve_bound_model_code
+from app.services.attachment_product_composition_service import (
+    current_composition_version,
+)
 from app.services.task_service import submit_job
 
 
@@ -61,10 +65,13 @@ SLOT_DEFINITIONS: dict[str, list[dict[str, object]]] = {
     ],
 }
 
-REFERENCE_ANALYSIS_SYSTEM_PROMPT = """你是亚马逊电商附图参考素材分析专家。你会收到按业务角色标注的多张图片。
+REFERENCE_ANALYSIS_SYSTEM_PROMPT = """你是亚马逊电商附图参考素材分析专家。你会收到按业务角色和商品身份标注的多张图片。
 只返回一个有效JSON对象，不要Markdown，不要分析过程。结构必须是：
 {
   "product":{"summary":"中文摘要","constraints":["约束"]},
+  "products":[
+    {"product_role":"PRIMARY","display_order":0,"summary":"中文摘要","colors":["颜色"],"structure":["结构"],"prints":["印花/Logo/号码"],"fidelity_constraints":["保真约束"]}
+  ],
   "template":{"summary":"中文摘要","layout_constraints":["构图约束"]},
   "scene":{"summary":"中文摘要","style_cues":["氛围线索"]},
   "print":{"summary":"中文摘要","fidelity_constraints":["高保真约束"]},
@@ -75,6 +82,7 @@ REFERENCE_ANALYSIS_SYSTEM_PROMPT = """你是亚马逊电商附图参考素材分
 TEMPLATE只参考构图、摆放和结构，禁止继承模板中旧商品的颜色、款式、号码、Logo或印花。
 SCENE只参考环境与氛围，不得改变商品身份。
 PRINT是高保真视觉事实，必须保护轮廓、比例、描边、结构和朝向，不得重新设计成相似普通字体。
+多商品时必须逐件分析并保留products数组；PRIMARY和每个SECONDARY的颜色、Logo、印花、号码、版型与结构必须彼此独立，禁止串用。
 没有某类素材时，对应对象保留空摘要和空数组。"""
 
 
@@ -287,30 +295,115 @@ async def effective_reference_snapshot(
             effective_products.extend(item for item in matching if item.source == "session")
     refs = await list_module_references(db, module.id)
     grouped = {slot: [] for slot in SLOT_TYPES}
-    explicit_product = [item.asset_id for item in refs if item.slot_type == "PRODUCT"]
-    grouped["PRODUCT"] = explicit_product or [item.asset_id for item in effective_products]
+    composition = await db.scalar(select(AttachmentProductComposition).where(
+        AttachmentProductComposition.module_plan_id == module.id,
+        AttachmentProductComposition.organization_id == module.organization_id,
+    ))
+    composition_version = await current_composition_version(db, composition) if composition else None
+    composition_snapshot = dict(composition_version.snapshot_json or {}) if composition_version else {}
+    products = composition_snapshot.get("products")
+    products = products if isinstance(products, list) else []
+    execution_order: list[dict[str, object]] = []
+
+    def add_execution_asset(
+        *, asset_id: str, slot_type: str, product: dict[str, object] | None = None,
+        view_role: str | None = None,
+    ) -> None:
+        if any(row.get("asset_id") == asset_id for row in execution_order):
+            return
+        execution_order.append({
+            "image_index": len(execution_order) + 1,
+            "asset_id": asset_id,
+            "slot_type": slot_type,
+            "product_entry_id": product.get("product_entry_id") if product else None,
+            "product_role": product.get("product_role") if product else None,
+            "product_display_order": product.get("display_order") if product else None,
+            "product_name": product.get("display_name") if product else None,
+            "view_role": view_role,
+        })
+
+    product_mode = composition.mode if composition else "SINGLE"
+    if product_mode == "MULTI":
+        active_products = sorted(
+            (item for item in products if isinstance(item, dict)),
+            key=lambda item: int(item.get("display_order") or 0),
+        )
+        for product in active_products:
+            product_assets = product.get("assets")
+            product_assets = product_assets if isinstance(product_assets, list) else []
+            ordered = sorted(
+                (item for item in product_assets if isinstance(item, dict) and item.get("asset_id")),
+                key=lambda item: (
+                    {"front": 0, "back": 1, "detail": 2}.get(str(item.get("view_role") or ""), 9),
+                    int(item.get("sort_order") or 0),
+                ),
+            )
+            limit = 2 if product.get("product_role") == "PRIMARY" else 1
+            for asset in ordered[:limit]:
+                asset_id = str(asset["asset_id"])
+                grouped["PRODUCT"].append(asset_id)
+                add_execution_asset(
+                    asset_id=asset_id, slot_type="PRODUCT", product=product,
+                    view_role=str(asset.get("view_role") or "front"),
+                )
+            if product.get("product_role") == "PRIMARY":
+                for reference in [item for item in refs if item.slot_type == "PRINT"][:1]:
+                    grouped["PRINT"].append(reference.asset_id)
+                    add_execution_asset(
+                        asset_id=reference.asset_id, slot_type="PRINT", product=product,
+                        view_role="print",
+                    )
+    else:
+        explicit_product = [item.asset_id for item in refs if item.slot_type == "PRODUCT"]
+        grouped["PRODUCT"] = explicit_product or [item.asset_id for item in effective_products]
+        primary = next((item for item in products if isinstance(item, dict) and item.get("product_role") == "PRIMARY"), None)
+        for asset_id in grouped["PRODUCT"]:
+            add_execution_asset(asset_id=asset_id, slot_type="PRODUCT", product=primary)
     for item in refs:
-        if item.slot_type != "PRODUCT":
+        if item.slot_type not in {"PRODUCT", "PRINT"}:
             grouped[item.slot_type].append(item.asset_id)
+    if product_mode != "MULTI":
+        for item in [row for row in refs if row.slot_type == "PRINT"]:
+            grouped["PRINT"].append(item.asset_id)
+            add_execution_asset(asset_id=item.asset_id, slot_type="PRINT", product=primary)
+    for slot_type, limit in (("TEMPLATE", 1), ("SCENE", 1), ("OTHER", 1)):
+        grouped[slot_type] = grouped[slot_type][:limit] if product_mode == "MULTI" else grouped[slot_type]
+        for asset_id in grouped[slot_type]:
+            add_execution_asset(asset_id=asset_id, slot_type=slot_type)
     grouped = {key: list(dict.fromkeys(value)) for key, value in grouped.items()}
     snapshot = {
         "module_key": module.module_key,
         "reference_state_version": module.reference_state_version,
         "roles": grouped,
         "priority": ["PRODUCT", "PRINT", "TEMPLATE", "SCENE", "OTHER"],
+        "product_mode": product_mode,
+        "product_count": 1 if product_mode == "SINGLE" else len(products),
+        "model_count": 1 if product_mode == "SINGLE" else len(products),
+        "product_composition_id": composition.id if composition else None,
+        "product_composition_version_id": composition_version.id if composition_version else None,
+        "product_composition_version_number": composition_version.version_number if composition_version else None,
+        "products": products,
+        "execution_order": execution_order,
     }
     return grouped, snapshot
 
 
-def build_reference_analysis_input(module_key: str, grouped: dict[str, list[str]]) -> tuple[str, str, list[str]]:
-    descriptors = []
-    references: list[str] = []
-    for slot in ("PRODUCT", "PRINT", "TEMPLATE", "SCENE", "OTHER"):
-        for asset_id in grouped.get(slot, []):
-            references.append(asset_id)
-            descriptors.append({"image_index": len(references), "slot_type": slot, "asset_id": asset_id})
+def build_reference_analysis_input(
+    module_key: str, grouped: dict[str, list[str]], snapshot: dict[str, object] | None = None,
+) -> tuple[str, str, list[str]]:
+    execution_order = (snapshot or {}).get("execution_order")
+    descriptors = execution_order if isinstance(execution_order, list) else []
+    references = [str(item.get("asset_id")) for item in descriptors if isinstance(item, dict) and item.get("asset_id")]
+    if not references:
+        descriptors = []
+        for slot in ("PRODUCT", "PRINT", "TEMPLATE", "SCENE", "OTHER"):
+            for asset_id in grouped.get(slot, []):
+                references.append(asset_id)
+                descriptors.append({"image_index": len(references), "slot_type": slot, "asset_id": asset_id})
     user_prompt = json.dumps({
         "module_key": module_key,
+        "product_mode": (snapshot or {}).get("product_mode", "SINGLE"),
+        "product_composition": (snapshot or {}).get("products", []),
         "images_in_submission_order": descriptors,
         "role_semantics": {
             "PRODUCT": "决定商品外观，是最高优先级事实来源",
@@ -359,7 +452,7 @@ async def start_reference_analysis(
     grouped, snapshot = await effective_reference_snapshot(db, plan=plan, module=module)
     if not grouped["PRODUCT"]:
         raise AppError("attachment_reference.product_required", "当前模块缺少商品参考图", 409)
-    system_prompt, user_prompt, references = build_reference_analysis_input(module.module_key, grouped)
+    system_prompt, user_prompt, references = build_reference_analysis_input(module.module_key, grouped, snapshot)
     model_code = await resolve_bound_model_code(
         db, organization_id=project.organization_id, operation_code="listing.plan", capability="text_generation",
     )
@@ -392,7 +485,9 @@ async def start_reference_analysis(
     understanding = AttachmentReferenceUnderstanding(
         organization_id=project.organization_id, module_plan_id=module.id,
         version_number=version_number, status="analyzing", structured_json={},
-        source_snapshot_json=snapshot, ai_job_id=job.id, created_by=user_id,
+        source_snapshot_json=snapshot, ai_job_id=job.id,
+        product_composition_version_id=snapshot.get("product_composition_version_id"),
+        created_by=user_id,
     )
     db.add(understanding)
     module.reference_analysis_job_id = job.id
@@ -423,7 +518,11 @@ async def reconcile_reference_understandings(
                 understanding.structured_json = parse_reference_understanding(text)
                 understanding.ai_model = job.model_code
                 _, current_snapshot = await effective_reference_snapshot(db, plan=plan, module=module)
-                if current_snapshot["roles"] == understanding.source_snapshot_json.get("roles"):
+                if (
+                    current_snapshot.get("roles") == understanding.source_snapshot_json.get("roles")
+                    and current_snapshot.get("product_composition_version_id")
+                    == understanding.source_snapshot_json.get("product_composition_version_id")
+                ):
                     understanding.status = "ready"
                     module.reference_context_dirty = False
                 else:

@@ -11,6 +11,9 @@ from app.core.errors import AppError
 from app.db.session import get_db_session
 from app.models.attachment_planning import (
     AttachmentModuleReference,
+    AttachmentProductComposition,
+    AttachmentProductCompositionAsset,
+    AttachmentProductCompositionItem,
     AttachmentProductReferenceGroup,
     AttachmentProductReferenceItem,
     AttachmentWorkbenchModulePlan,
@@ -46,6 +49,11 @@ from app.schemas.attachment_planning import (
     AttachmentCreativePlanningResponse,
     AttachmentAdoptDirectionRequest,
     AttachmentModuleKeysRequest,
+    AttachmentProductCompositionAssetResponse,
+    AttachmentProductCompositionItemResponse,
+    AttachmentProductCompositionResponse,
+    AttachmentProductModeUpdate,
+    AttachmentSecondaryProductRequest,
     AttachmentOutputReviewRequest,
     AttachmentOutputStateResponse,
     AttachmentResultStateResponse,
@@ -98,6 +106,15 @@ from app.services.attachment_creative_service import (
     creative_planning_response,
     start_creative_planning,
 )
+from app.services.attachment_product_composition_service import (
+    add_secondary_product,
+    current_composition_version,
+    ensure_product_composition,
+    get_product_composition,
+    remove_secondary_product,
+    replace_secondary_product,
+    set_product_mode,
+)
 from app.services.audit_service import add_audit_log
 from app.services.listing_image_task_group_service import task_group_response
 
@@ -134,7 +151,14 @@ async def _context(
     plan, modules = await get_or_create_attachment_plan(
         db, project=project, session=session, version=version, user_id=user_id,
     )
-    await ensure_product_reference_group(db, plan=plan, session=session, user_id=user_id)
+    _, product_references = await ensure_product_reference_group(
+        db, plan=plan, session=session, user_id=user_id,
+    )
+    for module in modules:
+        await ensure_product_composition(
+            db, module=module, session=session,
+            product_references=product_references, user_id=user_id,
+        )
     await ensure_attachment_result_states(
         db, project=project, module_keys=list(STANDARD_MODULE_CODES), user_id=user_id,
     )
@@ -169,6 +193,9 @@ def _response(
             operator_requirement_cn=item.operator_requirement_cn, aspect_ratio=item.aspect_ratio,
             source=item.source,
             supports_creative=bool(attachment_module_rule(snapshot, item.module_key).get("supports_creative")),
+            supports_multi_product=bool(
+                attachment_module_rule(snapshot, item.module_key).get("supports_multi_product")
+            ),
             derived_from_output_id=item.derived_from_output_id,
             current_version_number=item.current_version_number,
             status=item.status, planning_job_id=item.planning_job_id, error_message=item.error_message,
@@ -261,6 +288,75 @@ async def _reference_response(
     )
 
 
+async def _product_composition_responses(
+    db: AsyncSession, storage: StorageService, settings: Settings, *,
+    modules: list[AttachmentWorkbenchModulePlan],
+) -> list[AttachmentProductCompositionResponse]:
+    module_ids = [item.id for item in modules]
+    compositions = list((await db.scalars(select(AttachmentProductComposition).where(
+        AttachmentProductComposition.module_plan_id.in_(module_ids),
+    ))).all()) if module_ids else []
+    composition_by_module = {item.module_plan_id: item for item in compositions}
+    composition_ids = [item.id for item in compositions]
+    items = list((await db.scalars(select(AttachmentProductCompositionItem).where(
+        AttachmentProductCompositionItem.composition_id.in_(composition_ids),
+    ).order_by(
+        AttachmentProductCompositionItem.display_order,
+        AttachmentProductCompositionItem.created_at,
+    ))).all()) if composition_ids else []
+    item_ids = [item.id for item in items]
+    composition_assets = list((await db.scalars(select(AttachmentProductCompositionAsset).where(
+        AttachmentProductCompositionAsset.composition_item_id.in_(item_ids),
+    ).order_by(
+        AttachmentProductCompositionAsset.sort_order,
+        AttachmentProductCompositionAsset.created_at,
+    ))).all()) if item_ids else []
+    asset_ids = {item.asset_id for item in composition_assets}
+    assets = list((await db.scalars(select(Asset).where(
+        Asset.id.in_(asset_ids) if asset_ids else Asset.id == "",
+        Asset.deleted_at.is_(None),
+    ))).all())
+    signed = {item.id: await signed_asset_response(item, storage, settings) for item in assets}
+    assets_by_item: dict[str, list[AttachmentProductCompositionAsset]] = {}
+    for item in composition_assets:
+        assets_by_item.setdefault(item.composition_item_id, []).append(item)
+    items_by_composition: dict[str, list[AttachmentProductCompositionItem]] = {}
+    for item in items:
+        items_by_composition.setdefault(item.composition_id, []).append(item)
+
+    responses: list[AttachmentProductCompositionResponse] = []
+    for module in modules:
+        composition = composition_by_module.get(module.id)
+        if composition is None:
+            continue
+        current_version = await current_composition_version(db, composition)
+        responses.append(AttachmentProductCompositionResponse(
+            id=composition.id,
+            module_key=module.module_key,
+            mode=composition.mode,
+            current_version_id=current_version.id,
+            current_version_number=current_version.version_number,
+            state_version=composition.state_version,
+            products=[AttachmentProductCompositionItemResponse(
+                id=item.id,
+                product_role=item.product_role,
+                source_session_id=item.source_session_id,
+                source_project_id=item.source_project_id,
+                display_name=item.display_name_snapshot,
+                category_name=item.category_name_snapshot,
+                display_order=item.display_order,
+                assets=[AttachmentProductCompositionAssetResponse(
+                    id=reference.id,
+                    asset=signed[reference.asset_id],
+                    source_asset_id=reference.source_asset_id,
+                    view_role=reference.view_role,
+                    sort_order=reference.sort_order,
+                ) for reference in assets_by_item.get(item.id, []) if reference.asset_id in signed],
+            ) for item in items_by_composition.get(composition.id, [])],
+        ))
+    return responses
+
+
 def _generation_preview_response(
     project: ListingImageProject, preview: AttachmentGenerationPreview,
 ) -> AttachmentGenerationPreviewResponse:
@@ -308,6 +404,144 @@ async def get_references(
 ) -> AttachmentReferenceStateResponse:
     _, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
     return await _reference_response(db, storage, settings, plan=plan, modules=modules)
+
+
+@router.get(
+    "/projects/{project_id}/product-compositions",
+    response_model=list[AttachmentProductCompositionResponse],
+)
+async def get_product_compositions(
+    project_id: str,
+    db: AsyncSession = Depends(get_db_session),
+    storage: StorageService = Depends(get_storage_service),
+    settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.read")),
+) -> list[AttachmentProductCompositionResponse]:
+    _, _, _, _, modules = await _load_and_reconcile(
+        db, project_id=project_id, principal=principal,
+    )
+    return await _product_composition_responses(db, storage, settings, modules=modules)
+
+
+async def _changed_product_composition_response(
+    db: AsyncSession, storage: StorageService, settings: Settings, *,
+    module_key: str, modules: list[AttachmentWorkbenchModulePlan],
+) -> AttachmentProductCompositionResponse:
+    rows = await _product_composition_responses(db, storage, settings, modules=modules)
+    response = next((item for item in rows if item.module_key == module_key), None)
+    if response is None:
+        raise AppError("attachment_composition.missing", "商品组合尚未初始化，请刷新后重试", 409)
+    return response
+
+
+@router.patch(
+    "/projects/{project_id}/modules/{module_key}/product-composition",
+    response_model=AttachmentProductCompositionResponse,
+)
+async def update_product_composition_mode(
+    project_id: str, module_key: str, payload: AttachmentProductModeUpdate,
+    db: AsyncSession = Depends(get_db_session),
+    storage: StorageService = Depends(get_storage_service),
+    settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentProductCompositionResponse:
+    _, _, version, _, modules = await _load_and_reconcile(
+        db, project_id=project_id, principal=principal,
+    )
+    module = next((item for item in modules if item.module_key == module_key), None)
+    if module is None:
+        raise AppError("attachment_composition.module_invalid", "选择了不支持的附图模块", 422)
+    rule = attachment_module_rule(dict(version.category_skill_snapshot or {}), module_key)
+    await set_product_mode(
+        db, module=module, mode=payload.mode,
+        expected_state_version=payload.expected_state_version,
+        user_id=principal.user.id,
+        supports_multi_product=bool(rule.get("supports_multi_product")),
+    )
+    await db.commit()
+    return await _changed_product_composition_response(
+        db, storage, settings, module_key=module_key, modules=modules,
+    )
+
+
+@router.post(
+    "/projects/{project_id}/modules/{module_key}/product-composition/products",
+    response_model=AttachmentProductCompositionResponse,
+)
+async def add_product_composition_item(
+    project_id: str, module_key: str, payload: AttachmentSecondaryProductRequest,
+    db: AsyncSession = Depends(get_db_session),
+    storage: StorageService = Depends(get_storage_service),
+    settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentProductCompositionResponse:
+    _, _, version, _, modules = await _load_and_reconcile(
+        db, project_id=project_id, principal=principal,
+    )
+    module = next((item for item in modules if item.module_key == module_key), None)
+    if module is None:
+        raise AppError("attachment_composition.module_invalid", "选择了不支持的附图模块", 422)
+    if not attachment_module_rule(dict(version.category_skill_snapshot or {}), module_key).get("supports_multi_product"):
+        raise AppError("attachment_composition.mode_unsupported", "当前模块不支持多件商品", 422)
+    await add_secondary_product(
+        db, module=module, source_session_id=payload.source_session_id,
+        expected_state_version=payload.expected_state_version, user_id=principal.user.id,
+    )
+    await db.commit()
+    return await _changed_product_composition_response(
+        db, storage, settings, module_key=module_key, modules=modules,
+    )
+
+
+@router.put(
+    "/projects/{project_id}/modules/{module_key}/product-composition/products/{item_id}",
+    response_model=AttachmentProductCompositionResponse,
+)
+async def replace_product_composition_item(
+    project_id: str, module_key: str, item_id: str, payload: AttachmentSecondaryProductRequest,
+    db: AsyncSession = Depends(get_db_session),
+    storage: StorageService = Depends(get_storage_service),
+    settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentProductCompositionResponse:
+    _, _, _, _, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    module = next((item for item in modules if item.module_key == module_key), None)
+    if module is None:
+        raise AppError("attachment_composition.module_invalid", "选择了不支持的附图模块", 422)
+    await replace_secondary_product(
+        db, module=module, item_id=item_id, source_session_id=payload.source_session_id,
+        expected_state_version=payload.expected_state_version, user_id=principal.user.id,
+    )
+    await db.commit()
+    return await _changed_product_composition_response(
+        db, storage, settings, module_key=module_key, modules=modules,
+    )
+
+
+@router.delete(
+    "/projects/{project_id}/modules/{module_key}/product-composition/products/{item_id}",
+    response_model=AttachmentProductCompositionResponse,
+)
+async def delete_product_composition_item(
+    project_id: str, module_key: str, item_id: str,
+    expected_state_version: int = Query(ge=0),
+    db: AsyncSession = Depends(get_db_session),
+    storage: StorageService = Depends(get_storage_service),
+    settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentProductCompositionResponse:
+    _, _, _, _, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    module = next((item for item in modules if item.module_key == module_key), None)
+    if module is None:
+        raise AppError("attachment_composition.module_invalid", "选择了不支持的附图模块", 422)
+    await remove_secondary_product(
+        db, module=module, item_id=item_id,
+        expected_state_version=expected_state_version, user_id=principal.user.id,
+    )
+    await db.commit()
+    return await _changed_product_composition_response(
+        db, storage, settings, module_key=module_key, modules=modules,
+    )
 
 
 @router.post("/projects/{project_id}/generation-preview", response_model=AttachmentGenerationPreviewResponse)
@@ -609,10 +843,13 @@ async def update_module(
     if changed:
         module.operator_requirement_cn = next_requirement
         module.aspect_ratio = next_ratio
+        composition = await get_product_composition(db, module=module)
+        composition_version = await current_composition_version(db, composition)
         await add_module_version(
             db, plan=plan, module=module, action="manual_edit", user_id=principal.user.id,
             rule_snapshot=attachment_module_rule(dict(version.category_skill_snapshot or {}), module_key),
             plan_summary_cn=next_plan, prompt_cn=next_prompt,
+            product_composition_version_id=composition_version.id,
         )
         module.state_version += 1
         module.updated_by = principal.user.id

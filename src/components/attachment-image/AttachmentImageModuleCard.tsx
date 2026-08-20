@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { ListingImageTask, ListingImageTaskGroup } from '../../lib/listingWorkflowApi'
-import { listAttachmentPlanVersions, type AttachmentModulePlan, type AttachmentModuleResultState, type AttachmentPlanVersion } from '../../lib/attachmentPlanningApi'
+import type { ListingWorkflowSessionSummary } from '../../lib/listingWorkflowApi'
+import type { Asset } from '../../lib/contentApi'
+import { listAttachmentPlanVersions, type AttachmentModulePlan, type AttachmentModuleResultState, type AttachmentPlanVersion, type AttachmentProductComposition } from '../../lib/attachmentPlanningApi'
 import type {
   AttachmentModuleDefinition,
   AttachmentModuleDraft,
@@ -12,6 +14,7 @@ import type {
 } from '../../lib/attachmentPlanningApi'
 import AttachmentReferencePanel from './AttachmentReferencePanel'
 import AttachmentResultReviewPanel, { type AttachmentResultEntry } from './AttachmentResultReviewPanel'
+import AttachmentProductCompositionPanel from './AttachmentProductCompositionPanel'
 
 const statusLabels: Record<string, string> = {
   queued: '等待中',
@@ -37,6 +40,9 @@ interface Props {
   planningBusy?: boolean
   referenceState?: AttachmentModuleReferenceState
   productReferences?: AttachmentProductReferenceItem[]
+  productComposition?: AttachmentProductComposition
+  productCandidates?: ListingWorkflowSessionSummary[]
+  productCandidateAssets?: Record<string, Asset>
   tasks: ListingImageTask[]
   groups: ListingImageTaskGroup[]
   resultState?: AttachmentModuleResultState
@@ -48,6 +54,10 @@ interface Props {
   onAddReference: (slot: AttachmentReferenceSlotType, assetId: string) => Promise<void>
   onRemoveReference: (referenceId: string) => Promise<void>
   onAnalyzeReferences: () => Promise<void>
+  onProductModeChange: (mode: 'SINGLE' | 'MULTI') => Promise<void>
+  onAddSecondaryProduct: (sessionId: string) => Promise<void>
+  onReplaceSecondaryProduct: (itemId: string, sessionId: string) => Promise<void>
+  onRemoveSecondaryProduct: (itemId: string) => Promise<void>
   onReferenceError: (message: string) => void
   onGenerate: () => Promise<void>
   generationBusy?: boolean
@@ -72,6 +82,9 @@ export default function AttachmentImageModuleCard({
   planningBusy = false,
   referenceState,
   productReferences = [],
+  productComposition,
+  productCandidates = [],
+  productCandidateAssets = {},
   tasks,
   groups,
   resultState,
@@ -83,6 +96,10 @@ export default function AttachmentImageModuleCard({
   onAddReference,
   onRemoveReference,
   onAnalyzeReferences,
+  onProductModeChange,
+  onAddSecondaryProduct,
+  onReplaceSecondaryProduct,
+  onRemoveSecondaryProduct,
   onReferenceError,
   onGenerate,
   generationBusy = false,
@@ -206,6 +223,17 @@ export default function AttachmentImageModuleCard({
             </select>
           </label>
         </div>
+        {productComposition && <AttachmentProductCompositionPanel
+          composition={productComposition}
+          supportsMultiProduct={Boolean(planning?.supports_multi_product)}
+          candidates={productCandidates}
+          candidateAssets={productCandidateAssets}
+          busy={planningBusy}
+          onModeChange={onProductModeChange}
+          onAdd={onAddSecondaryProduct}
+          onReplace={onReplaceSecondaryProduct}
+          onRemove={onRemoveSecondaryProduct}
+        />}
         {referenceState && <AttachmentReferencePanel
           state={referenceState}
           productReferences={productReferences}

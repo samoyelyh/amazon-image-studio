@@ -40,6 +40,11 @@ import { AuthApiError } from '../lib/authApi'
 import {
   getAttachmentPlanning,
   getAttachmentReferences,
+  getAttachmentProductCompositions,
+  updateAttachmentProductMode,
+  addAttachmentSecondaryProduct,
+  replaceAttachmentSecondaryProduct,
+  removeAttachmentSecondaryProduct,
   addAttachmentReference,
   removeAttachmentReference,
   analyzeAttachmentReferences,
@@ -67,6 +72,7 @@ import {
   getAttachmentCreativePlanning,
   adoptAttachmentCreativeDirection,
   type AttachmentResultState,
+  type AttachmentProductComposition,
 } from '../lib/attachmentPlanningApi'
 import { randomUuid } from '../lib/randomUuid'
 
@@ -151,6 +157,9 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
   const [pollingPaused, setPollingPaused] = useState(false)
   const [planning, setPlanning] = useState<AttachmentPlanningState | null>(null)
   const [referenceState, setReferenceState] = useState<AttachmentReferenceState | null>(null)
+  const [productCompositions, setProductCompositions] = useState<AttachmentProductComposition[]>([])
+  const [productCandidates, setProductCandidates] = useState<ListingWorkflowSessionSummary[]>([])
+  const [productCandidateAssets, setProductCandidateAssets] = useState<Record<string, Asset>>({})
   const [referenceBusy, setReferenceBusy] = useState('')
   const [productPreprocessOpen, setProductPreprocessOpen] = useState(false)
   const [productPreprocessSaving, setProductPreprocessSaving] = useState(false)
@@ -196,13 +205,18 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         const stored = projectValue.prompt_config?.[ATTACHMENT_WORKBENCH_CONFIG_KEY]
         let nextDraft = normalizeAttachmentWorkbenchDraft(stored, availableCodes)
         const storedDraftSignature = JSON.stringify(nextDraft)
-        const [loadedAssets, taskGroups, planningValue, referenceValue, resultsValue] = await Promise.all([
+        const [loadedAssets, taskGroups, planningValue, referenceValue, resultsValue, compositionValue, sessionCandidates] = await Promise.all([
           Promise.all(projectValue.source_asset_ids.map((id) => getAsset(id).catch(() => null))),
           listListingImageTaskGroups(projectValue.id),
           getAttachmentPlanning(projectValue.id),
           getAttachmentReferences(projectValue.id),
           getAttachmentResultState(projectValue.id),
+          getAttachmentProductCompositions(projectValue.id),
+          listListingWorkflowSessions(100),
         ])
+        const candidateAssetRows = await Promise.all(sessionCandidates
+          .filter((item) => item.primary_asset_id)
+          .map((item) => getAsset(item.primary_asset_id!).catch(() => null)))
         if (!active) return
         nextDraft = {
           ...nextDraft,
@@ -217,6 +231,9 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         setGroups(taskGroups.items); setDraft(nextDraft); draftRef.current = nextDraft
         setPlanning(planningValue); setVisualDirection(planningValue.visual_direction_cn)
         setReferenceState(referenceValue)
+        setProductCompositions(compositionValue)
+        setProductCandidates(sessionCandidates.filter(isAttachmentSessionReady))
+        setProductCandidateAssets(Object.fromEntries(candidateAssetRows.filter((item): item is Asset => Boolean(item)).map((item) => [item.id, item])))
         setResultState(resultsValue)
         setVisualDirty(false); visualDirtyRef.current = false
         lastSavedSignature.current = storedDraftSignature
@@ -647,6 +664,58 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     }
   }
 
+  const applyProductComposition = async (next: AttachmentProductComposition) => {
+    setProductCompositions((current) => current.map((item) => item.module_key === next.module_key ? next : item))
+    const [nextPlanning, nextReferences] = await Promise.all([refreshPlanning(), project ? getAttachmentReferences(project.id) : null])
+    if (nextReferences) setReferenceState(nextReferences)
+    return nextPlanning
+  }
+
+  const changeProductMode = async (moduleKey: AttachmentModuleCode, mode: 'SINGLE' | 'MULTI') => {
+    if (!project) return
+    const current = productCompositions.find((item) => item.module_key === moduleKey)
+    if (!current) return
+    setPlanningBusy(`composition:${moduleKey}`)
+    try {
+      const next = await updateAttachmentProductMode(project.id, moduleKey, mode, current.state_version)
+      await applyProductComposition(next)
+      showToast(mode === 'MULTI' ? '已切换为多件商品。请添加商品后重新分析并策划。' : '已切回单件商品；附加商品记录已保留。', 'success')
+    } catch (reason) { showToast(errorText(reason), 'error'); throw reason } finally { setPlanningBusy('') }
+  }
+
+  const addSecondaryProduct = async (moduleKey: AttachmentModuleCode, sourceSessionId: string) => {
+    if (!project) return
+    const current = productCompositions.find((item) => item.module_key === moduleKey)
+    if (!current) return
+    setPlanningBusy(`composition:${moduleKey}`)
+    try {
+      const next = await addAttachmentSecondaryProduct(project.id, moduleKey, sourceSessionId, current.state_version)
+      await applyProductComposition(next); showToast('附加商品已加入，请重新分析参考素材。', 'success')
+    } catch (reason) { showToast(errorText(reason), 'error'); throw reason } finally { setPlanningBusy('') }
+  }
+
+  const replaceSecondaryProduct = async (moduleKey: AttachmentModuleCode, itemId: string, sourceSessionId: string) => {
+    if (!project) return
+    const current = productCompositions.find((item) => item.module_key === moduleKey)
+    if (!current) return
+    setPlanningBusy(`composition:${moduleKey}`)
+    try {
+      const next = await replaceAttachmentSecondaryProduct(project.id, moduleKey, itemId, sourceSessionId, current.state_version)
+      await applyProductComposition(next); showToast('附加商品已更换，请重新分析参考素材。', 'success')
+    } catch (reason) { showToast(errorText(reason), 'error'); throw reason } finally { setPlanningBusy('') }
+  }
+
+  const removeSecondaryProduct = async (moduleKey: AttachmentModuleCode, itemId: string) => {
+    if (!project) return
+    const current = productCompositions.find((item) => item.module_key === moduleKey)
+    if (!current) return
+    setPlanningBusy(`composition:${moduleKey}`)
+    try {
+      const next = await removeAttachmentSecondaryProduct(project.id, moduleKey, itemId, current.state_version)
+      await applyProductComposition(next); showToast('附加商品已移除，历史素材不会被删除。', 'success')
+    } catch (reason) { showToast(errorText(reason), 'error'); throw reason } finally { setPlanningBusy('') }
+  }
+
   const addReference = async (moduleKey: AttachmentModuleCode, slot: AttachmentReferenceSlotType, assetId: string) => {
     if (!project) return
     setReferenceBusy(`add:${moduleKey}:${slot}`)
@@ -781,7 +850,35 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         const tasks = (latestGroup?.tasks || []).filter((task) => task.image_type === definition.code)
         const available = phaseOneSupported && backend.available !== false
         const modulePlanning = planning?.modules.find((item) => item.module_key === definition.code)
-        return <AttachmentImageModuleCard key={definition.code} index={index + 1} definition={definition} draft={draft.modules[definition.code]} expanded={expanded.has(definition.code)} available={available} unavailableReason={phaseOneSupported ? String(backend.unavailable_reason || '') : '首期仅支持橄榄球衣。'} objective={String(backend.objective || '')} projectId={project.id} planning={modulePlanning} planningBusy={planningBusy !== '' || planningActive || referenceBusy !== ''} referenceState={referenceState?.modules.find((item) => item.module_key === definition.code)} productReferences={referenceState?.product_references || []} tasks={tasks} groups={attachmentGroups} resultState={resultState?.modules.find((item) => item.module_key === definition.code)} onToggleExpanded={() => setExpanded((current) => { const next = new Set(current); next.has(definition.code) ? next.delete(definition.code) : next.add(definition.code); return next })} onChange={(next) => updateModule(definition.code, next)} onSavePlanning={(input) => saveModulePlanning(definition.code, input)} onReplan={(requirement) => runModulePlanning(definition.code, requirement, false)} onOptimizePrompt={(requirement) => runModulePlanning(definition.code, requirement, true)} onAddReference={(slot, assetId) => addReference(definition.code, slot, assetId)} onRemoveReference={(referenceId) => removeReference(definition.code, referenceId)} onAnalyzeReferences={() => analyzeReferences(definition.code)} onReferenceError={(message) => showToast(message, 'error')} onGenerate={() => prepareGeneration([definition.code])} generationBusy={generationBusy !== ''} onApproveResult={approveResult} onRejectResult={rejectResult} onRetryTask={retryTask} onClearResults={() => clearResults([definition.code])} onResetModule={() => resetModuleState(definition.code)} onAdoptDirection={adoptCreativeDirection} />
+        return <AttachmentImageModuleCard
+          key={definition.code} index={index + 1} definition={definition}
+          draft={draft.modules[definition.code]} expanded={expanded.has(definition.code)}
+          available={available} unavailableReason={phaseOneSupported ? String(backend.unavailable_reason || '') : '首期仅支持橄榄球衣。'}
+          objective={String(backend.objective || '')} projectId={project.id} planning={modulePlanning}
+          planningBusy={planningBusy !== '' || planningActive || referenceBusy !== ''}
+          referenceState={referenceState?.modules.find((item) => item.module_key === definition.code)}
+          productReferences={referenceState?.product_references || []}
+          productComposition={productCompositions.find((item) => item.module_key === definition.code)}
+          productCandidates={productCandidates} productCandidateAssets={productCandidateAssets}
+          tasks={tasks} groups={attachmentGroups}
+          resultState={resultState?.modules.find((item) => item.module_key === definition.code)}
+          onToggleExpanded={() => setExpanded((current) => { const next = new Set(current); next.has(definition.code) ? next.delete(definition.code) : next.add(definition.code); return next })}
+          onChange={(next) => updateModule(definition.code, next)}
+          onSavePlanning={(input) => saveModulePlanning(definition.code, input)}
+          onReplan={(requirement) => runModulePlanning(definition.code, requirement, false)}
+          onOptimizePrompt={(requirement) => runModulePlanning(definition.code, requirement, true)}
+          onProductModeChange={(mode) => changeProductMode(definition.code, mode)}
+          onAddSecondaryProduct={(sourceSessionId) => addSecondaryProduct(definition.code, sourceSessionId)}
+          onReplaceSecondaryProduct={(itemId, sourceSessionId) => replaceSecondaryProduct(definition.code, itemId, sourceSessionId)}
+          onRemoveSecondaryProduct={(itemId) => removeSecondaryProduct(definition.code, itemId)}
+          onAddReference={(slot, assetId) => addReference(definition.code, slot, assetId)}
+          onRemoveReference={(referenceId) => removeReference(definition.code, referenceId)}
+          onAnalyzeReferences={() => analyzeReferences(definition.code)} onReferenceError={(message) => showToast(message, 'error')}
+          onGenerate={() => prepareGeneration([definition.code])} generationBusy={generationBusy !== ''}
+          onApproveResult={approveResult} onRejectResult={rejectResult} onRetryTask={retryTask}
+          onClearResults={() => clearResults([definition.code])} onResetModule={() => resetModuleState(definition.code)}
+          onAdoptDirection={adoptCreativeDirection}
+        />
       })}</div>
     </section>
 

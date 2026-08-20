@@ -36,6 +36,7 @@ CREATIVE_SYSTEM_PROMPT = """你是亚马逊电商附图创意策划专家。一�
 - TEMPLATE仅约束版式；SCENE仅约束环境；都不得覆盖PRODUCT。
 - 模块业务目标、当前比例、定制信息和真实性规则是硬约束。
 - 整套视觉方向只作弱参考，可以探索不同风格，不得让它抹掉创意差异。
+- 多商品时可以探索人物站位和互动，但Model A/B/C必须与PRIMARY/SECONDARY逐一对应，商品颜色、结构、Logo、印花、文字和号码禁止串位，PRIMARY必须视觉优先。
 - prompt_cn必须是一张独立成图的完整执行提示词，不得包含分析过程。"""
 
 
@@ -151,6 +152,8 @@ async def start_creative_planning(
             raise AppError("attachment_creative.product_required", f"{rule.get('name') or module_key}缺少商品参考图", 409)
         if reference_snapshot.get("roles") != (understanding.source_snapshot_json or {}).get("roles"):
             raise AppError("attachment_creative.reference_stale", f"{rule.get('name') or module_key}参考素材与分析版本不一致", 409)
+        if reference_snapshot.get("product_composition_version_id") != understanding.product_composition_version_id:
+            raise AppError("attachment_creative.composition_stale", f"{rule.get('name') or module_key}商品组合已更新，请重新分析", 409)
         ratio = str(draft.get("aspectRatio") or module.aspect_ratio)
         context = build_attachment_module_context(
             module_key=module_key,
@@ -160,12 +163,25 @@ async def start_creative_planning(
             aspect_ratio=ratio,
             operator_requirement_cn=module.operator_requirement_cn,
             reference_understanding=dict(understanding.structured_json or {}),
+            product_composition={
+                "mode": reference_snapshot.get("product_mode"),
+                "product_count": reference_snapshot.get("product_count"),
+                "model_count": reference_snapshot.get("model_count"),
+                "products": reference_snapshot.get("products", []),
+            },
         )
         context["direction_count"] = count
         context["visual_direction_soft_context"] = plan.visual_direction_cn
         contexts.append(context)
-        for role in ("PRODUCT", "PRINT", "TEMPLATE", "SCENE", "OTHER"):
-            reference_ids.extend(grouped.get(role, []))
+        ordered = reference_snapshot.get("execution_order")
+        if isinstance(ordered, list):
+            reference_ids.extend(
+                str(row.get("asset_id")) for row in ordered
+                if isinstance(row, dict) and row.get("asset_id")
+            )
+        else:
+            for role in ("PRODUCT", "PRINT", "TEMPLATE", "SCENE", "OTHER"):
+                reference_ids.extend(grouped.get(role, []))
         source_version = await db.scalar(select(AttachmentWorkbenchPlanVersion).where(
             AttachmentWorkbenchPlanVersion.module_plan_id == module.id,
             AttachmentWorkbenchPlanVersion.version_number == module.current_version_number,
@@ -178,6 +194,7 @@ async def start_creative_planning(
             "module_state_version": module.state_version,
             "reference_state_version": module.reference_state_version,
             "reference_understanding_id": understanding.id,
+            "product_composition_version_id": reference_snapshot.get("product_composition_version_id"),
             "source_version_id": source_version.id if source_version else None,
             "operator_requirement_cn": module.operator_requirement_cn,
             "rule_snapshot": rule,
@@ -330,6 +347,9 @@ async def creative_planning_response(
                 ai_job_id=job.id,
                 ai_model=job.model_code,
                 reference_understanding_id=str(item.get("reference_understanding_id") or "") or None,
+                product_composition_version_id=(
+                    str(item.get("product_composition_version_id") or "") or None
+                ),
                 created_by=job.created_by,
             )
             db.add(row)

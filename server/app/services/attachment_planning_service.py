@@ -50,11 +50,13 @@ SUITE_SYSTEM_PROMPT = """你是亚马逊电商附图策划专家。根据已确�
 - 不得虚构图片或商品分析中不存在的材质、功能、授权、认证或性能。
 - 运营补充要求不能覆盖商品真实性硬约束。
 - plan_summary_cn回答“这张图准备做成什么样”，不要写成技术说明。
-- prompt_cn不要机械复制整套视觉方向，要把方向转化为当前模块可执行的画面要求。"""
+- prompt_cn不要机械复制整套视觉方向，要把方向转化为当前模块可执行的画面要求。
+- 如果product_composition.mode为MULTI，必须明确人物数量等于商品数量、Model A/B/C与PRIMARY/SECONDARY逐一对应、主商品视觉优先，并逐件写明不可串用的商品身份特征。"""
 
 MODULE_REPLAN_SYSTEM_PROMPT = """你是亚马逊电商附图策划专家。只重新策划指定模块，必须继承当前整套视觉方向与商品真实性约束。
 只返回有效 JSON：{"module_key":"指定模块编码","plan_summary_cn":"中文方案","prompt_cn":"完整中文执行提示词"}。
-不得返回其他模块，不得解释，不得使用Markdown。提示词必须写明目标比例并针对该比例组织构图。"""
+不得返回其他模块，不得解释，不得使用Markdown。提示词必须写明目标比例并针对该比例组织构图。
+如果product_composition.mode为MULTI，必须明确人物数量等于商品数量、Model A/B/C与PRIMARY/SECONDARY逐一对应、主商品视觉优先，并逐件写明不可串用的商品身份特征。"""
 
 PROMPT_OPTIMIZE_SYSTEM_PROMPT = """你是亚马逊电商图片提示词编辑专家。保持当前模块方案方向不变，只重构并优化中文执行提示词。
 只返回有效 JSON：{"module_key":"指定模块编码","prompt_cn":"优化后的完整中文执行提示词"}。
@@ -86,6 +88,7 @@ def build_attachment_module_context(
     *, module_key: str, analysis_snapshot: dict[str, object], listing_snapshot: dict[str, object],
     skill_snapshot: dict[str, object], aspect_ratio: str, operator_requirement_cn: str,
     reference_understanding: dict[str, object] | None = None,
+    product_composition: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if module_key not in MODULE_INDEX:
         raise AppError("attachment_planning.module_invalid", "选择了不支持的附图模块", 422, {"module_key": module_key})
@@ -108,11 +111,15 @@ def build_attachment_module_context(
         "aspect_ratio": aspect_ratio,
         "operator_requirement_cn": operator_requirement_cn.strip(),
         "reference_understanding": reference_understanding,
+        "product_composition": product_composition or {"mode": "SINGLE", "products": []},
         "reference_priority": ["PRODUCT", "PRINT", "module_rule", "TEMPLATE", "SCENE", "OTHER"],
         "truth_constraints": [
             "商品参考图是商品外观的最高优先级事实来源",
             "不得改变颜色、结构、版型、领口、袖口、Logo、文字、号码、图案、印花和定制内容",
             "不得新增未经确认的功能、材质、授权、认证或性能宣称",
+            "多商品时，Model A对应主商品，Model B/C依次对应附加商品；每个模特只能穿对应商品",
+            "不同商品的颜色、结构、版型、Logo、文字、号码、图案、印花和定制信息不得串用",
+            "主商品必须处于核心视觉区域且最突出、最清晰；附加商品只用于增强系列感和多人场景",
         ],
     }
 
@@ -121,6 +128,7 @@ def build_suite_planning_input(
     *, version: ListingVersion, modules: list[AttachmentPlanningModuleInput], visual_direction_cn: str,
     current_modules: dict[str, AttachmentWorkbenchModulePlan] | None = None,
     reference_understandings: dict[str, dict[str, object]] | None = None,
+    product_compositions: dict[str, dict[str, object]] | None = None,
 ) -> tuple[str, str, dict[str, dict[str, object]]]:
     skill_snapshot = dict(version.category_skill_snapshot or {})
     contexts: dict[str, dict[str, object]] = {}
@@ -133,6 +141,7 @@ def build_suite_planning_input(
             aspect_ratio=item.aspect_ratio,
             operator_requirement_cn=item.operator_requirement_cn,
             reference_understanding=(reference_understandings or {}).get(item.module_key),
+            product_composition=(product_compositions or {}).get(item.module_key),
         )
         current = (current_modules or {}).get(item.module_key)
         if current is not None:
@@ -159,6 +168,7 @@ def build_module_planning_input(
     *, version: ListingVersion, module: AttachmentWorkbenchModulePlan, visual_direction_cn: str,
     action: str,
     reference_understanding: dict[str, object] | None = None,
+    product_composition: dict[str, object] | None = None,
 ) -> tuple[str, str, dict[str, object]]:
     context = build_attachment_module_context(
         module_key=module.module_key,
@@ -168,6 +178,7 @@ def build_module_planning_input(
         aspect_ratio=module.aspect_ratio,
         operator_requirement_cn=module.operator_requirement_cn,
         reference_understanding=reference_understanding,
+        product_composition=product_composition,
     )
     payload = {
         "visual_direction_cn": visual_direction_cn,
@@ -323,6 +334,7 @@ async def add_module_version(
     action: str, user_id: str, rule_snapshot: dict[str, object], job: Job | None = None,
     plan_summary_cn: str, prompt_cn: str,
     reference_understanding_id: str | None = None,
+    product_composition_version_id: str | None = None,
     source_version_id: str | None = None,
     derived_from_output_id: str | None = None,
 ) -> AttachmentWorkbenchPlanVersion:
@@ -340,6 +352,7 @@ async def add_module_version(
         generation_mode="standard", derived_from_output_id=derived_from_output_id,
         ai_job_id=job.id if job else None, ai_model=job.model_code if job else None, created_by=user_id,
         reference_understanding_id=reference_understanding_id,
+        product_composition_version_id=product_composition_version_id,
     )
     db.add(row)
     module.plan_summary_cn = plan_summary_cn
@@ -363,19 +376,36 @@ async def start_suite_planning(
 
     understanding_ids: dict[str, str] = {}
     understanding_contexts: dict[str, dict[str, object]] = {}
+    product_composition_version_ids: dict[str, str] = {}
+    product_compositions: dict[str, dict[str, object]] = {}
     references: list[str] = []
     for key in selected_keys:
         understanding_id, understanding = await current_understanding_context(db, indexed[key])
         if understanding_id and understanding:
             understanding_ids[key] = understanding_id
             understanding_contexts[key] = understanding
-        grouped, _ = await effective_reference_snapshot(db, plan=plan, module=indexed[key])
-        for slot in ("PRODUCT", "PRINT", "TEMPLATE", "SCENE", "OTHER"):
-            references.extend(grouped.get(slot, []))
+        grouped, reference_snapshot = await effective_reference_snapshot(db, plan=plan, module=indexed[key])
+        product_composition_version_ids[key] = str(reference_snapshot["product_composition_version_id"])
+        product_compositions[key] = {
+            "mode": reference_snapshot.get("product_mode"),
+            "product_count": reference_snapshot.get("product_count"),
+            "model_count": reference_snapshot.get("model_count"),
+            "products": reference_snapshot.get("products", []),
+        }
+        ordered = reference_snapshot.get("execution_order")
+        if isinstance(ordered, list):
+            references.extend(
+                str(row.get("asset_id")) for row in ordered
+                if isinstance(row, dict) and row.get("asset_id")
+            )
+        else:
+            for slot in ("PRODUCT", "PRINT", "TEMPLATE", "SCENE", "OTHER"):
+                references.extend(grouped.get(slot, []))
     references = list(dict.fromkeys(references))
     system_prompt, user_prompt, _ = build_suite_planning_input(
         version=version, modules=modules, visual_direction_cn=visual_direction_cn,
         current_modules=indexed, reference_understandings=understanding_contexts,
+        product_compositions=product_compositions,
     )
     target_plan_version = plan.state_version + 1
     target_module_versions = {key: indexed[key].state_version + 1 for key in selected_keys}
@@ -393,6 +423,7 @@ async def start_suite_planning(
                "metadata": {"workflow": "attachment_workbench_planning", "action": "suite_plan",
                             "planning_id": plan.id, "selected_modules": selected_keys,
                             "reference_understanding_ids": understanding_ids,
+                            "product_composition_version_ids": product_composition_version_ids,
                             "expected_plan_state_version": target_plan_version,
                             "expected_module_state_versions": target_module_versions}},
         billing_factors={"quality": "standard", "resolution": "text"}, client_item_id="attachment-suite",
@@ -431,16 +462,27 @@ async def start_module_planning(
     from app.services.attachment_reference_service import current_understanding_context, effective_reference_snapshot
 
     understanding_id, understanding = await current_understanding_context(db, module)
+    grouped, reference_snapshot = await effective_reference_snapshot(db, plan=plan, module=module)
+    product_composition_version_id = str(reference_snapshot["product_composition_version_id"])
     system_prompt, user_prompt, _ = build_module_planning_input(
         version=version, module=module, visual_direction_cn=plan.visual_direction_cn, action=action,
         reference_understanding=understanding,
+        product_composition={
+            "mode": reference_snapshot.get("product_mode"),
+            "product_count": reference_snapshot.get("product_count"),
+            "model_count": reference_snapshot.get("model_count"),
+            "products": reference_snapshot.get("products", []),
+        },
     )
     target_module_version = module.state_version + 1
     model_code = await resolve_bound_model_code(
         db, organization_id=project.organization_id, operation_code="listing.plan", capability="text_generation",
     )
-    grouped, _ = await effective_reference_snapshot(db, plan=plan, module=module)
+    ordered = reference_snapshot.get("execution_order")
     references = list(dict.fromkeys(
+        str(row.get("asset_id")) for row in ordered
+        if isinstance(row, dict) and row.get("asset_id")
+    )) if isinstance(ordered, list) else list(dict.fromkeys(
         asset_id for slot in ("PRODUCT", "PRINT", "TEMPLATE", "SCENE", "OTHER")
         for asset_id in grouped.get(slot, [])
     ))
@@ -455,6 +497,7 @@ async def start_module_planning(
                "metadata": {"workflow": "attachment_workbench_planning", "action": action,
                             "planning_id": plan.id, "module_key": module.module_key,
                             "reference_understanding_ids": {module.module_key: understanding_id} if understanding_id else {},
+                            "product_composition_version_ids": {module.module_key: product_composition_version_id},
                             "expected_plan_state_version": plan.state_version,
                             "expected_module_state_versions": {module.module_key: target_module_version}}},
         billing_factors={"quality": "standard", "resolution": "text"},
@@ -511,6 +554,10 @@ async def reconcile_attachment_planning(
         expected_modules = expected_modules if isinstance(expected_modules, dict) else {}
         understanding_ids = metadata.get("reference_understanding_ids")
         understanding_ids = understanding_ids if isinstance(understanding_ids, dict) else {}
+        product_composition_version_ids = metadata.get("product_composition_version_ids")
+        product_composition_version_ids = (
+            product_composition_version_ids if isinstance(product_composition_version_ids, dict) else {}
+        )
         stale = plan.state_version != expected_plan or any(
             item.planning_job_id != job.id or item.state_version != int(expected_modules.get(item.module_key, -1))
             for item in affected
@@ -541,6 +588,9 @@ async def reconcile_attachment_planning(
                         rule_snapshot=definition, job=job, plan_summary_cn=result["plan_summary_cn"],
                         prompt_cn=result["prompt_cn"],
                         reference_understanding_id=str(understanding_ids.get(item.module_key) or "") or None,
+                        product_composition_version_id=(
+                            str(product_composition_version_ids.get(item.module_key) or "") or None
+                        ),
                     )
                     item.derived_from_output_id = None
                 plan.planning_status = "ready"; plan.error_message = None
@@ -556,6 +606,9 @@ async def reconcile_attachment_planning(
                     plan_summary_cn=item.plan_summary_cn if optimize_only else result["plan_summary_cn"],
                     prompt_cn=result["prompt_cn"],
                     reference_understanding_id=str(understanding_ids.get(item.module_key) or "") or None,
+                    product_composition_version_id=(
+                        str(product_composition_version_ids.get(item.module_key) or "") or None
+                    ),
                 )
                 if not optimize_only:
                     item.derived_from_output_id = None

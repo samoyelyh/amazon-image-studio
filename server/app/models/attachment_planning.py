@@ -117,6 +117,78 @@ class AttachmentWorkbenchPlanVersion(UuidPrimaryKeyMixin, TimestampMixin, Base):
     reference_understanding_id: Mapped[str | None] = mapped_column(
         ForeignKey("attachment_reference_understandings.id", ondelete="SET NULL", use_alter=True), nullable=True
     )
+    product_composition_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("attachment_product_composition_versions.id", ondelete="SET NULL", use_alter=True), nullable=True
+    )
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+
+class AttachmentProductComposition(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "attachment_product_compositions"
+    __table_args__ = (
+        UniqueConstraint("module_plan_id", name="uq_attachment_product_composition_module"),
+        Index("ix_attachment_product_compositions_org_module", "organization_id", "module_plan_id"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    module_plan_id: Mapped[str] = mapped_column(ForeignKey("attachment_workbench_module_plans.id", ondelete="CASCADE"), nullable=False)
+    mode: Mapped[str] = mapped_column(String(20), default="SINGLE", nullable=False)
+    current_version_number: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    state_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+
+class AttachmentProductCompositionItem(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "attachment_product_composition_items"
+    __table_args__ = (
+        UniqueConstraint("composition_id", "source_session_id", name="uq_attachment_product_composition_session"),
+        UniqueConstraint("composition_id", "product_role", "display_order", name="uq_attachment_product_composition_role_order"),
+        Index("ix_attachment_product_composition_items_org_composition", "organization_id", "composition_id", "display_order"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    composition_id: Mapped[str] = mapped_column(ForeignKey("attachment_product_compositions.id", ondelete="CASCADE"), nullable=False)
+    product_role: Mapped[str] = mapped_column(String(20), nullable=False)
+    source_session_id: Mapped[str] = mapped_column(ForeignKey("listing_generation_sessions.id", ondelete="RESTRICT"), nullable=False)
+    source_project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    display_name_snapshot: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    category_name_snapshot: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+
+class AttachmentProductCompositionAsset(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "attachment_product_composition_assets"
+    __table_args__ = (
+        UniqueConstraint("composition_item_id", "asset_id", "view_role", name="uq_attachment_product_composition_asset_role"),
+        Index("ix_attachment_product_composition_assets_org_item", "organization_id", "composition_item_id", "sort_order"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    composition_item_id: Mapped[str] = mapped_column(ForeignKey("attachment_product_composition_items.id", ondelete="CASCADE"), nullable=False)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False)
+    source_asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=True)
+    view_role: Mapped[str] = mapped_column(String(20), default="front", nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    metadata_json: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+
+class AttachmentProductCompositionVersion(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "attachment_product_composition_versions"
+    __table_args__ = (
+        UniqueConstraint("composition_id", "version_number", name="uq_attachment_product_composition_version"),
+        Index("ix_attachment_product_composition_versions_org_composition", "organization_id", "composition_id", "version_number"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    composition_id: Mapped[str] = mapped_column(ForeignKey("attachment_product_compositions.id", ondelete="CASCADE"), nullable=False)
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    mode: Mapped[str] = mapped_column(String(20), nullable=False)
+    snapshot_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
 
 
@@ -185,5 +257,8 @@ class AttachmentReferenceUnderstanding(UuidPrimaryKeyMixin, TimestampMixin, Base
     source_snapshot_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
     ai_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
     ai_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    product_composition_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("attachment_product_composition_versions.id", ondelete="SET NULL"), nullable=True
+    )
     error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)

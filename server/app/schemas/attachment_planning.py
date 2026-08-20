@@ -64,6 +64,7 @@ class AttachmentModulePlanResponse(BaseModel):
     aspect_ratio: str
     source: str
     supports_creative: bool = False
+    supports_multi_product: bool = False
     derived_from_output_id: str | None = None
     current_version_number: int
     status: str
@@ -112,6 +113,7 @@ class AttachmentPlanVersionResponse(BaseModel):
     ai_job_id: str | None
     ai_model: str | None
     reference_understanding_id: str | None = None
+    product_composition_version_id: str | None = None
     created_by: str
     created_at: datetime
 
@@ -187,6 +189,45 @@ class AttachmentReferenceStateResponse(BaseModel):
     modules: list[AttachmentModuleReferenceStateResponse]
 
 
+class AttachmentProductCompositionAssetResponse(BaseModel):
+    id: str
+    asset: AssetResponse
+    source_asset_id: str | None
+    view_role: str
+    sort_order: int
+
+
+class AttachmentProductCompositionItemResponse(BaseModel):
+    id: str
+    product_role: Literal["PRIMARY", "SECONDARY"] | str
+    source_session_id: str
+    source_project_id: str | None
+    display_name: str
+    category_name: str
+    display_order: int
+    assets: list[AttachmentProductCompositionAssetResponse]
+
+
+class AttachmentProductCompositionResponse(BaseModel):
+    id: str
+    module_key: str
+    mode: Literal["SINGLE", "MULTI"] | str
+    current_version_id: str
+    current_version_number: int
+    state_version: int
+    products: list[AttachmentProductCompositionItemResponse]
+
+
+class AttachmentProductModeUpdate(BaseModel):
+    mode: Literal["SINGLE", "MULTI"]
+    expected_state_version: int = Field(ge=0)
+
+
+class AttachmentSecondaryProductRequest(BaseModel):
+    source_session_id: str = Field(min_length=36, max_length=36)
+    expected_state_version: int = Field(ge=0)
+
+
 class AttachmentGenerationSelectionRequest(BaseModel):
     selected_module_keys: list[str] = Field(min_length=1, max_length=6)
     creative_planning_job_id: str | None = Field(default=None, min_length=36, max_length=36)
@@ -218,6 +259,10 @@ class AttachmentGenerationModulePreviewResponse(BaseModel):
     reference_understanding_id: str
     reference_understanding_version: int
     reference_count: int
+    product_mode: Literal["SINGLE", "MULTI"] | str = "SINGLE"
+    product_count: int = 1
+    model_count: int = 1
+    products: list[dict[str, object]] = Field(default_factory=list)
     directions: list["AttachmentCreativeDirectionResponse"] = Field(default_factory=list)
 
 
