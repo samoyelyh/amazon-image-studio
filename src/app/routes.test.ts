@@ -13,15 +13,16 @@ describe('application routes', () => {
       .find((section) => section.label === '图片工作台')
       ?.items.map((item) => item.path)
     expect(workspacePaths).toEqual([
-      '/workspaces/listing',
       '/workspaces/attachment-images',
-      '/workspaces/listing/legacy',
       '/workspaces/listing/variations',
       '/workspaces/batch-tryon',
       '/workspaces/aplus',
       '/material-extract',
       '/workspaces/print-design',
     ])
+    expect(navigationSections.flatMap((section) => section.items).some((item) => (
+      item.path === appRoutes.listing || item.path === appRoutes.legacyListing
+    ))).toBe(false)
   })
 
   it('keeps quick generation inside the existing Listing workspace hierarchy', () => {

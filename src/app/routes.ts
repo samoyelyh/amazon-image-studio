@@ -54,9 +54,7 @@ export const navigationSections: NavigationSection[] = [
   {
     label: '图片工作台',
     items: [
-      { label: '品类 Listing', path: appRoutes.listing },
       { label: '附图生成工作台', shortLabel: '附图生成', path: appRoutes.attachmentImages },
-      { label: '原版 Listing 图', path: appRoutes.legacyListing },
       { label: '自由图片裂变', path: appRoutes.smartImageVariationHub },
       { label: '批量套图', path: appRoutes.batchTryOn },
       { label: 'A+ 图', path: appRoutes.aplus },
