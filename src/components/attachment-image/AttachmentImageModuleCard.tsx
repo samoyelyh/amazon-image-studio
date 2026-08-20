@@ -56,6 +56,7 @@ interface Props {
   onRetryTask: (task: ListingImageTask) => Promise<void>
   onClearResults: () => Promise<void>
   onResetModule: () => Promise<void>
+  onAdoptDirection: (entry: AttachmentResultEntry, expectedStateVersion: number) => Promise<void>
 }
 
 export default function AttachmentImageModuleCard({
@@ -90,6 +91,7 @@ export default function AttachmentImageModuleCard({
   onRetryTask,
   onClearResults,
   onResetModule,
+  onAdoptDirection,
 }: Props) {
   const [planSummary, setPlanSummary] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -130,7 +132,8 @@ export default function AttachmentImageModuleCard({
 
   const latestStatus = tasks[0]?.status || 'draft'
   const readyToGenerate = Boolean(
-    available && planning?.prompt_cn.trim() && planning?.plan_summary_cn.trim()
+    available
+    && (draft.generationMode === 'creative' || (planning?.prompt_cn.trim() && planning?.plan_summary_cn.trim()))
     && referenceState?.understanding?.status === 'ready' && !referenceState.reference_context_dirty,
   )
 
@@ -150,7 +153,7 @@ export default function AttachmentImageModuleCard({
           <span className="flex flex-wrap items-center gap-2">
             <strong className="text-sm text-gray-950 dark:text-white">{definition.name}</strong>
             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600 dark:bg-white/[0.08] dark:text-gray-300">{draft.aspectRatio}</span>
-            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">{draft.imageCount} 张 · 标准生成</span>
+            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">{draft.imageCount} {draft.generationMode === 'creative' ? '个方向 · 创意生成' : '张 · 标准生成'}</span>
             {tasks.length > 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">{statusLabels[latestStatus] || latestStatus}</span>}
             {planning && <span className={`rounded-full px-2 py-0.5 text-[11px] ${planning.status === 'failed' ? 'bg-red-50 text-red-700' : planning.status === 'planning' ? 'bg-violet-50 text-violet-700' : 'bg-gray-100 text-gray-600'}`}>{planning.status === 'planning' ? 'AI策划中' : planning.current_version_number ? `Prompt V${planning.current_version_number}` : '尚未策划'}</span>}
           </span>
@@ -164,7 +167,7 @@ export default function AttachmentImageModuleCard({
 
     {expanded && <div className="grid gap-5 border-t border-gray-100 p-4 dark:border-white/[0.06] sm:p-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(300px,.95fr)]">
       <section>
-        <AttachmentResultReviewPanel moduleKey={definition.code} moduleName={definition.name} groups={groups} state={resultState} busy={generationBusy} onApprove={onApproveResult} onReject={onRejectResult} onRetry={onRetryTask} onClear={onClearResults} onReset={onResetModule} />
+        <AttachmentResultReviewPanel moduleKey={definition.code} moduleName={definition.name} groups={groups} state={resultState} busy={generationBusy} moduleStateVersion={planning?.state_version || 0} onApprove={onApproveResult} onReject={onRejectResult} onRetry={onRetryTask} onClear={onClearResults} onReset={onResetModule} onAdoptDirection={onAdoptDirection} />
       </section>
 
       <section className="space-y-4">
@@ -172,7 +175,18 @@ export default function AttachmentImageModuleCard({
           <div className="text-xs font-semibold text-gray-500">当前模块目标</div>
           <p className="mt-2 text-sm leading-6 text-gray-700 dark:text-gray-200">{objective || definition.shortDescription}</p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className={`grid gap-3 ${planning?.supports_creative ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+          {planning?.supports_creative && <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">生成模式
+            <select
+              className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm dark:border-white/[0.1] dark:bg-gray-950"
+              value={draft.generationMode}
+              onChange={(event) => onChange({ ...draft, generationMode: event.target.value === 'creative' ? 'creative' : 'standard' })}
+            >
+              <option value="standard">标准生成</option>
+              <option value="creative">创意生成</option>
+            </select>
+            <span className="mt-1 block font-normal text-gray-400">{draft.generationMode === 'creative' ? '探索多个不同画面方向' : '同一方向生成多个候选'}</span>
+          </label>}
           <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">画面比例
             <select
               className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm dark:border-white/[0.1] dark:bg-gray-950"
@@ -182,13 +196,13 @@ export default function AttachmentImageModuleCard({
               {definition.allowedAspectRatios.map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}
             </select>
           </label>
-          <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">生成数量
+          <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">{draft.generationMode === 'creative' ? '创意方向数量' : '生成数量'}
             <select
               className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm dark:border-white/[0.1] dark:bg-gray-950"
               value={draft.imageCount}
               onChange={(event) => onChange({ ...draft, imageCount: Number(event.target.value) })}
             >
-              {[1, 2, 3, 4].map((count) => <option key={count} value={count}>{count} 张</option>)}
+              {[1, 2, 3, 4].map((count) => <option key={count} value={count}>{count} {draft.generationMode === 'creative' ? '个方向' : '张'}</option>)}
             </select>
           </label>
         </div>
@@ -211,15 +225,17 @@ export default function AttachmentImageModuleCard({
             <textarea className="mt-1 min-h-48 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal leading-6 dark:border-white/[0.1] dark:bg-gray-950" value={prompt} placeholder="AI策划后将在这里显示可直接用于后续生图的中文Prompt" onChange={(event) => { setPrompt(event.target.value); setDirty(true) }} />
           </label>
           {planning?.error_message && <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{planning.error_message}</div>}
+          {planning?.derived_from_output_id && <div className="rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-700">当前标准方案沿用自创意结果 {planning.derived_from_output_id.slice(0, 8)}；可以继续编辑后再生成。</div>}
+          {draft.generationMode === 'creative' && <div className="rounded-lg bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">当前标准方案与Prompt不会被覆盖。点击生成后，AI会一次策划 {draft.imageCount} 个不同方向，再进入确认。</div>}
           <div className="flex flex-wrap gap-2">
             <button type="button" className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50" disabled={!planning || planningBusy || saving || !dirty} onClick={() => { setSaving(true); void saveCurrent().catch(() => undefined).finally(() => setSaving(false)) }}>{saving ? '保存中…' : '保存修改'}</button>
             <button type="button" className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 disabled:opacity-50 dark:border-white/[0.1] dark:text-gray-200" disabled={!planning || planningBusy || saving} onClick={() => void saveThenRun(() => onReplan(operatorRequirement)).catch(() => undefined)}>AI重新策划</button>
             <button type="button" className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 disabled:opacity-50 dark:border-white/[0.1] dark:text-gray-200" disabled={!planning || !prompt.trim() || planningBusy || saving} onClick={() => void saveThenRun(() => onOptimizePrompt(operatorRequirement)).catch(() => undefined)}>AI优化 Prompt</button>
             <button type="button" className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50" disabled={!readyToGenerate || planningBusy || saving || generationBusy || dirty} onClick={() => void onGenerate()}>{generationBusy ? '准备确认…' : '生成当前模块'}</button>
           </div>
-          {!readyToGenerate && <p className="text-[11px] leading-5 text-amber-700">正式生成前需保存完整方案与Prompt，并完成当前参考素材分析。</p>}
+          {!readyToGenerate && <p className="text-[11px] leading-5 text-amber-700">正式生成前需完成当前参考素材分析{draft.generationMode === 'standard' ? '，并保存完整方案与Prompt' : ''}。</p>}
           {planning?.skill_source.can_view_rules && planning.skill_source.module_rule && <details><summary className="cursor-pointer text-xs font-semibold text-gray-500">管理员：查看规则来源</summary><pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-[11px] leading-5 text-gray-500 dark:bg-white/[0.03]">{JSON.stringify(planning.skill_source.module_rule, null, 2)}</pre></details>}
-          {historyOpen && <div className="space-y-2 border-t border-gray-100 pt-3 dark:border-white/[0.06]">{historyLoading ? <p className="text-xs text-gray-500">正在读取版本…</p> : versions.length ? versions.map((item) => <details key={item.id} className="rounded-lg bg-gray-50 px-3 py-2 dark:bg-white/[0.03]"><summary className="cursor-pointer text-xs font-semibold text-gray-700 dark:text-gray-200">V{item.version_number} · {item.action} · {new Date(item.created_at).toLocaleString('zh-CN', { hour12: false })}</summary><div className="mt-2 whitespace-pre-wrap text-xs leading-5 text-gray-500">{item.plan_summary_cn}{item.prompt_cn ? `\n\n${item.prompt_cn}` : ''}</div></details>) : <p className="text-xs text-gray-500">暂无历史版本。</p>}</div>}
+          {historyOpen && <div className="space-y-2 border-t border-gray-100 pt-3 dark:border-white/[0.06]">{historyLoading ? <p className="text-xs text-gray-500">正在读取版本…</p> : versions.length ? versions.map((item) => <details key={item.id} className="rounded-lg bg-gray-50 px-3 py-2 dark:bg-white/[0.03]"><summary className="cursor-pointer text-xs font-semibold text-gray-700 dark:text-gray-200">{item.generation_mode === 'creative' ? `创意方向 ${item.creative_direction_index}` : item.action === 'derived_from_creative' ? '沿用创意方向' : `标准 V${item.version_number}`} · {new Date(item.created_at).toLocaleString('zh-CN', { hour12: false })}</summary><div className="mt-2 whitespace-pre-wrap text-xs leading-5 text-gray-500">{item.plan_summary_cn}{item.prompt_cn ? `\n\n${item.prompt_cn}` : ''}</div></details>) : <p className="text-xs text-gray-500">暂无历史版本。</p>}</div>}
         </div>
       </section>
     </div>}

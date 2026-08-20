@@ -19,6 +19,8 @@ export interface AttachmentModulePlan {
   operator_requirement_cn: string
   aspect_ratio: string
   source: string
+  supports_creative: boolean
+  derived_from_output_id: string | null
   current_version_number: number
   status: string
   planning_job_id: string | null
@@ -52,6 +54,9 @@ export interface AttachmentPlanVersion {
   module_key: AttachmentModuleCode | null
   version_number: number
   action: string
+  generation_mode: 'standard' | 'creative' | string
+  creative_direction_index: number | null
+  derived_from_output_id: string | null
   visual_direction_cn: string | null
   plan_summary_cn: string | null
   prompt_cn: string | null
@@ -142,6 +147,25 @@ export interface AttachmentGenerationModulePreview {
   reference_understanding_id: string
   reference_understanding_version: number
   reference_count: number
+  directions: AttachmentCreativeDirection[]
+}
+
+export interface AttachmentCreativeDirection {
+  plan_version_id: string
+  module_key: AttachmentModuleCode
+  direction_index: number
+  plan_summary_cn: string
+  prompt_cn: string
+  aspect_ratio: string
+}
+
+export interface AttachmentCreativePlanningResult {
+  project_id: string
+  planning_job_id: string
+  status: 'queued' | 'running' | 'ready' | 'failed' | 'cancelled' | 'stale' | string
+  error_message: string | null
+  directions: AttachmentCreativeDirection[]
+  created: boolean
 }
 
 export interface AttachmentGenerationPreview {
@@ -195,9 +219,12 @@ export interface AttachmentOutputState {
   module_state_version: number
 }
 
-export function previewAttachmentGeneration(projectId: string, selectedModuleKeys: AttachmentModuleCode[]) {
+export function previewAttachmentGeneration(projectId: string, selectedModuleKeys: AttachmentModuleCode[], creativePlanningJobId?: string) {
   return authenticatedFetch<AttachmentGenerationPreview>(`/attachment-workbench/projects/${projectId}/generation-preview`, {
-    method: 'POST', body: JSON.stringify({ selected_module_keys: selectedModuleKeys }),
+    method: 'POST', body: JSON.stringify({
+      selected_module_keys: selectedModuleKeys,
+      creative_planning_job_id: creativePlanningJobId || null,
+    }),
   })
 }
 
@@ -205,9 +232,29 @@ export function generateAttachments(projectId: string, input: {
   selected_module_keys: AttachmentModuleCode[]
   snapshot_signature: string
   idempotency_key: string
+  creative_planning_job_id?: string
 }) {
   return authenticatedFetch<AttachmentGenerationResult>(`/attachment-workbench/projects/${projectId}/generate`, {
     method: 'POST', body: JSON.stringify(input),
+  })
+}
+
+export function startAttachmentCreativePlanning(projectId: string, selectedModuleKeys: AttachmentModuleCode[], idempotencyKey: string) {
+  return authenticatedFetch<AttachmentCreativePlanningResult>(`/attachment-workbench/projects/${projectId}/creative-plans`, {
+    method: 'POST', body: JSON.stringify({
+      selected_module_keys: selectedModuleKeys,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
+export function getAttachmentCreativePlanning(projectId: string, planningJobId: string) {
+  return authenticatedFetch<AttachmentCreativePlanningResult>(`/attachment-workbench/projects/${projectId}/creative-plans/${planningJobId}`)
+}
+
+export function adoptAttachmentCreativeDirection(projectId: string, outputId: string, expectedStateVersion: number) {
+  return authenticatedFetch<AttachmentPlanningState>(`/attachment-workbench/projects/${projectId}/outputs/${outputId}/adopt-direction`, {
+    method: 'POST', body: JSON.stringify({ expected_state_version: expectedStateVersion }),
   })
 }
 

@@ -276,6 +276,9 @@ async def task_group_response(
             plan_version_id=str(metadata.get("plan_version_id") or "") or None,
             prompt_version_id=str(metadata.get("prompt_version_id") or "") or None,
             reference_understanding_id=str(metadata.get("reference_understanding_id") or "") or None,
+            creative_direction_index=int(metadata.get("creative_direction_index") or 0) or None,
+            plan_summary_cn=str(metadata.get("plan_summary_snapshot") or ""),
+            prompt_cn=str(metadata.get("prompt_snapshot") or ""),
         ))
     return ListingImageTaskGroupResponse(
         id=group.id, batch_id=group.job_batch_id, listing_image_project_id=group.listing_image_project_id,

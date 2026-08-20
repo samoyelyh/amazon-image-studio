@@ -18,7 +18,7 @@ from app.models.attachment_planning import (
 from app.models.listing_workflow import ListingGenerationSession, ListingImageProject, ListingVersion
 from app.models.tasks import Job, JobBatch
 from app.schemas.tasks import BatchJobItemRequest, JobBatchSubmitRequest
-from app.services.attachment_planning_service import STANDARD_MODULE_CODES
+from app.services.attachment_planning_service import STANDARD_MODULE_CODES, attachment_module_rule
 from app.services.attachment_reference_service import effective_reference_snapshot, latest_reference_understanding
 from app.services.category_listing_service import resolve_bound_model_code
 from app.services.listing_image_task_group_service import build_input_asset_snapshot, create_group_for_batch
@@ -43,6 +43,14 @@ DELIVERY_SIZES = {
 
 
 @dataclass(frozen=True)
+class AttachmentGenerationDirection:
+    slot_index: int
+    plan_version: AttachmentWorkbenchPlanVersion
+    execution_prompt: str
+    creative_direction_index: int | None = None
+
+
+@dataclass(frozen=True)
 class AttachmentGenerationModule:
     module_key: str
     module_name: str
@@ -56,6 +64,7 @@ class AttachmentGenerationModule:
     grouped_references: dict[str, list[str]]
     reference_snapshot: dict[str, object]
     execution_prompt: str
+    directions: list[AttachmentGenerationDirection]
 
 
 @dataclass(frozen=True)
@@ -101,6 +110,7 @@ def build_attachment_execution_prompt(
     *, module: AttachmentWorkbenchModulePlan, plan: AttachmentWorkbenchPlan,
     version: AttachmentWorkbenchPlanVersion, understanding: AttachmentReferenceUnderstanding,
     grouped_references: dict[str, list[str]], aspect_ratio: str,
+    generation_mode: str = "standard",
 ) -> str:
     role_rows = _reference_index(grouped_references)
     role_lines = "\n".join(
@@ -108,6 +118,33 @@ def build_attachment_execution_prompt(
         for item in role_rows
     )
     understanding_text = json.dumps(understanding.structured_json or {}, ensure_ascii=False, separators=(",", ":"))
+    if generation_mode == "creative":
+        direction_block = f"""CREATIVE DIRECTION (primary module-level direction):
+{version.plan_summary_cn or module.plan_summary_cn}
+
+CREATIVE FINAL PROMPT:
+{version.prompt_cn or module.prompt_cn}
+
+GLOBAL VISUAL DIRECTION (soft context only; never erase the creative direction above):
+{plan.visual_direction_cn.strip()}"""
+    elif version.derived_from_output_id or module.derived_from_output_id:
+        direction_block = f"""CURRENT DERIVED MODULE DIRECTION (primary; overrides global style details):
+{version.plan_summary_cn or module.plan_summary_cn}
+
+CURRENT FINAL MODULE PROMPT:
+{version.prompt_cn or module.prompt_cn}
+
+GLOBAL VISUAL DIRECTION (soft context only; never erase the derived module direction above):
+{plan.visual_direction_cn.strip()}"""
+    else:
+        direction_block = f"""GLOBAL VISUAL DIRECTION:
+{plan.visual_direction_cn.strip()}
+
+CURRENT MODULE PLAN:
+{version.plan_summary_cn or module.plan_summary_cn}
+
+CURRENT FINAL MODULE PROMPT:
+{version.prompt_cn or module.prompt_cn}"""
     return f"""Create one production-ready Amazon listing image for module: {MODULE_NAMES.get(module.module_key, module.module_key)}.
 
 REFERENCE ORDER (must follow exactly):
@@ -120,14 +157,7 @@ ROLE RULES:
 - SCENE controls environment, atmosphere and lighting only.
 - OTHER is supplemental and never overrides PRODUCT.
 
-GLOBAL VISUAL DIRECTION:
-{plan.visual_direction_cn.strip()}
-
-CURRENT MODULE PLAN:
-{version.plan_summary_cn or module.plan_summary_cn}
-
-CURRENT FINAL MODULE PROMPT:
-{version.prompt_cn or module.prompt_cn}
+{direction_block}
 
 VALIDATED REFERENCE UNDERSTANDING:
 {understanding_text}
@@ -153,6 +183,7 @@ async def build_attachment_generation_preview(
     db: AsyncSession, *, project: ListingImageProject, session: ListingGenerationSession,
     version: ListingVersion, plan: AttachmentWorkbenchPlan,
     modules: list[AttachmentWorkbenchModulePlan], selected_module_keys: list[str],
+    creative_planning_job_id: str | None = None,
 ) -> AttachmentGenerationPreview:
     selected = list(dict.fromkeys(selected_module_keys))
     if not selected:
@@ -172,13 +203,26 @@ async def build_attachment_generation_preview(
     supported_ratios = _supported_ratios(dict(model.config_json or {}))
     indexed = {item.module_key: item for item in modules}
     prepared: list[AttachmentGenerationModule] = []
+    creative_versions = list((await db.scalars(select(AttachmentWorkbenchPlanVersion).where(
+        AttachmentWorkbenchPlanVersion.organization_id == project.organization_id,
+        AttachmentWorkbenchPlanVersion.workbench_plan_id == plan.id,
+        AttachmentWorkbenchPlanVersion.ai_job_id == creative_planning_job_id,
+        AttachmentWorkbenchPlanVersion.generation_mode == "creative",
+    ).order_by(
+        AttachmentWorkbenchPlanVersion.module_key,
+        AttachmentWorkbenchPlanVersion.creative_direction_index,
+    ))).all()) if creative_planning_job_id else []
 
     for module_key in selected:
         module = indexed[module_key]
         draft = _module_draft(project, module_key)
         mode = str(draft.get("generationMode") or "standard")
-        if mode != "standard":
-            raise AppError("attachment_generation.mode_unsupported", "Phase 4 仅支持标准生成模式", 422)
+        if mode not in {"standard", "creative"}:
+            raise AppError("attachment_generation.mode_invalid", "附图生成模式无效", 422)
+        if mode == "creative" and not bool(attachment_module_rule(
+            dict(version.category_skill_snapshot or {}), module_key,
+        ).get("supports_creative")):
+            raise AppError("attachment_generation.mode_unsupported", f"{MODULE_NAMES[module_key]}不支持创意生成", 422)
         try:
             image_count = int(draft.get("imageCount") or 1)
         except (TypeError, ValueError) as error:
@@ -195,14 +239,24 @@ async def build_attachment_generation_preview(
                 422,
                 {"aspect_ratio": aspect_ratio, "model_code": model_code},
             )
-        if module.current_version_number < 1 or not module.plan_summary_cn.strip() or not module.prompt_cn.strip():
-            raise AppError("attachment_generation.prompt_required", f"请先完成{MODULE_NAMES[module_key]}的方案和Prompt", 409)
-        plan_version = await db.scalar(select(AttachmentWorkbenchPlanVersion).where(
-            AttachmentWorkbenchPlanVersion.module_plan_id == module.id,
-            AttachmentWorkbenchPlanVersion.version_number == module.current_version_number,
-        ))
-        if plan_version is None:
-            raise AppError("attachment_generation.version_missing", f"{MODULE_NAMES[module_key]}当前版本不存在，请重新保存", 409)
+        if mode == "standard":
+            if module.current_version_number < 1 or not module.plan_summary_cn.strip() or not module.prompt_cn.strip():
+                raise AppError("attachment_generation.prompt_required", f"请先完成{MODULE_NAMES[module_key]}的方案和Prompt", 409)
+            plan_version = await db.scalar(select(AttachmentWorkbenchPlanVersion).where(
+                AttachmentWorkbenchPlanVersion.module_plan_id == module.id,
+                AttachmentWorkbenchPlanVersion.version_scope == f"module:{module_key}",
+                AttachmentWorkbenchPlanVersion.version_number == module.current_version_number,
+            ))
+            if plan_version is None:
+                raise AppError("attachment_generation.version_missing", f"{MODULE_NAMES[module_key]}当前版本不存在，请重新保存", 409)
+            selected_versions = [plan_version] * image_count
+        else:
+            if not creative_planning_job_id:
+                raise AppError("attachment_generation.creative_planning_required", "请先完成创意方向策划", 409)
+            selected_versions = [item for item in creative_versions if item.module_plan_id == module.id]
+            if len(selected_versions) != image_count:
+                raise AppError("attachment_generation.creative_directions_missing", f"{MODULE_NAMES[module_key]}创意方向数量不完整，请重新策划", 409)
+            plan_version = selected_versions[0]
         if module.reference_context_dirty:
             raise AppError("attachment_generation.reference_stale", f"{MODULE_NAMES[module_key]}参考素材已变化，请重新分析", 409)
         understanding = await latest_reference_understanding(db, module.id, ready_only=True)
@@ -214,15 +268,22 @@ async def build_attachment_generation_preview(
         if reference_snapshot.get("roles") != (understanding.source_snapshot_json or {}).get("roles"):
             raise AppError("attachment_generation.reference_stale", f"{MODULE_NAMES[module_key]}参考素材与分析版本不一致，请重新分析", 409)
         width, height = DELIVERY_SIZES[aspect_ratio]
+        directions = [AttachmentGenerationDirection(
+            slot_index=index,
+            plan_version=direction_version,
+            creative_direction_index=int(direction_version.creative_direction_index or index) if mode == "creative" else None,
+            execution_prompt=build_attachment_execution_prompt(
+                module=module, plan=plan, version=direction_version, understanding=understanding,
+                grouped_references=grouped, aspect_ratio=aspect_ratio, generation_mode=mode,
+            ),
+        ) for index, direction_version in enumerate(selected_versions, 1)]
         prepared.append(AttachmentGenerationModule(
             module_key=module_key, module_name=MODULE_NAMES[module_key], aspect_ratio=aspect_ratio,
             image_count=image_count, generation_mode=mode, width=width, height=height,
             plan_version=plan_version, understanding=understanding,
             grouped_references=grouped, reference_snapshot=reference_snapshot,
-            execution_prompt=build_attachment_execution_prompt(
-                module=module, plan=plan, version=plan_version, understanding=understanding,
-                grouped_references=grouped, aspect_ratio=aspect_ratio,
-            ),
+            execution_prompt=directions[0].execution_prompt,
+            directions=directions,
         ))
 
     signature_payload = {
@@ -235,8 +296,12 @@ async def build_attachment_generation_preview(
             "aspect_ratio": item.aspect_ratio,
             "image_count": item.image_count,
             "generation_mode": item.generation_mode,
-            "plan_version_id": item.plan_version.id,
-            "prompt_version_id": item.plan_version.id,
+            "directions": [{
+                "slot_index": direction.slot_index,
+                "plan_version_id": direction.plan_version.id,
+                "prompt_version_id": direction.plan_version.id,
+                "creative_direction_index": direction.creative_direction_index,
+            } for direction in item.directions],
             "reference_understanding_id": item.understanding.id,
             "reference_snapshot": item.reference_snapshot,
         } for item in prepared],
@@ -252,10 +317,12 @@ async def create_attachment_generation(
     session: ListingGenerationSession, version: ListingVersion, plan: AttachmentWorkbenchPlan,
     modules: list[AttachmentWorkbenchModulePlan], selected_module_keys: list[str],
     snapshot_signature: str, idempotency_key: str, user_id: str,
+    creative_planning_job_id: str | None = None,
 ) -> tuple[AttachmentGenerationPreview, JobBatch, list[Job], object, bool]:
     preview = await build_attachment_generation_preview(
         db, project=project, session=session, version=version, plan=plan,
         modules=modules, selected_module_keys=selected_module_keys,
+        creative_planning_job_id=creative_planning_job_id,
     )
     if snapshot_signature != preview.snapshot_signature:
         raise AppError("attachment_generation.snapshot_changed", "确认期间方案、Prompt、比例或参考素材已变化，请重新确认", 409)
@@ -263,10 +330,11 @@ async def create_attachment_generation(
     items: list[BatchJobItemRequest] = []
     for module in preview.modules:
         reference_ids = _flatten_references(module.grouped_references)
-        for slot_index in range(1, module.image_count + 1):
+        for direction in module.directions:
+            slot_index = direction.slot_index
             items.append(BatchJobItemRequest(
                 client_item_id=f"attachment:{module.module_key}:{slot_index}:{idempotency_key[-12:]}",
-                prompt=module.execution_prompt, reference_asset_ids=reference_ids,
+                prompt=direction.execution_prompt, reference_asset_ids=reference_ids,
                 size=f"{module.width}x{module.height}", aspect_ratio=module.aspect_ratio,
                 requested_width=module.width, requested_height=module.height,
                 quality="high", output_format="png",
@@ -281,14 +349,18 @@ async def create_attachment_generation(
                     "module_name": module.module_name,
                     "slot_index": slot_index,
                     "generation_mode": module.generation_mode,
-                    "plan_version_id": module.plan_version.id,
-                    "plan_version_number": module.plan_version.version_number,
-                    "prompt_version_id": module.plan_version.id,
-                    "prompt_version_number": module.plan_version.version_number,
+                    "plan_version_id": direction.plan_version.id,
+                    "plan_version_number": direction.plan_version.version_number,
+                    "prompt_version_id": direction.plan_version.id,
+                    "prompt_version_number": direction.plan_version.version_number,
+                    "plan_summary_snapshot": direction.plan_version.plan_summary_cn,
+                    "prompt_snapshot": direction.plan_version.prompt_cn,
+                    "creative_direction_index": direction.creative_direction_index,
+                    "creative_planning_job_id": creative_planning_job_id if module.generation_mode == "creative" else None,
                     "reference_understanding_id": module.understanding.id,
                     "reference_understanding_version": module.understanding.version_number,
                     "reference_snapshot": module.reference_snapshot,
-                    "effective_prompt_snapshot": module.execution_prompt,
+                    "effective_prompt_snapshot": direction.execution_prompt,
                     "requested_aspect_ratio": module.aspect_ratio,
                     "requested_width": module.width,
                     "requested_height": module.height,
@@ -327,8 +399,12 @@ async def create_attachment_generation(
         "aspect_ratio": item.aspect_ratio,
         "image_count": item.image_count,
         "generation_mode": item.generation_mode,
-        "plan_version_id": item.plan_version.id,
-        "prompt_version_id": item.plan_version.id,
+        "directions": [{
+            "slot_index": direction.slot_index,
+            "plan_version_id": direction.plan_version.id,
+            "prompt_version_id": direction.plan_version.id,
+            "creative_direction_index": direction.creative_direction_index,
+        } for direction in item.directions],
         "reference_understanding_id": item.understanding.id,
         "reference_snapshot": item.reference_snapshot,
     } for item in preview.modules]

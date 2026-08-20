@@ -41,6 +41,10 @@ from app.schemas.attachment_planning import (
     AttachmentGenerationModulePreviewResponse,
     AttachmentGenerationPreviewResponse,
     AttachmentGenerationResponse,
+    AttachmentCreativeDirectionResponse,
+    AttachmentCreativePlanningRequest,
+    AttachmentCreativePlanningResponse,
+    AttachmentAdoptDirectionRequest,
     AttachmentModuleKeysRequest,
     AttachmentOutputReviewRequest,
     AttachmentOutputStateResponse,
@@ -80,6 +84,7 @@ from app.services.attachment_generation_service import (
     create_attachment_generation,
 )
 from app.services.attachment_result_service import (
+    adopt_attachment_creative_direction,
     clear_attachment_final,
     discard_attachment_results,
     ensure_attachment_result_states,
@@ -88,6 +93,10 @@ from app.services.attachment_result_service import (
     retry_attachment_job,
     review_attachment_output,
     set_attachment_final,
+)
+from app.services.attachment_creative_service import (
+    creative_planning_response,
+    start_creative_planning,
 )
 from app.services.audit_service import add_audit_log
 from app.services.listing_image_task_group_service import task_group_response
@@ -158,7 +167,10 @@ def _response(
             id=item.id, module_key=item.module_key, module_name=module_names.get(item.module_key, item.module_key),
             plan_summary_cn=item.plan_summary_cn, prompt_cn=item.prompt_cn,
             operator_requirement_cn=item.operator_requirement_cn, aspect_ratio=item.aspect_ratio,
-            source=item.source, current_version_number=item.current_version_number,
+            source=item.source,
+            supports_creative=bool(attachment_module_rule(snapshot, item.module_key).get("supports_creative")),
+            derived_from_output_id=item.derived_from_output_id,
+            current_version_number=item.current_version_number,
             status=item.status, planning_job_id=item.planning_job_id, error_message=item.error_message,
             reference_context_dirty=item.reference_context_dirty,
             reference_state_version=item.reference_state_version,
@@ -267,6 +279,14 @@ def _generation_preview_response(
             reference_understanding_id=item.understanding.id,
             reference_understanding_version=item.understanding.version_number,
             reference_count=sum(len(values) for values in item.grouped_references.values()),
+            directions=[AttachmentCreativeDirectionResponse(
+                plan_version_id=direction.plan_version.id,
+                module_key=item.module_key,
+                direction_index=direction.creative_direction_index or direction.slot_index,
+                plan_summary_cn=str(direction.plan_version.plan_summary_cn or ""),
+                prompt_cn=str(direction.plan_version.prompt_cn or ""),
+                aspect_ratio=item.aspect_ratio,
+            ) for direction in item.directions] if item.generation_mode == "creative" else [],
         ) for item in preview.modules],
     )
 
@@ -302,6 +322,7 @@ async def preview_generation(
     preview = await build_attachment_generation_preview(
         db, project=project, session=listing_session, version=version, plan=plan,
         modules=modules, selected_module_keys=payload.selected_module_keys,
+        creative_planning_job_id=payload.creative_planning_job_id,
     )
     return _generation_preview_response(project, preview)
 
@@ -322,7 +343,7 @@ async def generate_attachments(
         db, settings, project=project, session=listing_session, version=version,
         plan=plan, modules=modules, selected_module_keys=payload.selected_module_keys,
         snapshot_signature=payload.snapshot_signature, idempotency_key=payload.idempotency_key,
-        user_id=principal.user.id,
+        user_id=principal.user.id, creative_planning_job_id=payload.creative_planning_job_id,
     )
     await db.commit()
     if created:
@@ -337,6 +358,53 @@ async def generate_attachments(
         module_keys=[item.module_key for item in preview.modules],
         total_images=preview.total_images, created=created,
     )
+
+
+@router.post(
+    "/projects/{project_id}/creative-plans",
+    response_model=AttachmentCreativePlanningResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def create_creative_plan(
+    project_id: str, payload: AttachmentCreativePlanningRequest,
+    db: AsyncSession = Depends(get_db_session), settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentCreativePlanningResponse:
+    project, listing_session, version, plan, modules = await _load_and_reconcile(
+        db, project_id=project_id, principal=principal,
+    )
+    job, created = await start_creative_planning(
+        db, settings, project=project, session=listing_session, version=version, plan=plan,
+        modules=modules, selected_module_keys=payload.selected_module_keys,
+        idempotency_key=payload.idempotency_key, user_id=principal.user.id,
+    )
+    await db.commit()
+    if created:
+        await dispatch_jobs(db, await due_jobs(db, settings, limit=1))
+    return AttachmentCreativePlanningResponse(
+        project_id=project.id, planning_job_id=job.id,
+        status="running" if job.status in {"running", "dispatching"} else "queued",
+        created=created,
+    )
+
+
+@router.get(
+    "/projects/{project_id}/creative-plans/{planning_job_id}",
+    response_model=AttachmentCreativePlanningResponse,
+)
+async def get_creative_plan(
+    project_id: str, planning_job_id: str,
+    db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.read")),
+) -> AttachmentCreativePlanningResponse:
+    project, _, _, plan, modules = await _load_and_reconcile(
+        db, project_id=project_id, principal=principal,
+    )
+    response = await creative_planning_response(
+        db, project=project, plan=plan, modules=modules, planning_job_id=planning_job_id,
+    )
+    await db.commit()
+    return response
 
 
 @router.post("/projects/{project_id}/modules/{module_key}/references", response_model=AttachmentReferenceStateResponse)
@@ -603,6 +671,33 @@ async def review_output(
     )
     await db.commit()
     return response
+
+
+@router.post(
+    "/projects/{project_id}/outputs/{output_id}/adopt-direction",
+    response_model=AttachmentPlanningResponse,
+)
+async def adopt_creative_direction(
+    project_id: str, output_id: str, payload: AttachmentAdoptDirectionRequest, request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentPlanningResponse:
+    project, _, version, plan, modules = await _load_and_reconcile(
+        db, project_id=project_id, principal=principal,
+    )
+    module = await adopt_attachment_creative_direction(
+        db, project=project, plan=plan, version=version, modules=modules,
+        output_id=output_id, expected_state_version=payload.expected_state_version,
+        user_id=principal.user.id,
+    )
+    add_audit_log(
+        db, request=request, actor_user_id=principal.user.id, organization_id=project.organization_id,
+        action="attachment_result.adopt_creative_direction",
+        resource_type="generated_output", resource_id=output_id,
+        metadata={"project_id": project.id, "module_key": module.module_key, "plan_version": module.current_version_number},
+    )
+    await db.commit()
+    return _response(project=project, version=version, plan=plan, modules=modules, principal=principal)
 
 
 @router.post(

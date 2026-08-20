@@ -12,6 +12,7 @@ from app.models.attachment_planning import (
     AttachmentModuleResultState,
     AttachmentWorkbenchModulePlan,
     AttachmentWorkbenchPlan,
+    AttachmentWorkbenchPlanVersion,
 )
 from app.models.content import GeneratedOutput
 from app.models.listing_workflow import ListingImageProject, ListingImageTaskGroup, ListingVersion
@@ -23,6 +24,8 @@ from app.schemas.attachment_planning import (
 )
 from app.schemas.tasks import BatchJobItemRequest, JobBatchSubmitRequest
 from app.services.attachment_planning_service import MODULE_INDEX
+from app.services.attachment_planning_service import add_module_version, attachment_module_rule
+from app.services.attachment_reference_service import effective_reference_snapshot
 from app.services.listing_image_task_group_service import create_group_for_batch
 from app.services.task_service import submit_batch
 
@@ -170,6 +173,75 @@ async def clear_attachment_final(
     return state
 
 
+async def adopt_attachment_creative_direction(
+    db: AsyncSession, *, project: ListingImageProject, plan: AttachmentWorkbenchPlan,
+    version: ListingVersion, modules: list[AttachmentWorkbenchModulePlan], output_id: str,
+    expected_state_version: int, user_id: str,
+) -> AttachmentWorkbenchModulePlan:
+    output, job, _, module_key = await _output_context(
+        db, project=project, output_id=output_id, lock=True,
+    )
+    metadata = job.input_json.get("metadata") if isinstance(job.input_json, dict) else None
+    metadata = metadata if isinstance(metadata, dict) else {}
+    if metadata.get("generation_mode") != "creative":
+        raise AppError("attachment_creative.adopt_source_invalid", "只有创意生成结果可以沿用方向", 422)
+    source_version_id = str(metadata.get("plan_version_id") or "")
+    source = await db.scalar(select(AttachmentWorkbenchPlanVersion).where(
+        AttachmentWorkbenchPlanVersion.id == source_version_id,
+        AttachmentWorkbenchPlanVersion.organization_id == project.organization_id,
+        AttachmentWorkbenchPlanVersion.workbench_plan_id == plan.id,
+        AttachmentWorkbenchPlanVersion.module_key == module_key,
+        AttachmentWorkbenchPlanVersion.generation_mode == "creative",
+    ))
+    if source is None or not source.plan_summary_cn or not source.prompt_cn:
+        raise AppError("attachment_creative.source_version_missing", "创意结果缺少可追溯的方案或Prompt版本", 409)
+    module = next((item for item in modules if item.module_key == module_key), None)
+    if module is None or module.id != source.module_plan_id:
+        raise AppError("attachment_creative.module_mismatch", "创意结果与当前模块不匹配", 422)
+    if module.state_version != expected_state_version:
+        raise AppError(
+            "attachment_planning.state_version_conflict", "该模块已被更新，请刷新后再沿用创意方向", 409,
+            {"expected": expected_state_version, "actual": module.state_version},
+        )
+    grouped, _ = await effective_reference_snapshot(db, plan=plan, module=module)
+    if not grouped.get("PRODUCT"):
+        raise AppError("attachment_creative.product_required", "当前模块缺少有效商品参考图，不能沿用方向", 409)
+
+    module.aspect_ratio = str(source.aspect_ratio or module.aspect_ratio)
+    await add_module_version(
+        db, plan=plan, module=module, action="derived_from_creative", user_id=user_id,
+        rule_snapshot=attachment_module_rule(dict(version.category_skill_snapshot or {}), module_key),
+        plan_summary_cn=str(source.plan_summary_cn), prompt_cn=str(source.prompt_cn),
+        reference_understanding_id=source.reference_understanding_id,
+        source_version_id=source.id, derived_from_output_id=output.id,
+    )
+    module.derived_from_output_id = output.id
+    module.source = "derived_from_creative"
+    module.status = "ready"
+    module.error_message = None
+    module.state_version += 1
+    module.updated_by = user_id
+    module.last_saved_at = datetime.now(UTC)
+
+    config = dict(project.prompt_config or {})
+    workbench = dict(config.get("attachment_workbench") or {})
+    drafts = dict(workbench.get("modules") or {})
+    current = dict(drafts.get(module_key) or {})
+    drafts[module_key] = {
+        **current,
+        "generationMode": "standard",
+        "aspectRatio": module.aspect_ratio,
+    }
+    workbench["modules"] = drafts
+    config["attachment_workbench"] = workbench
+    project.prompt_config = config
+    project.state_version += 1
+    project.last_saved_at = datetime.now(UTC)
+    project.updated_by = user_id
+    await db.flush()
+    return module
+
+
 async def attachment_outputs(
     db: AsyncSession, *, project: ListingImageProject, module_keys: list[str] | None = None,
 ) -> list[tuple[GeneratedOutput, Job, ListingImageTaskGroup, str]]:
@@ -268,6 +340,7 @@ async def reset_attachment_module(
     module.operator_requirement_cn = ""
     module.aspect_ratio = default_ratio
     module.source = "none"
+    module.derived_from_output_id = None
     module.current_version_number = 0
     module.planning_job_id = None
     module.status = "draft"

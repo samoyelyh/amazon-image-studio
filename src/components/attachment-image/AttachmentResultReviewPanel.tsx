@@ -26,6 +26,8 @@ interface Props {
   onRetry: (task: ListingImageTask) => Promise<void>
   onClear: () => Promise<void>
   onReset: () => Promise<void>
+  moduleStateVersion: number
+  onAdoptDirection: (entry: AttachmentResultEntry, expectedStateVersion: number) => Promise<void>
 }
 
 export function deriveAttachmentResultData(
@@ -66,14 +68,16 @@ function OutputCard({ entry, final, onOpen }: { entry: AttachmentResultEntry; fi
       <div className="absolute left-2 top-2 flex flex-wrap gap-1">
         {final && <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">最终采用</span>}
         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${status === 'approved' ? 'bg-emerald-600 text-white' : status === 'rejected' ? 'bg-red-600 text-white' : 'bg-gray-900/75 text-white'}`}>{reviewLabel[status]}</span>
+        {entry.task.generation_mode === 'creative' && <span className="rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white">创意 {entry.task.creative_direction_index || entry.task.slot_index}</span>}
       </div>
     </div>
-    <div className="p-2.5"><div className="text-xs font-semibold text-gray-800 dark:text-gray-100">候选 {entry.task.slot_index || entry.output.sequence_number + 1}</div><div className="mt-1 text-[11px] text-gray-500">任务组 #{entry.group.group_number} · {entry.output.width}×{entry.output.height}</div></div>
+    <div className="p-2.5"><div className="text-xs font-semibold text-gray-800 dark:text-gray-100">{entry.task.generation_mode === 'creative' ? `创意方向 ${entry.task.creative_direction_index || entry.task.slot_index}` : `候选 ${entry.task.slot_index || entry.output.sequence_number + 1}`}</div><div className="mt-1 text-[11px] text-gray-500">任务组 #{entry.group.group_number} · {entry.task.generation_mode === 'creative' ? '创意' : '标准'} · {entry.output.width}×{entry.output.height}</div></div>
   </article>
 }
 
 export default function AttachmentResultReviewPanel({
   moduleKey, moduleName, groups, state, busy, onApprove, onReject, onRetry, onClear, onReset,
+  moduleStateVersion, onAdoptDirection,
 }: Props) {
   const [selected, setSelected] = useState<AttachmentResultEntry | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -100,12 +104,15 @@ export default function AttachmentResultReviewPanel({
             <div className="grid grid-cols-2 gap-2 text-xs">{[
               ['状态', reviewLabel[selected.output.review_status || 'pending_review']], ['最终采用', selected.output.id === state?.current_final_output_id ? '是' : '否'],
               ['任务组', `#${selected.group.group_number}`], ['候选槽位', String(selected.task.slot_index || '-')],
+              ['生成模式', selected.task.generation_mode === 'creative' ? `创意方向 ${selected.task.creative_direction_index || selected.task.slot_index}` : '标准生成'],
               ['模型', selected.task.model_code], ['尺寸', `${selected.output.width}×${selected.output.height}`],
               ['提交时间', time(selected.task.created_at)], ['完成时间', time(selected.task.finished_at)],
             ].map(([label, value]) => <div key={label} className="rounded-lg bg-gray-50 p-2.5 dark:bg-white/[0.03]"><div className="text-gray-400">{label}</div><div className="mt-1 break-words font-semibold text-gray-700 dark:text-gray-200">{value}</div></div>)}</div>
-            <details className="rounded-xl border border-gray-200 p-3 dark:border-white/[0.08]"><summary className="cursor-pointer text-xs font-semibold">本次最终 Prompt 快照</summary><p className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap text-xs leading-5 text-gray-600 dark:text-gray-300">{selected.task.final_prompt}</p></details>
+            {selected.task.plan_summary_cn && <details open={selected.task.generation_mode === 'creative'} className="rounded-xl border border-gray-200 p-3 dark:border-white/[0.08]"><summary className="cursor-pointer text-xs font-semibold">{selected.task.generation_mode === 'creative' ? '本张创意方案' : '本次方案快照'}</summary><p className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap text-xs leading-5 text-gray-600 dark:text-gray-300">{selected.task.plan_summary_cn}</p></details>}
+            <details className="rounded-xl border border-gray-200 p-3 dark:border-white/[0.08]"><summary className="cursor-pointer text-xs font-semibold">本次方向 Prompt</summary><p className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap text-xs leading-5 text-gray-600 dark:text-gray-300">{selected.task.prompt_cn || selected.task.final_prompt}</p></details>
+            <details className="rounded-xl border border-gray-200 p-3 dark:border-white/[0.08]"><summary className="cursor-pointer text-xs font-semibold">完整执行 Prompt 快照</summary><p className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap text-xs leading-5 text-gray-600 dark:text-gray-300">{selected.task.final_prompt}</p></details>
             <details className="rounded-xl border border-gray-200 p-3 dark:border-white/[0.08]"><summary className="cursor-pointer text-xs font-semibold">本次输入素材（{selected.task.input_assets.length}）</summary><div className="mt-3 grid grid-cols-3 gap-2">{selected.task.input_assets.map((asset) => asset.url ? <AuthenticatedImage key={asset.asset_id} url={asset.url} alt={asset.filename} className="aspect-square w-full rounded-lg object-contain" placeholderClassName="aspect-square rounded-lg" /> : null)}</div></details>
-            <div className="flex flex-wrap gap-2"><button className={button} onClick={() => void downloadServerOutput(selected.output)}>下载</button><button className={button} disabled={busy} onClick={() => void onApprove(selected, false).then(() => setSelected(null))}>仅审核通过</button><button className={primary} disabled={busy} onClick={() => void onApprove(selected, true).then(() => setSelected(null))}>通过并设为最终</button><button className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50" disabled={busy} onClick={() => { const isFinal = selected.output.id === state?.current_final_output_id; if (isFinal && !window.confirm('这张图片当前是最终采用版本。确认打回并清除最终采用状态吗？')) return; void onReject(selected, isFinal).then(() => setSelected(null)) }}>打回</button></div>
+            <div className="flex flex-wrap gap-2"><button className={button} onClick={() => void downloadServerOutput(selected.output)}>下载</button>{selected.task.generation_mode === 'creative' && <button className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50" disabled={busy} onClick={() => void onAdoptDirection(selected, moduleStateVersion).then(() => setSelected(null))}>沿用此方向生成</button>}<button className={button} disabled={busy} onClick={() => void onApprove(selected, false).then(() => setSelected(null))}>仅审核通过</button><button className={primary} disabled={busy} onClick={() => void onApprove(selected, true).then(() => setSelected(null))}>通过并设为最终</button><button className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50" disabled={busy} onClick={() => { const isFinal = selected.output.id === state?.current_final_output_id; if (isFinal && !window.confirm('这张图片当前是最终采用版本。确认打回并清除最终采用状态吗？')) return; void onReject(selected, isFinal).then(() => setSelected(null)) }}>打回</button></div>
           </div>
         </div>
       </div>

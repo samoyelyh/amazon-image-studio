@@ -63,6 +63,8 @@ class AttachmentModulePlanResponse(BaseModel):
     operator_requirement_cn: str
     aspect_ratio: str
     source: str
+    supports_creative: bool = False
+    derived_from_output_id: str | None = None
     current_version_number: int
     status: str
     planning_job_id: str | None
@@ -96,6 +98,9 @@ class AttachmentPlanVersionResponse(BaseModel):
     module_key: str | None
     version_number: int
     action: Literal["phase1_import", "ai_suite_plan", "ai_module_replan", "ai_prompt_optimize", "manual_edit"] | str
+    generation_mode: Literal["standard", "creative"] | str = "standard"
+    creative_direction_index: int | None = None
+    derived_from_output_id: str | None = None
     visual_direction_cn: str | None
     plan_summary_cn: str | None
     prompt_cn: str | None
@@ -184,6 +189,7 @@ class AttachmentReferenceStateResponse(BaseModel):
 
 class AttachmentGenerationSelectionRequest(BaseModel):
     selected_module_keys: list[str] = Field(min_length=1, max_length=6)
+    creative_planning_job_id: str | None = Field(default=None, min_length=36, max_length=36)
 
     @model_validator(mode="after")
     def unique_modules(self) -> "AttachmentGenerationSelectionRequest":
@@ -212,6 +218,29 @@ class AttachmentGenerationModulePreviewResponse(BaseModel):
     reference_understanding_id: str
     reference_understanding_version: int
     reference_count: int
+    directions: list["AttachmentCreativeDirectionResponse"] = Field(default_factory=list)
+
+
+class AttachmentCreativePlanningRequest(AttachmentGenerationSelectionRequest):
+    idempotency_key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$", min_length=8, max_length=160)
+
+
+class AttachmentCreativeDirectionResponse(BaseModel):
+    plan_version_id: str
+    module_key: str
+    direction_index: int
+    plan_summary_cn: str
+    prompt_cn: str
+    aspect_ratio: str
+
+
+class AttachmentCreativePlanningResponse(BaseModel):
+    project_id: str
+    planning_job_id: str
+    status: Literal["queued", "running", "ready", "failed", "cancelled", "stale"] | str
+    error_message: str | None = None
+    directions: list[AttachmentCreativeDirectionResponse] = Field(default_factory=list)
+    created: bool = False
 
 
 class AttachmentGenerationPreviewResponse(BaseModel):
@@ -283,3 +312,7 @@ class AttachmentModuleKeysRequest(BaseModel):
 
 class AttachmentRetryJobRequest(BaseModel):
     idempotency_key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$", min_length=8, max_length=160)
+
+
+class AttachmentAdoptDirectionRequest(BaseModel):
+    expected_state_version: int = Field(ge=0)

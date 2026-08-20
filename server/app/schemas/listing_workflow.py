@@ -471,6 +471,9 @@ class ListingImageTaskResponse(BaseModel):
     plan_version_id: str | None = None
     prompt_version_id: str | None = None
     reference_understanding_id: str | None = None
+    creative_direction_index: int | None = None
+    plan_summary_cn: str = ""
+    prompt_cn: str = ""
 
 
 class ListingImageTaskGroupStatistics(BaseModel):

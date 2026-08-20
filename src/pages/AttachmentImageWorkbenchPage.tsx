@@ -63,6 +63,9 @@ import {
   retryAttachmentJob,
   reviewAttachmentOutput,
   setAttachmentFinal,
+  startAttachmentCreativePlanning,
+  getAttachmentCreativePlanning,
+  adoptAttachmentCreativeDirection,
   type AttachmentResultState,
 } from '../lib/attachmentPlanningApi'
 import { randomUuid } from '../lib/randomUuid'
@@ -159,6 +162,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
   const [generationPreview, setGenerationPreview] = useState<AttachmentGenerationPreview | null>(null)
   const [generationSelection, setGenerationSelection] = useState<AttachmentModuleCode[]>([])
   const [generationBusy, setGenerationBusy] = useState('')
+  const [generationCreativePlanningJobId, setGenerationCreativePlanningJobId] = useState<string | null>(null)
   const [resultState, setResultState] = useState<AttachmentResultState | null>(null)
   const generationIdempotencyRef = useRef('')
   const visualDirtyRef = useRef(false)
@@ -190,7 +194,8 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         const backendModules = projectValue.modules.filter((item) => typeof item.code === 'string')
         const availableCodes = backendModules.filter((item) => item.available !== false).map((item) => String(item.code))
         const stored = projectValue.prompt_config?.[ATTACHMENT_WORKBENCH_CONFIG_KEY]
-        const nextDraft = normalizeAttachmentWorkbenchDraft(stored, availableCodes)
+        let nextDraft = normalizeAttachmentWorkbenchDraft(stored, availableCodes)
+        const storedDraftSignature = JSON.stringify(nextDraft)
         const [loadedAssets, taskGroups, planningValue, referenceValue, resultsValue] = await Promise.all([
           Promise.all(projectValue.source_asset_ids.map((id) => getAsset(id).catch(() => null))),
           listListingImageTaskGroups(projectValue.id),
@@ -199,6 +204,14 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
           getAttachmentResultState(projectValue.id),
         ])
         if (!active) return
+        nextDraft = {
+          ...nextDraft,
+          modules: Object.fromEntries(attachmentModuleDefinitions.map((definition) => {
+            const supportsCreative = planningValue.modules.find((item) => item.module_key === definition.code)?.supports_creative
+            const moduleDraft = nextDraft.modules[definition.code]
+            return [definition.code, supportsCreative ? moduleDraft : { ...moduleDraft, generationMode: 'standard' }]
+          })) as AttachmentWorkbenchDraft['modules'],
+        }
         setSession(sessionValue); setProject(projectValue); projectRef.current = projectValue
         setAssets(loadedAssets.filter((item): item is Asset => Boolean(item)))
         setGroups(taskGroups.items); setDraft(nextDraft); draftRef.current = nextDraft
@@ -206,8 +219,8 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         setReferenceState(referenceValue)
         setResultState(resultsValue)
         setVisualDirty(false); visualDirtyRef.current = false
-        lastSavedSignature.current = JSON.stringify(nextDraft)
-        setSaveStatus('saved'); hydrated.current = true
+        lastSavedSignature.current = storedDraftSignature
+        setSaveStatus(storedDraftSignature === JSON.stringify(nextDraft) ? 'saved' : 'dirty'); hydrated.current = true
       } catch (reason) {
         if (active) setError(errorText(reason))
       } finally {
@@ -344,8 +357,27 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
       if (JSON.stringify(draftRef.current) !== lastSavedSignature.current) {
         throw new Error('工作台设置保存失败，请先保存成功后再生成。')
       }
-      const preview = await previewAttachmentGeneration(project.id, moduleKeys)
+      const creativeKeys = moduleKeys.filter((key) => draftRef.current?.modules[key].generationMode === 'creative')
+      let creativePlanningJobId: string | undefined
+      if (creativeKeys.length) {
+        const started = await startAttachmentCreativePlanning(
+          project.id, creativeKeys, `attachment-creative:${randomUuid()}`,
+        )
+        creativePlanningJobId = started.planning_job_id
+        showToast(`正在一次策划 ${creativeKeys.length} 个模块的创意方向，完成后会打开确认窗口。`, 'success')
+        let result = started
+        for (let attempt = 0; attempt < 240 && result.status !== 'ready'; attempt += 1) {
+          if (['failed', 'cancelled', 'stale'].includes(result.status)) {
+            throw new Error(result.error_message || '创意方向策划失败，请重试。')
+          }
+          await new Promise((resolve) => window.setTimeout(resolve, 1500))
+          result = await getAttachmentCreativePlanning(project.id, creativePlanningJobId)
+        }
+        if (result.status !== 'ready') throw new Error('创意方向策划等待超时，请稍后重试。')
+      }
+      const preview = await previewAttachmentGeneration(project.id, moduleKeys, creativePlanningJobId)
       generationIdempotencyRef.current = `attachment-generate:${randomUuid()}`
+      setGenerationCreativePlanningJobId(creativePlanningJobId || null)
       setGenerationSelection(moduleKeys)
       setGenerationPreview(preview)
     } catch (reason) {
@@ -363,8 +395,10 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         selected_module_keys: generationSelection,
         snapshot_signature: generationPreview.snapshot_signature,
         idempotency_key: generationIdempotencyRef.current,
+        creative_planning_job_id: generationCreativePlanningJobId || undefined,
       })
       setGenerationPreview(null)
+      setGenerationCreativePlanningJobId(null)
       setPollingPaused(false)
       await refreshGroups(project.id)
       showToast(`任务组 #${result.group_number} 已提交，共 ${result.total_images} 张。`, 'success')
@@ -430,6 +464,37 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
       setPollingPaused(false); await refreshGroups(project.id)
       showToast(`候选 ${task.slot_index || '-'} 已按原任务快照单独重试。`, 'success')
     } catch (reason) { showToast(errorText(reason), 'error') } finally { setGenerationBusy('') }
+  }
+
+  const adoptCreativeDirection = async (entry: AttachmentResultEntry, expectedStateVersion: number) => {
+    if (!project) return
+    setGenerationBusy(`adopt:${entry.output.id}`)
+    try {
+      const nextPlanning = await adoptAttachmentCreativeDirection(
+        project.id, entry.output.id, expectedStateVersion,
+      )
+      applyPlanning(nextPlanning)
+      const refreshedProject = await getCategoryOutputProject('listing-image', project.id)
+      const availableCodes = refreshedProject.modules
+        .filter((item) => item.available !== false)
+        .map((item) => String(item.code || ''))
+      const nextDraft = normalizeAttachmentWorkbenchDraft(
+        refreshedProject.prompt_config?.[ATTACHMENT_WORKBENCH_CONFIG_KEY], availableCodes,
+      )
+      projectRef.current = refreshedProject
+      setProject(refreshedProject)
+      draftRef.current = nextDraft
+      setDraft(nextDraft)
+      lastSavedSignature.current = JSON.stringify(nextDraft)
+      setSaveStatus('saved')
+      setExpanded((current) => new Set(current).add(entry.task.image_type as AttachmentModuleCode))
+      showToast('这个创意方向已复制为新的标准方案。你可以先微调方案或Prompt，再生成候选图。', 'success')
+    } catch (reason) {
+      showToast(errorText(reason), 'error')
+      await refreshPlanning().catch(() => undefined)
+    } finally {
+      setGenerationBusy('')
+    }
   }
 
   const clearResults = async (moduleKeys: AttachmentModuleCode[]) => {
@@ -698,7 +763,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         ['总任务', taskSummary.total], ['运行中', taskSummary.running], ['排队', taskSummary.queued], ['成功', taskSummary.succeeded], ['失败', taskSummary.failed], ['已中止', taskSummary.cancelled], ['已审核', `${resultState?.reviewed_outputs || 0}/${resultState?.total_outputs || 0}`], ['最终采用', resultState?.final_module_count || 0], ['活动批次', taskSummary.activeGroups],
       ].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-3 text-center dark:bg-white/[0.03]"><div className="text-xs text-gray-500">{label}</div><div className="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{value}</div></div>)}</div>
       {attachmentGroups.length > 0 && <div className="mt-4 space-y-2">{attachmentGroups.slice(0, 5).map((group) => <div key={group.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 px-3 py-2.5 text-xs dark:border-white/[0.06]">
-        <div><span className="font-semibold text-gray-800 dark:text-gray-100">{group.group_name}</span><span className="ml-2 text-gray-500">{group.statistics.succeeded + group.statistics.failed + group.statistics.cancelled}/{group.statistics.total} · {statusLabels[group.status] || group.status}</span></div>
+        <div><span className="font-semibold text-gray-800 dark:text-gray-100">{group.group_name}</span><span className="ml-2 text-gray-500">{group.tasks.some((task) => task.generation_mode === 'creative') ? '创意/混合' : '标准'} · {group.statistics.succeeded + group.statistics.failed + group.statistics.cancelled}/{group.statistics.total} · {statusLabels[group.status] || group.status}</span></div>
         <div className="flex gap-2">
           {!terminalGroupStatuses.has(group.status) && <button className="font-semibold text-red-600 disabled:opacity-50" disabled={generationBusy !== ''} onClick={() => void cancelGroup(group.id)}>中止</button>}
           {(group.statistics.failed > 0 || group.statistics.cancelled > 0) && <button className="font-semibold text-blue-600 disabled:opacity-50" disabled={generationBusy !== ''} onClick={() => void retryGroup(group.id)}>重试失败项</button>}
@@ -716,7 +781,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         const tasks = (latestGroup?.tasks || []).filter((task) => task.image_type === definition.code)
         const available = phaseOneSupported && backend.available !== false
         const modulePlanning = planning?.modules.find((item) => item.module_key === definition.code)
-        return <AttachmentImageModuleCard key={definition.code} index={index + 1} definition={definition} draft={draft.modules[definition.code]} expanded={expanded.has(definition.code)} available={available} unavailableReason={phaseOneSupported ? String(backend.unavailable_reason || '') : '首期仅支持橄榄球衣。'} objective={String(backend.objective || '')} projectId={project.id} planning={modulePlanning} planningBusy={planningBusy !== '' || planningActive || referenceBusy !== ''} referenceState={referenceState?.modules.find((item) => item.module_key === definition.code)} productReferences={referenceState?.product_references || []} tasks={tasks} groups={attachmentGroups} resultState={resultState?.modules.find((item) => item.module_key === definition.code)} onToggleExpanded={() => setExpanded((current) => { const next = new Set(current); next.has(definition.code) ? next.delete(definition.code) : next.add(definition.code); return next })} onChange={(next) => updateModule(definition.code, next)} onSavePlanning={(input) => saveModulePlanning(definition.code, input)} onReplan={(requirement) => runModulePlanning(definition.code, requirement, false)} onOptimizePrompt={(requirement) => runModulePlanning(definition.code, requirement, true)} onAddReference={(slot, assetId) => addReference(definition.code, slot, assetId)} onRemoveReference={(referenceId) => removeReference(definition.code, referenceId)} onAnalyzeReferences={() => analyzeReferences(definition.code)} onReferenceError={(message) => showToast(message, 'error')} onGenerate={() => prepareGeneration([definition.code])} generationBusy={generationBusy !== ''} onApproveResult={approveResult} onRejectResult={rejectResult} onRetryTask={retryTask} onClearResults={() => clearResults([definition.code])} onResetModule={() => resetModuleState(definition.code)} />
+        return <AttachmentImageModuleCard key={definition.code} index={index + 1} definition={definition} draft={draft.modules[definition.code]} expanded={expanded.has(definition.code)} available={available} unavailableReason={phaseOneSupported ? String(backend.unavailable_reason || '') : '首期仅支持橄榄球衣。'} objective={String(backend.objective || '')} projectId={project.id} planning={modulePlanning} planningBusy={planningBusy !== '' || planningActive || referenceBusy !== ''} referenceState={referenceState?.modules.find((item) => item.module_key === definition.code)} productReferences={referenceState?.product_references || []} tasks={tasks} groups={attachmentGroups} resultState={resultState?.modules.find((item) => item.module_key === definition.code)} onToggleExpanded={() => setExpanded((current) => { const next = new Set(current); next.has(definition.code) ? next.delete(definition.code) : next.add(definition.code); return next })} onChange={(next) => updateModule(definition.code, next)} onSavePlanning={(input) => saveModulePlanning(definition.code, input)} onReplan={(requirement) => runModulePlanning(definition.code, requirement, false)} onOptimizePrompt={(requirement) => runModulePlanning(definition.code, requirement, true)} onAddReference={(slot, assetId) => addReference(definition.code, slot, assetId)} onRemoveReference={(referenceId) => removeReference(definition.code, referenceId)} onAnalyzeReferences={() => analyzeReferences(definition.code)} onReferenceError={(message) => showToast(message, 'error')} onGenerate={() => prepareGeneration([definition.code])} generationBusy={generationBusy !== ''} onApproveResult={approveResult} onRejectResult={rejectResult} onRetryTask={retryTask} onClearResults={() => clearResults([definition.code])} onResetModule={() => resetModuleState(definition.code)} onAdoptDirection={adoptCreativeDirection} />
       })}</div>
     </section>
 
@@ -725,10 +790,10 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     </div>
     {generationPreview && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="确认正式生成">
       <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-5 shadow-2xl dark:bg-gray-900">
-        <div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold text-gray-950 dark:text-white">确认生成附图</h2><p className="mt-1 text-xs leading-5 text-gray-500">这是点击确认时的只读快照。确认后，每个候选槽位都会创建独立任务。</p></div><button className="text-xl text-gray-400" disabled={generationBusy === 'submit'} onClick={() => setGenerationPreview(null)}>×</button></div>
-        <div className="mt-4 space-y-2">{generationPreview.modules.map((item) => <div key={item.module_key} className="grid grid-cols-[1fr_auto] gap-3 rounded-xl border border-gray-200 p-3 text-sm dark:border-white/[0.08]"><div><div className="font-semibold text-gray-900 dark:text-white">{item.module_name}</div><div className="mt-1 text-xs text-gray-500">Prompt V{item.prompt_version_number} · 参考理解 V{item.reference_understanding_version} · {item.reference_count} 张参考图</div></div><div className="text-right"><div className="font-semibold">{item.image_count} 张</div><div className="mt-1 text-xs text-gray-500">{item.aspect_ratio} · {item.delivery_width}×{item.delivery_height}</div></div></div>)}</div>
+        <div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold text-gray-950 dark:text-white">确认生成附图</h2><p className="mt-1 text-xs leading-5 text-gray-500">这是点击确认时的只读快照。标准模式创建同方向候选；创意模式每个方向绑定自己的方案与Prompt。</p></div><button className="text-xl text-gray-400" disabled={generationBusy === 'submit'} onClick={() => { setGenerationPreview(null); setGenerationCreativePlanningJobId(null) }}>×</button></div>
+        <div className="mt-4 space-y-2">{generationPreview.modules.map((item) => <div key={item.module_key} className="rounded-xl border border-gray-200 p-3 text-sm dark:border-white/[0.08]"><div className="grid grid-cols-[1fr_auto] gap-3"><div><div className="flex items-center gap-2 font-semibold text-gray-900 dark:text-white">{item.module_name}<span className={`rounded-full px-2 py-0.5 text-[10px] ${item.generation_mode === 'creative' ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700'}`}>{item.generation_mode === 'creative' ? '创意生成' : '标准生成'}</span></div><div className="mt-1 text-xs text-gray-500">参考理解 V{item.reference_understanding_version} · {item.reference_count} 张参考图</div></div><div className="text-right"><div className="font-semibold">{item.image_count} {item.generation_mode === 'creative' ? '个方向 / 张' : '张候选'}</div><div className="mt-1 text-xs text-gray-500">{item.aspect_ratio} · {item.delivery_width}×{item.delivery_height}</div></div></div>{item.directions.length > 0 && <div className="mt-3 space-y-2 border-t border-gray-100 pt-3 dark:border-white/[0.06]">{item.directions.map((direction) => <details key={direction.plan_version_id} className="rounded-lg bg-violet-50/60 px-3 py-2 dark:bg-violet-500/5"><summary className="cursor-pointer text-xs font-semibold text-violet-700">创意方向 {direction.direction_index} · {direction.plan_summary_cn}</summary><p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-gray-600 dark:text-gray-300">{direction.prompt_cn}</p></details>)}</div>}</div>)}</div>
         <div className="mt-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">本次共生成 <strong>{generationPreview.total_images}</strong> 张，使用模型 <strong>{generationPreview.model_code}</strong>。任务提交后离开页面仍会继续执行。</div>
-        <div className="mt-5 flex justify-end gap-2"><button className={button} disabled={generationBusy === 'submit'} onClick={() => setGenerationPreview(null)}>返回修改</button><button className={primary} disabled={generationBusy === 'submit'} onClick={() => void confirmGeneration()}>{generationBusy === 'submit' ? '正在提交…' : '确认并开始生成'}</button></div>
+        <div className="mt-5 flex justify-end gap-2"><button className={button} disabled={generationBusy === 'submit'} onClick={() => { setGenerationPreview(null); setGenerationCreativePlanningJobId(null) }}>返回修改</button><button className={primary} disabled={generationBusy === 'submit'} onClick={() => void confirmGeneration()}>{generationBusy === 'submit' ? '正在提交…' : '确认并开始生成'}</button></div>
       </div>
     </div>}
     <BatchTryOnGarmentPreprocessDialog

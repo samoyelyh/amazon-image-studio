@@ -37,6 +37,7 @@ class AttachmentWorkbenchModulePlan(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("workbench_plan_id", "module_key", name="uq_attachment_module_plan_key"),
         Index("ix_attachment_module_plans_org_plan", "organization_id", "workbench_plan_id"),
+        Index("ix_attachment_module_plans_derived_output", "derived_from_output_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
@@ -47,6 +48,9 @@ class AttachmentWorkbenchModulePlan(UuidPrimaryKeyMixin, TimestampMixin, Base):
     operator_requirement_cn: Mapped[str] = mapped_column(Text, default="", nullable=False)
     aspect_ratio: Mapped[str] = mapped_column(String(20), nullable=False)
     source: Mapped[str] = mapped_column(String(40), default="none", nullable=False)
+    derived_from_output_id: Mapped[str | None] = mapped_column(
+        ForeignKey("generated_outputs.id", ondelete="SET NULL"), nullable=True,
+    )
     current_version_number: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     planning_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="draft", nullable=False)
@@ -83,6 +87,8 @@ class AttachmentWorkbenchPlanVersion(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("workbench_plan_id", "version_scope", "version_number", name="uq_attachment_plan_version_scope"),
         Index("ix_attachment_plan_versions_org_plan", "organization_id", "workbench_plan_id", "created_at"),
+        Index("ix_attachment_plan_versions_creative", "organization_id", "module_plan_id", "generation_mode", "created_at"),
+        Index("ix_attachment_plan_versions_derived_output", "derived_from_output_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
@@ -92,6 +98,11 @@ class AttachmentWorkbenchPlanVersion(UuidPrimaryKeyMixin, TimestampMixin, Base):
     module_key: Mapped[str | None] = mapped_column(String(60), nullable=True)
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
     action: Mapped[str] = mapped_column(String(40), nullable=False)
+    generation_mode: Mapped[str] = mapped_column(String(20), default="standard", nullable=False)
+    creative_direction_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    derived_from_output_id: Mapped[str | None] = mapped_column(
+        ForeignKey("generated_outputs.id", ondelete="SET NULL"), nullable=True,
+    )
     visual_direction_cn: Mapped[str | None] = mapped_column(Text, nullable=True)
     plan_summary_cn: Mapped[str | None] = mapped_column(Text, nullable=True)
     prompt_cn: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -323,6 +323,8 @@ async def add_module_version(
     action: str, user_id: str, rule_snapshot: dict[str, object], job: Job | None = None,
     plan_summary_cn: str, prompt_cn: str,
     reference_understanding_id: str | None = None,
+    source_version_id: str | None = None,
+    derived_from_output_id: str | None = None,
 ) -> AttachmentWorkbenchPlanVersion:
     scope = f"module:{module.module_key}"
     previous = await _previous_version(db, plan.id, scope, module.current_version_number)
@@ -333,7 +335,9 @@ async def add_module_version(
         plan_summary_cn=plan_summary_cn, prompt_cn=prompt_cn,
         operator_requirement_cn=module.operator_requirement_cn, aspect_ratio=module.aspect_ratio,
         selected_module_keys=[module.module_key], skill_version_id=plan.skill_version_id,
-        skill_rule_snapshot=rule_snapshot, source_version_id=previous.id if previous else None,
+        skill_rule_snapshot=rule_snapshot,
+        source_version_id=source_version_id if source_version_id is not None else (previous.id if previous else None),
+        generation_mode="standard", derived_from_output_id=derived_from_output_id,
         ai_job_id=job.id if job else None, ai_model=job.model_code if job else None, created_by=user_id,
         reference_understanding_id=reference_understanding_id,
     )
@@ -538,6 +542,7 @@ async def reconcile_attachment_planning(
                         prompt_cn=result["prompt_cn"],
                         reference_understanding_id=str(understanding_ids.get(item.module_key) or "") or None,
                     )
+                    item.derived_from_output_id = None
                 plan.planning_status = "ready"; plan.error_message = None
             else:
                 item = affected[0]
@@ -552,6 +557,8 @@ async def reconcile_attachment_planning(
                     prompt_cn=result["prompt_cn"],
                     reference_understanding_id=str(understanding_ids.get(item.module_key) or "") or None,
                 )
+                if not optimize_only:
+                    item.derived_from_output_id = None
             for item in affected:
                 item.status = "ready"; item.error_message = None; item.state_version += 1; item.last_saved_at = now
             plan.last_saved_at = now
@@ -569,7 +576,11 @@ async def list_attachment_versions(
         AttachmentWorkbenchPlanVersion.organization_id == organization_id,
         AttachmentWorkbenchPlanVersion.workbench_plan_id == plan_id,
     )
-    scope = f"module:{module_key}" if module_key else "suite"
-    return list((await db.scalars(statement.where(
-        AttachmentWorkbenchPlanVersion.version_scope == scope,
-    ).order_by(AttachmentWorkbenchPlanVersion.version_number.desc()))).all())
+    if module_key:
+        statement = statement.where(AttachmentWorkbenchPlanVersion.module_key == module_key)
+    else:
+        statement = statement.where(AttachmentWorkbenchPlanVersion.version_scope == "suite")
+    return list((await db.scalars(statement.order_by(
+        AttachmentWorkbenchPlanVersion.created_at.desc(),
+        AttachmentWorkbenchPlanVersion.version_number.desc(),
+    ))).all())

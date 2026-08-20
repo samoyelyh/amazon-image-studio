@@ -291,6 +291,9 @@ export interface ListingImageTask {
   plan_version_id: string | null
   prompt_version_id: string | null
   reference_understanding_id: string | null
+  creative_direction_index?: number | null
+  plan_summary_cn?: string
+  prompt_cn?: string
 }
 
 export interface FreeVariationContext {
