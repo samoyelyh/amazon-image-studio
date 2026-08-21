@@ -6,6 +6,7 @@ import type {
   AttachmentProductReferenceItem,
   AttachmentReferenceSlotType,
 } from '../../lib/attachmentPlanningApi'
+import { listAttachmentReferenceLibrary, type AttachmentReferenceLibraryItem } from '../../lib/attachmentReferenceLibraryApi'
 
 const slotCopy: Record<AttachmentReferenceSlotType, { label: string; description: string }> = {
   PRODUCT: { label: '商品图', description: '决定商品外观' },
@@ -24,7 +25,7 @@ interface Props {
   state: AttachmentModuleReferenceState
   productReferences: AttachmentProductReferenceItem[]
   busy?: boolean
-  onAdd: (slot: AttachmentReferenceSlotType, assetId: string) => Promise<void>
+  onAdd: (slot: AttachmentReferenceSlotType, assetId: string, options: { keywords: string[]; guidance: string; libraryItemId?: string }) => Promise<void>
   onRemove: (referenceId: string) => Promise<void>
   onAnalyze: () => Promise<void>
   onError: (message: string) => void
@@ -42,6 +43,11 @@ export default function AttachmentReferencePanel({
   const [uploadSlot, setUploadSlot] = useState<AttachmentReferenceSlotType>('OTHER')
   const [uploading, setUploading] = useState(false)
   const [understandingOpen, setUnderstandingOpen] = useState(false)
+  const [keywords, setKeywords] = useState('')
+  const [guidance, setGuidance] = useState('')
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const [libraryItems, setLibraryItems] = useState<AttachmentReferenceLibraryItem[]>([])
+  const [libraryLoading, setLibraryLoading] = useState(false)
 
   const pick = (slot: AttachmentReferenceSlotType) => {
     setUploadSlot(slot)
@@ -52,7 +58,10 @@ export default function AttachmentReferencePanel({
     setUploading(true)
     try {
       const asset = await uploadAsset(file, assetCategory[uploadSlot])
-      await onAdd(uploadSlot, asset.id)
+      await onAdd(uploadSlot, asset.id, {
+        keywords: keywords.split(/[，,]/).map((item) => item.trim()).filter(Boolean),
+        guidance: guidance.trim(),
+      })
     } catch (error) {
       onError(error instanceof Error ? error.message : '参考素材上传失败')
     } finally {
@@ -66,9 +75,10 @@ export default function AttachmentReferencePanel({
   return <section className="rounded-xl border border-gray-200 p-4 dark:border-white/[0.08]">
     <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file) }} />
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h3 className="text-sm font-semibold text-gray-900 dark:text-white">参考素材</h3><p className="mt-1 text-xs text-gray-500">按用途组织；移除只解除当前模块引用，不会删除原始 Asset。</p></div>
-      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${state.reference_context_dirty ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{state.reference_context_dirty ? '参考素材已更新' : understanding ? `理解 V${understanding.version_number}` : '等待分析'}</span>
+      <div><h3 className="text-sm font-semibold text-gray-900 dark:text-white">参考素材</h3><p className="mt-1 text-xs text-gray-500">上传或选择后自动后台分析；移除只解除当前模块引用，不会删除原始 Asset。</p></div>
+      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${state.reference_analysis_job_id ? 'bg-violet-50 text-violet-700' : state.reference_context_dirty ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{state.reference_analysis_job_id ? '分析中' : state.reference_context_dirty ? '等待自动分析' : understanding ? `已理解 V${understanding.version_number}` : '等待分析'}</span>
     </div>
+    <div className="mt-3 grid gap-2 sm:grid-cols-2"><label className="text-[11px] font-semibold text-gray-500">参考关键词（逗号分隔）<input value={keywords} onChange={(event) => setKeywords(event.target.value)} placeholder="构图、俯拍、暖色光线" className="mt-1 w-full rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-normal dark:border-white/[0.1] dark:bg-gray-950" /></label><label className="text-[11px] font-semibold text-gray-500">参考 Guidance<input value={guidance} onChange={(event) => setGuidance(event.target.value)} placeholder="重点参考与禁止继承内容" className="mt-1 w-full rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-normal dark:border-white/[0.1] dark:bg-gray-950" /></label></div>
     <div className="mt-4 space-y-3">{state.slot_definitions.map((definition) => {
       const slot = definition.slot_type
       const explicit = state.references.filter((item) => item.slot_type === slot)
@@ -84,10 +94,12 @@ export default function AttachmentReferencePanel({
       </div>
     })}</div>
     <div className="mt-4 flex flex-wrap items-center gap-2">
-      <button type="button" disabled={busy || uploading || Boolean(state.reference_analysis_job_id)} onClick={() => void onAnalyze()} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 disabled:opacity-40">{state.reference_analysis_job_id ? '参考素材分析中…' : understanding ? '重新分析参考素材' : '分析参考素材'}</button>
+      <button type="button" disabled={busy || uploading} onClick={() => { const next = !libraryOpen; setLibraryOpen(next); if (next && !libraryItems.length) { setLibraryLoading(true); void listAttachmentReferenceLibrary(state.module_key).then(setLibraryItems).catch((error) => onError(error instanceof Error ? error.message : '读取参考图库失败')).finally(() => setLibraryLoading(false)) } }} className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700">{libraryOpen ? '收起参考图库' : '从参考图库选择'}</button>
+      {understanding?.status === 'failed' && <button type="button" disabled={busy || uploading || Boolean(state.reference_analysis_job_id)} onClick={() => void onAnalyze()} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 disabled:opacity-40">重新分析</button>}
       {understanding && <button type="button" onClick={() => setUnderstandingOpen((value) => !value)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 dark:border-white/[0.1] dark:text-gray-300">{understandingOpen ? '收起理解摘要' : '参考图理解摘要'}</button>}
       {understanding?.status === 'failed' && <span className="text-xs text-red-600">{understanding.error_message || '参考素材分析失败，可重试'}</span>}
     </div>
+    {libraryOpen && <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/40 p-3"><div className="text-xs font-semibold text-violet-800">当前模块参考图库</div>{libraryLoading ? <p className="mt-3 text-xs text-gray-500">正在读取…</p> : libraryItems.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{libraryItems.map((item) => <button key={item.id} type="button" disabled={busy || item.understanding?.status !== 'ready'} onClick={() => void onAdd(item.reference_role, item.asset.id, { keywords: item.tags, guidance: item.guidance, libraryItemId: item.id })} className="flex gap-3 rounded-xl border border-white bg-white p-2 text-left shadow-sm disabled:opacity-50"><AuthenticatedImage url={item.asset.url} alt={item.name} className="h-14 w-14 rounded-lg object-cover" /><span className="min-w-0"><span className="block truncate text-xs font-semibold text-gray-900">{item.name}</span><span className="mt-1 block text-[10px] text-gray-500">{item.reference_role} · {item.understanding?.status === 'ready' ? '已预分析' : '分析中'}</span></span></button>)}</div> : <p className="mt-3 text-xs text-gray-500">当前模块还没有已启用的公共参考图。</p>}</div>}
     {understandingOpen && understanding && <div className="mt-3 space-y-2 rounded-xl bg-blue-50/60 p-3 text-xs leading-5 text-gray-700 dark:bg-blue-500/5 dark:text-gray-200">
       <div className="font-semibold">Reference Understanding V{understanding.version_number}</div>
       {(['product', 'template', 'scene', 'print', 'other'] as const).map((key) => summaryText(structured[key]) ? <div key={key}><span className="font-semibold uppercase text-blue-700">{key}</span> · {summaryText(structured[key])}</div> : null)}

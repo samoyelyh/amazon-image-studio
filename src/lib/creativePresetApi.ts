@@ -69,6 +69,9 @@ export interface AIModelPreset {
   sort_order: number
   is_active: boolean
   is_published: boolean
+  source_type: string
+  owner_user_id: string | null
+  generation_parameters: Record<string, unknown>
   identity_prompt: string | null
   generation_prompt: string | null
   negative_constraints: string | null
@@ -91,9 +94,34 @@ export interface AttachmentCreativeContext {
   planning_stale: boolean
 }
 
+export interface AttachmentModuleModelContext {
+  module_key: string
+  selection_mode: 'inherit' | 'recommended' | 'selected' | 'none'
+  effective_selection_mode: string
+  inherited: boolean
+  selected_identity_version_ids: string[]
+}
+
 export const listVisualPresets = () => authenticatedFetch<VisualPreset[]>('/creative-presets/visual')
 export const listThemePresets = () => authenticatedFetch<ThemePreset[]>('/creative-presets/themes')
 export const listAIModelPresets = () => authenticatedFetch<AIModelPreset[]>('/creative-presets/models')
+export const getAIModelPreset = (id: string) => authenticatedFetch<AIModelPreset>(`/creative-presets/models/${id}`)
+export function generatePersonalAIModel(input: {
+  idempotency_key: string
+  quick_type: string
+  display_name: string
+  gender_presentation: string
+  age_range: '18-24' | '25-30' | '30-39' | '40-49' | '50+'
+  body_type: 'slim' | 'natural' | 'fit' | 'athletic' | 'strong' | 'tall'
+  commercial_style: 'amazon_ecommerce' | 'sports' | 'lifestyle' | 'streetwear' | 'premium_commercial'
+  personality: 'natural' | 'sunny' | 'mature' | 'friendly' | 'confident' | 'cool' | 'energetic' | 'premium'
+  hair_style: string
+  expression: 'neutral' | 'subtle_smile' | 'confident' | 'relaxed'
+  recommended_usage: Array<'stadium' | 'gift' | 'casual' | 'sports' | 'family' | 'street'>
+}) {
+  return authenticatedFetch<AIModelPreset>('/creative-presets/models/generate', { method: 'POST', body: JSON.stringify(input) })
+}
+export const savePersonalAIModel = (id: string) => authenticatedFetch<AIModelPreset>(`/creative-presets/models/${id}/save-personal`, { method: 'POST' })
 export const getAttachmentCreativeContext = (projectId: string) =>
   authenticatedFetch<AttachmentCreativeContext>(`/attachment-workbench/projects/${projectId}/creative-context`)
 
@@ -106,6 +134,18 @@ export function updateAttachmentCreativeContext(projectId: string, input: {
 }) {
   return authenticatedFetch<AttachmentCreativeContext>(`/attachment-workbench/projects/${projectId}/creative-context`, {
     method: 'PATCH', body: JSON.stringify(input),
+  })
+}
+
+export const getAttachmentModuleModelContext = (projectId: string, moduleKey: string) =>
+  authenticatedFetch<AttachmentModuleModelContext>(`/attachment-workbench/projects/${projectId}/modules/${moduleKey}/model-context`)
+
+export function updateAttachmentModuleModelContext(projectId: string, moduleKey: string, input: {
+  selection_mode: AttachmentModuleModelContext['selection_mode']
+  selected_model_identity_version_ids: string[]
+}) {
+  return authenticatedFetch<AttachmentModuleModelContext>(`/attachment-workbench/projects/${projectId}/modules/${moduleKey}/model-context`, {
+    method: 'PUT', body: JSON.stringify(input),
   })
 }
 

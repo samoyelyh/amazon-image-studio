@@ -4,6 +4,7 @@ import AttachmentImageModuleCard from '../components/attachment-image/Attachment
 import type { AttachmentResultEntry } from '../components/attachment-image/AttachmentResultReviewPanel'
 import AttachmentMaterialSaveDialog from '../components/attachment-image/AttachmentMaterialSaveDialog'
 import AttachmentCreativeContextPanel from '../components/attachment-image/AttachmentCreativeContextPanel'
+import AttachmentProductIdentityPanel from '../components/attachment-image/AttachmentProductIdentityPanel'
 import BatchTryOnGarmentPreprocessDialog, { type GarmentReferencePreview } from '../components/BatchTryOnGarmentPreprocessDialog'
 import AuthenticatedImage from '../components/category-listing/AuthenticatedImage'
 import {
@@ -43,6 +44,9 @@ import {
   getAttachmentPlanning,
   getAttachmentReferences,
   getAttachmentProductCompositions,
+  getAttachmentProductIdentityLock,
+  reextractAttachmentProductIdentityLock,
+  updateAttachmentProductIdentityLock,
   updateAttachmentProductMode,
   addAttachmentSecondaryProduct,
   replaceAttachmentSecondaryProduct,
@@ -75,6 +79,7 @@ import {
   adoptAttachmentCreativeDirection,
   type AttachmentResultState,
   type AttachmentProductComposition,
+  type AttachmentProductIdentityLock,
 } from '../lib/attachmentPlanningApi'
 import { randomUuid } from '../lib/randomUuid'
 import {
@@ -124,6 +129,7 @@ function summaryTitle(session: ListingWorkflowSessionSummary) {
 function SessionHub() {
   const navigate = useNavigate()
   const [sessions, setSessions] = useState<ListingWorkflowSessionSummary[]>([])
+  const [selectedSessionId, setSelectedSessionId] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -137,6 +143,7 @@ function SessionHub() {
   }, [])
 
   const readySessions = sessions.filter(isAttachmentSessionReady)
+  const selected = readySessions.find((item) => item.id === selectedSessionId)
   return <div className="space-y-5 pb-12 pt-6">
     <header className="overflow-hidden rounded-2xl bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-600 p-6 text-white shadow-sm">
       <div className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-100">Listing Visual Production</div>
@@ -148,12 +155,19 @@ function SessionHub() {
 
     {error && <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</div>}
     <section className={panel}>
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold text-gray-950 dark:text-white">选择商品</h2><p className="mt-1 text-xs text-gray-500">这里只显示已经确认并保存 Listing 版本的 Session；状态进入生成中后仍可继续打开。</p></div><span className="text-xs text-gray-500">可用 {readySessions.length} 个</span></div>
-      {loading && <div className="mt-5 rounded-xl bg-gray-50 p-5 text-center text-sm text-gray-500 dark:bg-white/[0.03]">正在读取商品 Session…</div>}
-      {!loading && readySessions.length > 0 && <div className="mt-4 grid gap-3 lg:grid-cols-2">{readySessions.map((session) => <button key={session.id} type="button" onClick={() => navigate(`/attachment-image-workbench/${session.id}`)} className="rounded-2xl border border-gray-200 p-4 text-left transition hover:border-blue-300 hover:bg-blue-50/40 hover:shadow-sm dark:border-white/[0.08] dark:hover:bg-blue-500/5">
-        <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="truncate text-sm font-semibold text-gray-950 dark:text-white">{summaryTitle(session)}</div><div className="mt-1 text-xs text-gray-500">{session.category_name} · {session.skill_name} V{session.skill_version_number || '-'}</div></div><span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">Listing V{session.listing_version_number}</span></div>
-        <div className="mt-4 flex items-center justify-between text-xs text-gray-500"><span>{session.source_asset_ids.length} 张产品图</span><span>{new Date(session.updated_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}</span></div>
-      </button>)}</div>}
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold text-gray-950 dark:text-white">当前商品</h2><p className="mt-1 text-xs text-gray-500">商品选择已经内嵌到工作台。选择后会恢复该商品现有 Project 和工作状态，不会重复创建。</p></div><Link className={button} to="/workspaces/listing">查看全部商品</Link></div>
+      {loading && <div className="mt-5 rounded-xl bg-gray-50 p-5 text-center text-sm text-gray-500 dark:bg-white/[0.03]">正在读取可用商品…</div>}
+      {!loading && readySessions.length > 0 && <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+        <select aria-label="选择商品" value={selectedSessionId} onChange={(event) => setSelectedSessionId(event.target.value)} className="min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-800 dark:border-white/[0.1] dark:bg-gray-950 dark:text-gray-100">
+          <option value="">请选择一个已确认商品</option>
+          {readySessions.map((item) => <option key={item.id} value={item.id}>{summaryTitle(item)} · {item.category_name} · Listing V{item.listing_version_number}</option>)}
+        </select>
+        <button type="button" className={primary} disabled={!selectedSessionId} onClick={() => navigate(`/attachment-image-workbench/${selectedSessionId}`)}>打开工作台</button>
+      </div>}
+      {!loading && selected && <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/50 p-4 dark:border-blue-400/10 dark:bg-blue-500/5">
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-sm font-semibold text-gray-950 dark:text-white">{summaryTitle(selected)}</div><div className="mt-1 text-xs text-gray-500">{selected.category_name} · {selected.skill_name} V{selected.skill_version_number || '-'}</div></div><span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-700">{selected.source_asset_ids.length} 张产品图</span></div>
+      </div>}
+      {!loading && readySessions.length > 0 && !selected && <div className="mt-5 rounded-xl border border-dashed border-gray-200 p-8 text-center dark:border-white/[0.08]"><div className="text-sm font-semibold text-gray-800 dark:text-gray-100">请选择一个已确认商品开始附图制作</div><p className="mt-2 text-xs text-gray-500">选择后会直接进入真正的操作页面，并恢复已有策划、参考图、任务和结果。</p></div>}
       {!loading && !readySessions.length && <div className="mt-5 rounded-xl border border-dashed border-gray-200 p-8 text-center dark:border-white/[0.08]"><div className="text-sm font-semibold text-gray-800 dark:text-gray-100">还没有可用的已确认商品</div><p className="mt-2 text-xs text-gray-500">先使用快速创建完成商品分析和 Listing，再回到这里制作附图。</p><Link className={`${primary} mt-4 inline-block`} to="/workspaces/listing/quick">快速创建商品</Link></div>}
     </section>
   </div>
@@ -179,6 +193,8 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
   const [planning, setPlanning] = useState<AttachmentPlanningState | null>(null)
   const [referenceState, setReferenceState] = useState<AttachmentReferenceState | null>(null)
   const [productCompositions, setProductCompositions] = useState<AttachmentProductComposition[]>([])
+  const [productIdentityLock, setProductIdentityLock] = useState<AttachmentProductIdentityLock | null>(null)
+  const [productIdentityBusy, setProductIdentityBusy] = useState(false)
   const [productCandidates, setProductCandidates] = useState<ListingWorkflowSessionSummary[]>([])
   const [productCandidateAssets, setProductCandidateAssets] = useState<Record<string, Asset>>({})
   const [referenceBusy, setReferenceBusy] = useState('')
@@ -235,7 +251,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         const stored = projectValue.prompt_config?.[ATTACHMENT_WORKBENCH_CONFIG_KEY]
         let nextDraft = normalizeAttachmentWorkbenchDraft(stored, availableCodes)
         const storedDraftSignature = JSON.stringify(nextDraft)
-        const [loadedAssets, taskGroups, planningValue, referenceValue, resultsValue, compositionValue, sessionCandidates, creativeValue, visualsValue, themesValue, modelsValue] = await Promise.all([
+        const [loadedAssets, taskGroups, planningValue, referenceValue, resultsValue, compositionValue, sessionCandidates, creativeValue, visualsValue, themesValue, modelsValue, productIdentityValue] = await Promise.all([
           Promise.all(projectValue.source_asset_ids.map((id) => getAsset(id).catch(() => null))),
           listListingImageTaskGroups(projectValue.id),
           getAttachmentPlanning(projectValue.id),
@@ -247,6 +263,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
           listVisualPresets(),
           listThemePresets(),
           listAIModelPresets(),
+          getAttachmentProductIdentityLock(projectValue.id).catch(() => null),
         ])
         const candidateAssetRows = await Promise.all(sessionCandidates
           .filter((item) => item.primary_asset_id)
@@ -267,6 +284,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         setCreativeContext(creativeValue); setVisualPresets(visualsValue); setThemePresets(themesValue); setModelPresets(modelsValue)
         setReferenceState(referenceValue)
         setProductCompositions(compositionValue)
+        setProductIdentityLock(productIdentityValue)
         setProductCandidates(sessionCandidates.filter(isAttachmentSessionReady))
         setProductCandidateAssets(Object.fromEntries(candidateAssetRows.filter((item): item is Asset => Boolean(item)).map((item) => [item.id, item])))
         setResultState(resultsValue)
@@ -405,6 +423,15 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     }, 1600)
     return () => { active = false; window.clearInterval(timer) }
   }, [project?.id, referenceAnalysisActive])
+
+  useEffect(() => {
+    if (!project || productIdentityLock?.status !== 'analyzing') return
+    let active = true
+    const timer = window.setInterval(() => {
+      void getAttachmentProductIdentityLock(project.id).then((value) => { if (active) setProductIdentityLock(value) }).catch(() => undefined)
+    }, 1600)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [project?.id, productIdentityLock?.status])
 
   const moduleBackend = useMemo(() => Object.fromEntries((project?.modules || []).map((item) => [String(item.code || ''), item])), [project?.modules])
   const selectedModules = selectedAttachmentModules(draft)
@@ -718,6 +745,29 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     if (!project || !planning || !selectedModules.length) return
     setPlanningBusy('suite')
     try {
+      const selectedKeys = selectedModules.map((definition) => definition.code)
+      let references = await getAttachmentReferences(project.id)
+      let identity = await getAttachmentProductIdentityLock(project.id)
+      setReferenceState(references); setProductIdentityLock(identity)
+      for (const key of selectedKeys) {
+        const state = references.modules.find((item) => item.module_key === key)
+        if (state && !state.reference_analysis_job_id && (state.reference_context_dirty || state.understanding?.status !== 'ready')) {
+          references = await analyzeAttachmentReferences(project.id, key, `attachment-reference:auto-plan:${key}:${randomUuid()}`)
+          setReferenceState(references)
+        }
+      }
+      const deadline = Date.now() + 120_000
+      while ((identity.status !== 'ready' || selectedKeys.some((key) => references.modules.find((item) => item.module_key === key)?.understanding?.status !== 'ready')) && Date.now() < deadline) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1600))
+        ;[references, identity] = await Promise.all([getAttachmentReferences(project.id), getAttachmentProductIdentityLock(project.id)])
+        setReferenceState(references); setProductIdentityLock(identity)
+        const failed = references.modules.find((item) => selectedKeys.includes(item.module_key) && item.understanding?.status === 'failed')
+        if (identity.status === 'failed') throw new Error(identity.error_message || '商品事实提取失败，请重新提取')
+        if (failed) throw new Error(failed.understanding?.error_message || `${failed.module_key}参考素材分析失败`)
+      }
+      if (identity.status !== 'ready' || selectedKeys.some((key) => references.modules.find((item) => item.module_key === key)?.understanding?.status !== 'ready')) {
+        throw new Error('商品事实或参考素材仍在分析中，请稍后重试')
+      }
       const indexed = Object.fromEntries(planning.modules.map((item) => [item.module_key, item]))
       const value = await planAttachmentSuite(project.id, {
         modules: selectedModules.map((definition) => ({
@@ -746,6 +796,24 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     if (!project) return
     setPlanningBusy(`${optimize ? 'optimize' : 'replan'}:${moduleKey}`)
     try {
+      let references = await getAttachmentReferences(project.id)
+      let identity = await getAttachmentProductIdentityLock(project.id)
+      let moduleReferences = references.modules.find((item) => item.module_key === moduleKey)
+      if (moduleReferences && !moduleReferences.reference_analysis_job_id && (moduleReferences.reference_context_dirty || moduleReferences.understanding?.status !== 'ready')) {
+        references = await analyzeAttachmentReferences(project.id, moduleKey, `attachment-reference:auto-plan:${moduleKey}:${randomUuid()}`)
+        setReferenceState(references)
+      }
+      const deadline = Date.now() + 120_000
+      moduleReferences = references.modules.find((item) => item.module_key === moduleKey)
+      while ((identity.status !== 'ready' || moduleReferences?.understanding?.status !== 'ready') && Date.now() < deadline) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1600))
+        ;[references, identity] = await Promise.all([getAttachmentReferences(project.id), getAttachmentProductIdentityLock(project.id)])
+        moduleReferences = references.modules.find((item) => item.module_key === moduleKey)
+        setReferenceState(references); setProductIdentityLock(identity)
+        if (identity.status === 'failed') throw new Error(identity.error_message || '商品事实提取失败，请重新提取')
+        if (moduleReferences?.understanding?.status === 'failed') throw new Error(moduleReferences.understanding.error_message || '参考素材分析失败')
+      }
+      if (identity.status !== 'ready' || moduleReferences?.understanding?.status !== 'ready') throw new Error('商品事实或参考素材仍在分析中，请稍后重试')
       const input = {
         aspect_ratio: draft.modules[moduleKey].aspectRatio,
         operator_requirement_cn: operatorRequirement,
@@ -767,7 +835,12 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
   const applyProductComposition = async (next: AttachmentProductComposition) => {
     setProductCompositions((current) => current.map((item) => item.module_key === next.module_key ? next : item))
     const [nextPlanning, nextReferences] = await Promise.all([refreshPlanning(), project ? getAttachmentReferences(project.id) : null])
-    if (nextReferences) setReferenceState(nextReferences)
+    if (nextReferences && project) {
+      const moduleReferences = nextReferences.modules.find((item) => item.module_key === next.module_key)
+      if (moduleReferences && !moduleReferences.reference_analysis_job_id && moduleReferences.reference_context_dirty) {
+        setReferenceState(await analyzeAttachmentReferences(project.id, next.module_key, `attachment-reference:auto-composition:${next.module_key}:${randomUuid()}`))
+      } else setReferenceState(nextReferences)
+    }
     return nextPlanning
   }
 
@@ -816,12 +889,12 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     } catch (reason) { showToast(errorText(reason), 'error'); throw reason } finally { setPlanningBusy('') }
   }
 
-  const addReference = async (moduleKey: AttachmentModuleCode, slot: AttachmentReferenceSlotType, assetId: string) => {
+  const addReference = async (moduleKey: AttachmentModuleCode, slot: AttachmentReferenceSlotType, assetId: string, options: { keywords: string[]; guidance: string; libraryItemId?: string }) => {
     if (!project) return
     setReferenceBusy(`add:${moduleKey}:${slot}`)
     try {
-      setReferenceState(await addAttachmentReference(project.id, moduleKey, { slot_type: slot, asset_id: assetId }))
-      showToast('参考素材已添加。需要时请重新分析参考素材。', 'success')
+      setReferenceState(await addAttachmentReference(project.id, moduleKey, { slot_type: slot, asset_id: assetId, keywords: options.keywords, guidance: options.guidance, library_item_id: options.libraryItemId }))
+      showToast('参考素材已添加，后台正在自动理解图片。', 'success')
     } finally {
       setReferenceBusy('')
     }
@@ -891,6 +964,35 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     }
   }
 
+  const saveProductIdentity = async (structured: Record<string, unknown>) => {
+    if (!project) return
+    setProductIdentityBusy(true)
+    try {
+      setProductIdentityLock(await updateAttachmentProductIdentityLock(project.id, structured))
+      await refreshPlanning()
+      showToast('商品事实已保存；依赖这些事实的模块已标记为需要重新策划。', 'success')
+    } catch (reason) {
+      showToast(errorText(reason), 'error')
+      throw reason
+    } finally {
+      setProductIdentityBusy(false)
+    }
+  }
+
+  const reextractProductIdentity = async () => {
+    if (!project) return
+    setProductIdentityBusy(true)
+    try {
+      setProductIdentityLock(await reextractAttachmentProductIdentityLock(project.id))
+      showToast('商品事实重新提取已提交，完成后会自动刷新。', 'success')
+    } catch (reason) {
+      showToast(errorText(reason), 'error')
+      throw reason
+    } finally {
+      setProductIdentityBusy(false)
+    }
+  }
+
   if (loading) return <div className={`${panel} mt-6`}>正在恢复附图项目与任务状态…</div>
   if (error && (!session || !project)) return <div className="space-y-4 pt-6"><div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</div><Link className={button} to="/workspaces/attachment-images">返回商品列表</Link></div>
   if (!session || !project) return null
@@ -922,6 +1024,13 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
       busy={creativeContextBusy || Boolean(planningActive)}
       onChange={(value) => void changeCreativeContext(value)}
     />}
+
+    <AttachmentProductIdentityPanel
+      value={productIdentityLock}
+      busy={productIdentityBusy}
+      onSave={saveProductIdentity}
+      onReextract={reextractProductIdentity}
+    />
 
     <section className={panel}>
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold text-gray-950 dark:text-white">整套视觉方向</h2><p className="mt-1 text-xs text-gray-500">统一约束当前已选标准模块；AI整套策划一次返回视觉方向、模块方案和中文Prompt。</p></div><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-semibold ${planning?.planning_status === 'failed' ? 'bg-red-50 text-red-700' : planning?.planning_status === 'planning' ? 'bg-violet-50 text-violet-700' : 'bg-gray-100 text-gray-600'}`}>{planning?.planning_status === 'planning' ? 'AI策划中' : planning?.visual_direction_version ? `方向 V${planning.visual_direction_version}` : '尚未策划'}</span><button className={button} disabled={!planning} onClick={() => void refreshPlanning()}>刷新策划</button></div></div>
@@ -970,6 +1079,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
           productReferences={referenceState?.product_references || []}
           productComposition={productCompositions.find((item) => item.module_key === definition.code)}
           productCandidates={productCandidates} productCandidateAssets={productCandidateAssets}
+          modelPresets={modelPresets}
           tasks={tasks} groups={attachmentGroups}
           resultState={resultState?.modules.find((item) => item.module_key === definition.code)}
           onToggleExpanded={() => setExpanded((current) => { const next = new Set(current); next.has(definition.code) ? next.delete(definition.code) : next.add(definition.code); return next })}
@@ -981,7 +1091,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
           onAddSecondaryProduct={(sourceSessionId) => addSecondaryProduct(definition.code, sourceSessionId)}
           onReplaceSecondaryProduct={(itemId, sourceSessionId) => replaceSecondaryProduct(definition.code, itemId, sourceSessionId)}
           onRemoveSecondaryProduct={(itemId) => removeSecondaryProduct(definition.code, itemId)}
-          onAddReference={(slot, assetId) => addReference(definition.code, slot, assetId)}
+          onAddReference={(slot, assetId, options) => addReference(definition.code, slot, assetId, options)}
           onRemoveReference={(referenceId) => removeReference(definition.code, referenceId)}
           onAnalyzeReferences={() => analyzeReferences(definition.code)} onReferenceError={(message) => showToast(message, 'error')}
           onGenerate={() => prepareGeneration([definition.code])} generationBusy={generationBusy !== ''}

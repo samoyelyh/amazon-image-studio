@@ -129,6 +129,17 @@ export interface AttachmentReferenceState {
   modules: AttachmentModuleReferenceState[]
 }
 
+export interface AttachmentProductIdentityLock {
+  id: string
+  version_number: number
+  status: 'analyzing' | 'ready' | 'failed' | 'stale' | string
+  structured: Record<string, unknown>
+  ai_model: string | null
+  error_message: string | null
+  corrected_by_user: boolean
+  created_at: string
+}
+
 export interface AttachmentProductCompositionAsset {
   id: string
   asset: Asset
@@ -346,6 +357,22 @@ export function getAttachmentReferences(projectId: string) {
   return authenticatedFetch<AttachmentReferenceState>(`/attachment-workbench/projects/${projectId}/references`)
 }
 
+export function getAttachmentProductIdentityLock(projectId: string) {
+  return authenticatedFetch<AttachmentProductIdentityLock>(`/attachment-workbench/projects/${projectId}/product-identity-lock`)
+}
+
+export function reextractAttachmentProductIdentityLock(projectId: string) {
+  return authenticatedFetch<AttachmentProductIdentityLock>(`/attachment-workbench/projects/${projectId}/product-identity-lock/reextract`, {
+    method: 'POST',
+  })
+}
+
+export function updateAttachmentProductIdentityLock(projectId: string, structured: Record<string, unknown>) {
+  return authenticatedFetch<AttachmentProductIdentityLock>(`/attachment-workbench/projects/${projectId}/product-identity-lock`, {
+    method: 'PATCH', body: JSON.stringify({ structured }),
+  })
+}
+
 export function getAttachmentProductCompositions(projectId: string) {
   return authenticatedFetch<AttachmentProductComposition[]>(`/attachment-workbench/projects/${projectId}/product-compositions`)
 }
@@ -387,6 +414,9 @@ export function addAttachmentReference(projectId: string, moduleKey: AttachmentM
   slot_type: AttachmentReferenceSlotType
   asset_id: string
   metadata?: Record<string, unknown>
+  keywords?: string[]
+  guidance?: string
+  library_item_id?: string
 }) {
   return authenticatedFetch<AttachmentReferenceState>(`/attachment-workbench/projects/${projectId}/modules/${moduleKey}/references`, {
     method: 'POST', body: JSON.stringify({ ...input, metadata: input.metadata || {} }),

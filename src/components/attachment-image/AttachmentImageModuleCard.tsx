@@ -15,6 +15,8 @@ import type {
 import AttachmentReferencePanel from './AttachmentReferencePanel'
 import AttachmentResultReviewPanel, { type AttachmentResultEntry } from './AttachmentResultReviewPanel'
 import AttachmentProductCompositionPanel from './AttachmentProductCompositionPanel'
+import AttachmentModuleModelPanel from './AttachmentModuleModelPanel'
+import type { AIModelPreset } from '../../lib/creativePresetApi'
 
 const statusLabels: Record<string, string> = {
   queued: '等待中',
@@ -43,6 +45,7 @@ interface Props {
   productComposition?: AttachmentProductComposition
   productCandidates?: ListingWorkflowSessionSummary[]
   productCandidateAssets?: Record<string, Asset>
+  modelPresets?: AIModelPreset[]
   tasks: ListingImageTask[]
   groups: ListingImageTaskGroup[]
   resultState?: AttachmentModuleResultState
@@ -51,7 +54,7 @@ interface Props {
   onSavePlanning: (input: { plan_summary_cn: string; prompt_cn: string; operator_requirement_cn: string; aspect_ratio: string; expected_state_version: number }) => Promise<void>
   onReplan: (operatorRequirement: string) => Promise<void>
   onOptimizePrompt: (operatorRequirement: string) => Promise<void>
-  onAddReference: (slot: AttachmentReferenceSlotType, assetId: string) => Promise<void>
+  onAddReference: (slot: AttachmentReferenceSlotType, assetId: string, options: { keywords: string[]; guidance: string; libraryItemId?: string }) => Promise<void>
   onRemoveReference: (referenceId: string) => Promise<void>
   onAnalyzeReferences: () => Promise<void>
   onProductModeChange: (mode: 'SINGLE' | 'MULTI') => Promise<void>
@@ -86,6 +89,7 @@ export default function AttachmentImageModuleCard({
   productComposition,
   productCandidates = [],
   productCandidateAssets = {},
+  modelPresets = [],
   tasks,
   groups,
   resultState,
@@ -236,6 +240,13 @@ export default function AttachmentImageModuleCard({
           onAdd={onAddSecondaryProduct}
           onReplace={onReplaceSecondaryProduct}
           onRemove={onRemoveSecondaryProduct}
+        />}
+        {planning?.supports_model && <AttachmentModuleModelPanel
+          projectId={projectId}
+          moduleKey={definition.code}
+          models={modelPresets}
+          busy={planningBusy}
+          onError={onReferenceError}
         />}
         {referenceState && <AttachmentReferencePanel
           state={referenceState}

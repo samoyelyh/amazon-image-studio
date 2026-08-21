@@ -3,6 +3,8 @@ import type { JobOutput } from '../../lib/jobsApi'
 import type { ListingImageTask, ListingImageTaskGroup } from '../../lib/listingWorkflowApi'
 import type { AttachmentModuleResultState } from '../../lib/attachmentPlanningApi'
 import { downloadServerOutput } from '../../lib/serverDownloads'
+import { addAttachmentOutputToReferenceLibrary } from '../../lib/attachmentReferenceLibraryApi'
+import { useAuth } from '../../app/AuthContext'
 import AuthenticatedImage from '../category-listing/AuthenticatedImage'
 
 const button = 'rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 disabled:opacity-50 dark:border-white/[0.1] dark:bg-gray-950 dark:text-gray-200'
@@ -81,8 +83,10 @@ export default function AttachmentResultReviewPanel({
   moduleStateVersion, onAdoptDirection,
   onSaveSingle,
 }: Props) {
+  const auth = useAuth()
   const [selected, setSelected] = useState<AttachmentResultEntry | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [libraryBusy, setLibraryBusy] = useState(false)
   const data = useMemo(
     () => deriveAttachmentResultData(moduleKey, groups, state),
     [groups, moduleKey, state?.current_final_output_id, state?.results_cleared_at],
@@ -114,7 +118,7 @@ export default function AttachmentResultReviewPanel({
             <details className="rounded-xl border border-gray-200 p-3 dark:border-white/[0.08]"><summary className="cursor-pointer text-xs font-semibold">本次方向 Prompt</summary><p className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap text-xs leading-5 text-gray-600 dark:text-gray-300">{selected.task.prompt_cn || selected.task.final_prompt}</p></details>
             <details className="rounded-xl border border-gray-200 p-3 dark:border-white/[0.08]"><summary className="cursor-pointer text-xs font-semibold">完整执行 Prompt 快照</summary><p className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap text-xs leading-5 text-gray-600 dark:text-gray-300">{selected.task.final_prompt}</p></details>
             <details className="rounded-xl border border-gray-200 p-3 dark:border-white/[0.08]"><summary className="cursor-pointer text-xs font-semibold">本次输入素材（{selected.task.input_assets.length}）</summary><div className="mt-3 grid grid-cols-3 gap-2">{selected.task.input_assets.map((asset) => asset.url ? <AuthenticatedImage key={asset.asset_id} url={asset.url} alt={asset.filename} className="aspect-square w-full rounded-lg object-contain" placeholderClassName="aspect-square rounded-lg" /> : null)}</div></details>
-            <div className="flex flex-wrap gap-2"><button className={button} onClick={() => void downloadServerOutput(selected.output)}>下载</button>{onSaveSingle && <button className={button} disabled={busy} onClick={() => void onSaveSingle(selected).then(() => setSelected(null))}>保存到素材库</button>}{selected.task.generation_mode === 'creative' && <button className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50" disabled={busy} onClick={() => void onAdoptDirection(selected, moduleStateVersion).then(() => setSelected(null))}>沿用此方向生成</button>}<button className={button} disabled={busy} onClick={() => void onApprove(selected, false).then(() => setSelected(null))}>仅审核通过</button><button className={primary} disabled={busy} onClick={() => void onApprove(selected, true).then(() => setSelected(null))}>通过并设为最终</button><button className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50" disabled={busy} onClick={() => { const isFinal = selected.output.id === state?.current_final_output_id; if (isFinal && !window.confirm('这张图片当前是最终采用版本。确认打回并清除最终采用状态吗？')) return; void onReject(selected, isFinal).then(() => setSelected(null)) }}>打回</button></div>
+            <div className="flex flex-wrap gap-2"><button className={button} onClick={() => void downloadServerOutput(selected.output)}>下载</button>{onSaveSingle && <button className={button} disabled={busy} onClick={() => void onSaveSingle(selected).then(() => setSelected(null))}>保存到素材库</button>}{auth.hasPermission('platform.admin') && <button className={button} disabled={busy || libraryBusy} onClick={() => { setLibraryBusy(true); void addAttachmentOutputToReferenceLibrary(selected.output.id, { name: `${moduleName} 优秀结果`, module_key: moduleKey, reference_role: 'TEMPLATE', guidance: '参考画面构图、布局、镜头、光线与留白；禁止继承参考图中的商品身份、颜色、Logo、文字和号码。', tags: [moduleName, '生成结果'] }).then(() => window.alert('已加入参考图库，并已开始后台分析。')).catch((reason) => window.alert(reason instanceof Error ? reason.message : '加入参考图库失败')).finally(() => setLibraryBusy(false)) }}>加入参考图库</button>}{selected.task.generation_mode === 'creative' && <button className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50" disabled={busy} onClick={() => void onAdoptDirection(selected, moduleStateVersion).then(() => setSelected(null))}>沿用此方向生成</button>}<button className={button} disabled={busy} onClick={() => void onApprove(selected, false).then(() => setSelected(null))}>仅审核通过</button><button className={primary} disabled={busy} onClick={() => void onApprove(selected, true).then(() => setSelected(null))}>通过并设为最终</button><button className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50" disabled={busy} onClick={() => { const isFinal = selected.output.id === state?.current_final_output_id; if (isFinal && !window.confirm('这张图片当前是最终采用版本。确认打回并清除最终采用状态吗？')) return; void onReject(selected, isFinal).then(() => setSelected(null)) }}>打回</button></div>
           </div>
         </div>
       </div>
