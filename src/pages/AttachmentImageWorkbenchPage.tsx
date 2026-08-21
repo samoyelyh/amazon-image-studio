@@ -53,6 +53,7 @@ import {
   removeAttachmentSecondaryProduct,
   addAttachmentReference,
   removeAttachmentReference,
+  updateAttachmentReferenceOptions,
   analyzeAttachmentReferences,
   putAttachmentProductReference,
   listAttachmentPlanVersions,
@@ -392,8 +393,8 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     return () => { active = false; window.clearTimeout(timer) }
   }, [project?.id, taskSummary.activeGroups, pollingPaused])
 
-  const planningActive = planning?.planning_status === 'planning'
-    || planning?.modules.some((item) => item.status === 'planning')
+  const planningActive = ['preparing', 'planning'].includes(planning?.planning_status || '')
+    || planning?.modules.some((item) => ['preparing', 'planning'].includes(item.status))
   useEffect(() => {
     if (!project || !planningActive) return
     let active = true
@@ -745,29 +746,6 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     if (!project || !planning || !selectedModules.length) return
     setPlanningBusy('suite')
     try {
-      const selectedKeys = selectedModules.map((definition) => definition.code)
-      let references = await getAttachmentReferences(project.id)
-      let identity = await getAttachmentProductIdentityLock(project.id)
-      setReferenceState(references); setProductIdentityLock(identity)
-      for (const key of selectedKeys) {
-        const state = references.modules.find((item) => item.module_key === key)
-        if (state && !state.reference_analysis_job_id && (state.reference_context_dirty || state.understanding?.status !== 'ready')) {
-          references = await analyzeAttachmentReferences(project.id, key, `attachment-reference:auto-plan:${key}:${randomUuid()}`)
-          setReferenceState(references)
-        }
-      }
-      const deadline = Date.now() + 120_000
-      while ((identity.status !== 'ready' || selectedKeys.some((key) => references.modules.find((item) => item.module_key === key)?.understanding?.status !== 'ready')) && Date.now() < deadline) {
-        await new Promise((resolve) => window.setTimeout(resolve, 1600))
-        ;[references, identity] = await Promise.all([getAttachmentReferences(project.id), getAttachmentProductIdentityLock(project.id)])
-        setReferenceState(references); setProductIdentityLock(identity)
-        const failed = references.modules.find((item) => selectedKeys.includes(item.module_key) && item.understanding?.status === 'failed')
-        if (identity.status === 'failed') throw new Error(identity.error_message || '商品事实提取失败，请重新提取')
-        if (failed) throw new Error(failed.understanding?.error_message || `${failed.module_key}参考素材分析失败`)
-      }
-      if (identity.status !== 'ready' || selectedKeys.some((key) => references.modules.find((item) => item.module_key === key)?.understanding?.status !== 'ready')) {
-        throw new Error('商品事实或参考素材仍在分析中，请稍后重试')
-      }
       const indexed = Object.fromEntries(planning.modules.map((item) => [item.module_key, item]))
       const value = await planAttachmentSuite(project.id, {
         modules: selectedModules.map((definition) => ({
@@ -784,7 +762,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
       visualDirtyRef.current = true
       setVisualDirty(true)
       setPlanning(value)
-      showToast('AI整套策划已提交，完成后会自动显示各模块方案与Prompt。', 'success')
+      showToast('AI整套策划已提交。参考图会在后台自动理解，准备好后会直接继续策划。', 'success')
     } catch (reason) {
       showToast(errorText(reason), 'error')
     } finally {
@@ -796,24 +774,6 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     if (!project) return
     setPlanningBusy(`${optimize ? 'optimize' : 'replan'}:${moduleKey}`)
     try {
-      let references = await getAttachmentReferences(project.id)
-      let identity = await getAttachmentProductIdentityLock(project.id)
-      let moduleReferences = references.modules.find((item) => item.module_key === moduleKey)
-      if (moduleReferences && !moduleReferences.reference_analysis_job_id && (moduleReferences.reference_context_dirty || moduleReferences.understanding?.status !== 'ready')) {
-        references = await analyzeAttachmentReferences(project.id, moduleKey, `attachment-reference:auto-plan:${moduleKey}:${randomUuid()}`)
-        setReferenceState(references)
-      }
-      const deadline = Date.now() + 120_000
-      moduleReferences = references.modules.find((item) => item.module_key === moduleKey)
-      while ((identity.status !== 'ready' || moduleReferences?.understanding?.status !== 'ready') && Date.now() < deadline) {
-        await new Promise((resolve) => window.setTimeout(resolve, 1600))
-        ;[references, identity] = await Promise.all([getAttachmentReferences(project.id), getAttachmentProductIdentityLock(project.id)])
-        moduleReferences = references.modules.find((item) => item.module_key === moduleKey)
-        setReferenceState(references); setProductIdentityLock(identity)
-        if (identity.status === 'failed') throw new Error(identity.error_message || '商品事实提取失败，请重新提取')
-        if (moduleReferences?.understanding?.status === 'failed') throw new Error(moduleReferences.understanding.error_message || '参考素材分析失败')
-      }
-      if (identity.status !== 'ready' || moduleReferences?.understanding?.status !== 'ready') throw new Error('商品事实或参考素材仍在分析中，请稍后重试')
       const input = {
         aspect_ratio: draft.modules[moduleKey].aspectRatio,
         operator_requirement_cn: operatorRequirement,
@@ -823,7 +783,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         ? await optimizeAttachmentModulePrompt(project.id, moduleKey, input)
         : await replanAttachmentModule(project.id, moduleKey, input)
       applyPlanning(value)
-      showToast(optimize ? 'Prompt优化任务已提交。' : '单模块重新策划已提交。', 'success')
+      showToast(optimize ? 'Prompt优化已提交，系统会自动准备参考图后继续。' : '单模块策划已提交，系统会自动准备参考图后继续。', 'success')
     } catch (reason) {
       showToast(errorText(reason), 'error')
       throw reason
@@ -906,6 +866,22 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     try {
       setReferenceState(await removeAttachmentReference(project.id, moduleKey, referenceId))
       showToast('已从当前模块移除参考素材，原始图片仍保留。', 'success')
+    } finally {
+      setReferenceBusy('')
+    }
+  }
+
+  const updateReferenceOptions = async (
+    moduleKey: AttachmentModuleCode, referenceId: string,
+    keywords: string[], guidance: string, expectedVersion: number,
+  ) => {
+    if (!project) return
+    setReferenceBusy(`update:${referenceId}`)
+    try {
+      setReferenceState(await updateAttachmentReferenceOptions(project.id, moduleKey, referenceId, {
+        keywords, guidance, expected_reference_state_version: expectedVersion,
+      }))
+      showToast('参考要求已保存，AI正在重新理解。', 'success')
     } finally {
       setReferenceBusy('')
     }
@@ -1033,7 +1009,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
     />
 
     <section className={panel}>
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold text-gray-950 dark:text-white">整套视觉方向</h2><p className="mt-1 text-xs text-gray-500">统一约束当前已选标准模块；AI整套策划一次返回视觉方向、模块方案和中文Prompt。</p></div><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-semibold ${planning?.planning_status === 'failed' ? 'bg-red-50 text-red-700' : planning?.planning_status === 'planning' ? 'bg-violet-50 text-violet-700' : 'bg-gray-100 text-gray-600'}`}>{planning?.planning_status === 'planning' ? 'AI策划中' : planning?.visual_direction_version ? `方向 V${planning.visual_direction_version}` : '尚未策划'}</span><button className={button} disabled={!planning} onClick={() => void refreshPlanning()}>刷新策划</button></div></div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold text-gray-950 dark:text-white">整套视觉方向</h2><p className="mt-1 text-xs text-gray-500">统一约束当前已选标准模块；AI整套策划一次返回视觉方向、模块方案和中文Prompt。</p></div><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-3 py-1 text-xs font-semibold ${planning?.planning_status === 'failed' ? 'bg-red-50 text-red-700' : ['preparing', 'planning'].includes(planning?.planning_status || '') ? 'bg-violet-50 text-violet-700' : 'bg-gray-100 text-gray-600'}`}>{planning?.planning_status === 'preparing' ? 'AI理解参考图中' : planning?.planning_status === 'planning' ? 'AI策划中' : planning?.visual_direction_version ? `方向 V${planning.visual_direction_version}` : '尚未策划'}</span><button className={button} disabled={!planning} onClick={() => void refreshPlanning()}>刷新策划</button></div></div>
       <textarea disabled={!phaseOneSupported} className="mt-4 min-h-28 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm leading-6 disabled:bg-gray-100 dark:border-white/[0.1] dark:bg-gray-950 dark:text-white" value={visualDirection} placeholder="尚未策划。可以直接填写，也可以点击AI策划生成2～4行统一视觉方向。" onChange={(event) => { setVisualDirection(event.target.value); setVisualDirty(true); visualDirtyRef.current = true }} />
       {planning?.error_message && <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{planning.error_message}</div>}
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -1093,6 +1069,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
           onRemoveSecondaryProduct={(itemId) => removeSecondaryProduct(definition.code, itemId)}
           onAddReference={(slot, assetId, options) => addReference(definition.code, slot, assetId, options)}
           onRemoveReference={(referenceId) => removeReference(definition.code, referenceId)}
+          onUpdateReference={(referenceId, keywords, guidance, expectedVersion) => updateReferenceOptions(definition.code, referenceId, keywords, guidance, expectedVersion)}
           onAnalyzeReferences={() => analyzeReferences(definition.code)} onReferenceError={(message) => showToast(message, 'error')}
           onGenerate={() => prepareGeneration([definition.code])} generationBusy={generationBusy !== ''}
           onApproveResult={approveResult} onRejectResult={rejectResult} onRetryTask={retryTask}

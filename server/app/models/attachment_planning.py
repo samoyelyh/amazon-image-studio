@@ -34,6 +34,7 @@ class AttachmentWorkbenchPlan(UuidPrimaryKeyMixin, TimestampMixin, Base):
     visual_direction_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     planning_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
     planning_status: Mapped[str] = mapped_column(String(30), default="idle", nullable=False)
+    pending_planning_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
     error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     state_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_saved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

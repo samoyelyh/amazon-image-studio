@@ -615,6 +615,278 @@ async def start_module_planning(
     return job, created
 
 
+def _pending_module_payload(item: AttachmentPlanningModuleInput) -> dict[str, object]:
+    return {
+        "module_key": item.module_key,
+        "aspect_ratio": item.aspect_ratio,
+        "operator_requirement_cn": item.operator_requirement_cn,
+    }
+
+
+async def _start_planning_dependencies(
+    db: AsyncSession, settings: Settings, *, project: ListingImageProject,
+    session: ListingGenerationSession, version: ListingVersion, plan: AttachmentWorkbenchPlan,
+    selected: list[AttachmentWorkbenchModulePlan], user_id: str,
+) -> tuple[dict[str, str], str, int]:
+    """Start or reuse the exact analysis versions required by one planning intent."""
+    from app.services.attachment_product_identity_service import start_product_identity_lock
+    from app.services.attachment_reference_service import start_reference_analysis
+
+    created_count = 0
+    identity, _, identity_created = await start_product_identity_lock(
+        db, settings, project=project, session=session, version=version, plan=plan,
+        user_id=user_id, force=False,
+    )
+    created_count += int(identity_created)
+    understanding_ids: dict[str, str] = {}
+    for module in selected:
+        _, understanding, created = await start_reference_analysis(
+            db, settings, project=project, plan=plan, module=module,
+            idempotency_key=(
+                f"attachment-reference:auto-planning:{plan.id}:{module.id}:"
+                f"{module.reference_state_version}"
+            ),
+            user_id=user_id,
+        )
+        understanding_ids[module.module_key] = understanding.id
+        created_count += int(created)
+    return understanding_ids, identity.id, created_count
+
+
+def _set_preparing_state(
+    *, plan: AttachmentWorkbenchPlan, selected: list[AttachmentWorkbenchModulePlan],
+    pending: dict[str, object], user_id: str, suite: bool,
+) -> None:
+    now = datetime.now(UTC)
+    plan.pending_planning_json = pending
+    if suite:
+        plan.planning_status = "preparing"
+        plan.planning_job_id = None
+        plan.error_message = None
+    plan.updated_by = user_id
+    plan.last_saved_at = now
+    for module in selected:
+        module.status = "preparing"
+        module.planning_job_id = None
+        module.error_message = None
+        module.updated_by = user_id
+        module.last_saved_at = now
+
+
+async def request_suite_planning(
+    db: AsyncSession, settings: Settings, *, project: ListingImageProject,
+    session: ListingGenerationSession, version: ListingVersion, plan: AttachmentWorkbenchPlan,
+    module_rows: list[AttachmentWorkbenchModulePlan], modules: list[AttachmentPlanningModuleInput],
+    visual_direction_cn: str, idempotency_key: str, user_id: str,
+) -> tuple[Job | None, int]:
+    """Persist a suite planning intent and let the backend resolve its AI dependencies."""
+    existing = dict(plan.pending_planning_json or {})
+    if existing:
+        if existing.get("idempotency_key") == idempotency_key:
+            return None, 0
+        raise AppError("attachment_planning.already_preparing", "已有AI策划正在准备，请等待完成", 409)
+    indexed = {item.module_key: item for item in module_rows}
+    selected = [indexed[item.module_key] for item in modules if item.module_key in indexed]
+    if len(selected) != len(modules):
+        raise AppError("attachment_planning.module_invalid", "选择了不支持的附图模块", 422)
+    # Validate ratios and the required visual preset before any dependency job is submitted.
+    for item in modules:
+        if item.aspect_ratio not in ALLOWED_ASPECT_RATIOS:
+            raise AppError("attachment_planning.aspect_ratio_invalid", "图片比例无效", 422)
+    from app.services.creative_preset_service import creative_context_snapshot
+    if not (await creative_context_snapshot(db, plan=plan)).get("visual_preset_version_id"):
+        raise AppError("creative_preset.visual_required", "请先选择整套视觉模板", 409)
+    understanding_ids, identity_id, created_count = await _start_planning_dependencies(
+        db, settings, project=project, session=session, version=version, plan=plan,
+        selected=selected, user_id=user_id,
+    )
+    pending = {
+        "scope": "suite", "action": "suite_plan", "idempotency_key": idempotency_key,
+        "user_id": user_id, "visual_direction_cn": visual_direction_cn,
+        "modules": [_pending_module_payload(item) for item in modules],
+        "reference_understanding_ids": understanding_ids,
+        "reference_state_versions": {item.module_key: item.reference_state_version for item in selected},
+        "product_identity_lock_version_id": identity_id,
+        "requested_at": datetime.now(UTC).isoformat(),
+    }
+    _set_preparing_state(plan=plan, selected=selected, pending=pending, user_id=user_id, suite=True)
+    planning_job, planning_created = await _continue_pending_for_loaded_context(
+        db, settings, project=project, session=session, version=version,
+        plan=plan, modules=module_rows,
+    )
+    return planning_job, created_count + int(planning_created)
+
+
+async def request_module_planning(
+    db: AsyncSession, settings: Settings, *, project: ListingImageProject,
+    session: ListingGenerationSession, version: ListingVersion, plan: AttachmentWorkbenchPlan,
+    module_rows: list[AttachmentWorkbenchModulePlan], module: AttachmentWorkbenchModulePlan,
+    action: str, aspect_ratio: str, operator_requirement_cn: str,
+    idempotency_key: str, user_id: str,
+) -> tuple[Job | None, int]:
+    existing = dict(plan.pending_planning_json or {})
+    if existing:
+        if existing.get("idempotency_key") == idempotency_key:
+            return None, 0
+        raise AppError("attachment_planning.already_preparing", "已有AI策划正在准备，请等待完成", 409)
+    if aspect_ratio not in ALLOWED_ASPECT_RATIOS:
+        raise AppError("attachment_planning.aspect_ratio_invalid", "图片比例无效", 422)
+    request = AttachmentPlanningModuleInput(
+        module_key=module.module_key, aspect_ratio=aspect_ratio,
+        operator_requirement_cn=operator_requirement_cn,
+    )
+    understanding_ids, identity_id, created_count = await _start_planning_dependencies(
+        db, settings, project=project, session=session, version=version, plan=plan,
+        selected=[module], user_id=user_id,
+    )
+    pending = {
+        "scope": "module", "action": action, "module_key": module.module_key,
+        "idempotency_key": idempotency_key, "user_id": user_id,
+        "modules": [_pending_module_payload(request)],
+        "reference_understanding_ids": understanding_ids,
+        "reference_state_versions": {module.module_key: module.reference_state_version},
+        "product_identity_lock_version_id": identity_id,
+        "requested_at": datetime.now(UTC).isoformat(),
+    }
+    _set_preparing_state(plan=plan, selected=[module], pending=pending, user_id=user_id, suite=False)
+    planning_job, planning_created = await _continue_pending_for_loaded_context(
+        db, settings, project=project, session=session, version=version,
+        plan=plan, modules=module_rows,
+    )
+    return planning_job, created_count + int(planning_created)
+
+
+async def _continue_pending_for_loaded_context(
+    db: AsyncSession, settings: Settings, *, project: ListingImageProject,
+    session: ListingGenerationSession, version: ListingVersion, plan: AttachmentWorkbenchPlan,
+    modules: list[AttachmentWorkbenchModulePlan],
+) -> tuple[Job | None, bool]:
+    pending = dict(plan.pending_planning_json or {})
+    if not pending:
+        return None, False
+    indexed = {item.module_key: item for item in modules}
+    requests = [
+        AttachmentPlanningModuleInput.model_validate(item)
+        for item in pending.get("modules", []) if isinstance(item, dict)
+    ]
+    selected = [indexed[item.module_key] for item in requests if item.module_key in indexed]
+    if not requests or len(selected) != len(requests):
+        plan.pending_planning_json = {}
+        plan.planning_status = "failed"
+        plan.error_message = "待执行的AI策划模块已失效，请重新提交"
+        return None, False
+
+    # A reference edit while analysis is running invalidates the captured version.
+    # Start/reuse analysis for the new version and atomically retarget the intent.
+    expected_versions = dict(pending.get("reference_state_versions") or {})
+    understanding_ids = dict(pending.get("reference_understanding_ids") or {})
+    from app.services.attachment_reference_service import start_reference_analysis
+    for module in selected:
+        if int(expected_versions.get(module.module_key, -1)) != module.reference_state_version:
+            _, understanding, _ = await start_reference_analysis(
+                db, settings, project=project, plan=plan, module=module,
+                idempotency_key=(
+                    f"attachment-reference:pending-refresh:{plan.id}:{module.id}:"
+                    f"{module.reference_state_version}"
+                ), user_id=str(pending["user_id"]),
+            )
+            understanding_ids[module.module_key] = understanding.id
+            expected_versions[module.module_key] = module.reference_state_version
+    pending["reference_understanding_ids"] = understanding_ids
+    pending["reference_state_versions"] = expected_versions
+    plan.pending_planning_json = pending
+
+    from app.models.attachment_planning import (
+        AttachmentProductIdentityLockVersion, AttachmentReferenceUnderstanding,
+    )
+    identity = await db.get(
+        AttachmentProductIdentityLockVersion,
+        str(pending.get("product_identity_lock_version_id") or ""),
+    )
+    understandings = {
+        key: await db.get(AttachmentReferenceUnderstanding, str(row_id))
+        for key, row_id in understanding_ids.items()
+    }
+    failed_message = None
+    if identity is None or identity.status == "failed":
+        failed_message = identity.error_message if identity else "商品事实理解记录不存在"
+    for key, understanding in understandings.items():
+        if understanding is None or understanding.status == "failed":
+            failed_message = (
+                understanding.error_message if understanding else f"{key}参考素材理解记录不存在"
+            )
+            break
+    if failed_message:
+        plan.pending_planning_json = {}
+        message = str(failed_message or "参考素材理解失败，请调整后重试")[:1000]
+        if pending.get("scope") == "suite":
+            plan.planning_status = "failed"
+            plan.error_message = message
+        for module in selected:
+            module.status = "failed"
+            module.error_message = message
+        return None, False
+    if identity is None or identity.status != "ready" or any(
+        row is None or row.status != "ready" for row in understandings.values()
+    ):
+        return None, False
+
+    user_id = str(pending["user_id"])
+    if pending.get("scope") == "suite":
+        job, created = await start_suite_planning(
+            db, settings, project=project, session=session, version=version, plan=plan,
+            module_rows=modules, modules=requests,
+            visual_direction_cn=str(pending.get("visual_direction_cn") or ""),
+            idempotency_key=str(pending["idempotency_key"]), user_id=user_id,
+        )
+    else:
+        module = selected[0]
+        request = requests[0]
+        job, created = await start_module_planning(
+            db, settings, project=project, session=session, version=version, plan=plan,
+            module=module, action=str(pending.get("action") or "module_replan"),
+            aspect_ratio=request.aspect_ratio,
+            operator_requirement_cn=request.operator_requirement_cn,
+            idempotency_key=str(pending["idempotency_key"]), user_id=user_id,
+        )
+    plan.pending_planning_json = {}
+    return job, created
+
+
+async def continue_pending_attachment_planning(
+    db: AsyncSession, settings: Settings, *, plan_id: str,
+) -> int:
+    """Reconcile analysis results and continue a durable planning intent.
+
+    Called both by the worker completion callback and GET recovery. The
+    idempotency key stored on the plan makes repeated calls safe.
+    """
+    plan = await db.scalar(select(AttachmentWorkbenchPlan).where(
+        AttachmentWorkbenchPlan.id == plan_id,
+    ).with_for_update())
+    if plan is None:
+        return 0
+    project = await db.get(ListingImageProject, plan.listing_image_project_id)
+    session = await db.get(ListingGenerationSession, plan.session_id)
+    version = await db.get(ListingVersion, plan.listing_version_id)
+    if project is None or session is None or version is None:
+        return 0
+    modules = list((await db.scalars(select(AttachmentWorkbenchModulePlan).where(
+        AttachmentWorkbenchModulePlan.workbench_plan_id == plan.id,
+    ))).all())
+    from app.services.attachment_product_identity_service import reconcile_product_identity_lock
+    from app.services.attachment_reference_service import reconcile_reference_understandings
+    created_count = await reconcile_reference_understandings(
+        db, settings, plan=plan, modules=modules,
+    )
+    created_count += await reconcile_product_identity_lock(db, settings, plan=plan)
+    _, planning_created = await _continue_pending_for_loaded_context(
+        db, settings, project=project, session=session, version=version,
+        plan=plan, modules=modules,
+    )
+    return created_count + int(planning_created)
+
+
 async def reconcile_attachment_planning(
     db: AsyncSession, *, plan: AttachmentWorkbenchPlan, modules: list[AttachmentWorkbenchModulePlan],
     version: ListingVersion,

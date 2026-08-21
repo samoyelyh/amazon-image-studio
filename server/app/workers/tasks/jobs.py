@@ -38,6 +38,8 @@ from app.services.storage_service import get_storage_service
 from app.services.task_service import (
     claim_job,
     create_attempt,
+    dispatch_jobs,
+    due_jobs,
     finalize_cancelled_job,
     get_job,
     refresh_batch_status,
@@ -379,6 +381,34 @@ async def _execute_job(
                             job.id,
                             type(quick_error).__name__,
                         )
+                if isinstance(job_metadata, dict) and job_metadata.get("workflow") in {
+                    "attachment_reference_understanding", "attachment_product_identity_lock",
+                }:
+                    try:
+                        from app.models.attachment_planning import AttachmentWorkbenchModulePlan
+                        from app.services.attachment_planning_service import continue_pending_attachment_planning
+
+                        plan_id = str(job_metadata.get("plan_id") or "")
+                        if not plan_id and job_metadata.get("module_plan_id"):
+                            module_plan = await session.get(
+                                AttachmentWorkbenchModulePlan, str(job_metadata["module_plan_id"]),
+                            )
+                            plan_id = module_plan.workbench_plan_id if module_plan else ""
+                        if plan_id:
+                            created_count = await continue_pending_attachment_planning(
+                                session, settings, plan_id=plan_id,
+                            )
+                            await session.commit()
+                            if created_count:
+                                await dispatch_jobs(
+                                    session, await due_jobs(session, settings, limit=created_count),
+                                )
+                    except Exception as continuation_error:
+                        await session.rollback()
+                        logger.exception(
+                            "attachment_planning_continuation_failed analysis_job_id=%s error_type=%s",
+                            job.id, type(continuation_error).__name__,
+                        )
                 if job.operation_code in {
                     "batch_tryon.style_analyze", "batch_tryon.prompt_analyze", "batch_tryon.prompt_analyze_detailed",
                 } and isinstance(job_metadata, dict) and job_metadata.get("workflow") == "batch_tryon_server_workflow":
@@ -472,6 +502,7 @@ async def _execute_job(
                     if job.batch_id:
                         await refresh_batch_status(session, job.batch_id)
                     await session.commit()
+                    await _continue_attachment_planning_after_analysis(session, settings, job)
                     return {"job_id": job.id, "status": job.status, "error": error.code}
                 continue
             except Exception as error:
@@ -538,6 +569,7 @@ async def _execute_job(
                 if job.batch_id:
                     await refresh_batch_status(session, job.batch_id)
                 await session.commit()
+                await _continue_attachment_planning_after_analysis(session, settings, job)
                 return {"job_id": job.id, "status": job.status, "error": error_code}
             finally:
                 if heartbeat_task:
@@ -555,7 +587,44 @@ async def _execute_job(
         if job.batch_id:
             await refresh_batch_status(session, job.batch_id)
         await session.commit()
+        await _continue_attachment_planning_after_analysis(session, settings, job)
         return {"job_id": job.id, "status": job.status, "error": job.error_code}
+
+
+async def _continue_attachment_planning_after_analysis(
+    session: AsyncSession, settings, job: Job,
+) -> None:
+    if job.status not in {JobStatus.FAILED.value, JobStatus.CANCELLED.value}:
+        return
+    metadata = job.input_json.get("metadata") if isinstance(job.input_json, dict) else None
+    if not isinstance(metadata, dict) or metadata.get("workflow") not in {
+        "attachment_reference_understanding", "attachment_product_identity_lock",
+    }:
+        return
+    try:
+        from app.models.attachment_planning import AttachmentWorkbenchModulePlan
+        from app.services.attachment_planning_service import continue_pending_attachment_planning
+
+        plan_id = str(metadata.get("plan_id") or "")
+        if not plan_id and metadata.get("module_plan_id"):
+            module_plan = await session.get(
+                AttachmentWorkbenchModulePlan, str(metadata["module_plan_id"]),
+            )
+            plan_id = module_plan.workbench_plan_id if module_plan else ""
+        if not plan_id:
+            return
+        created_count = await continue_pending_attachment_planning(
+            session, settings, plan_id=plan_id,
+        )
+        await session.commit()
+        if created_count:
+            await dispatch_jobs(session, await due_jobs(session, settings, limit=created_count))
+    except Exception as continuation_error:
+        await session.rollback()
+        logger.exception(
+            "attachment_planning_failure_continuation_failed analysis_job_id=%s error_type=%s",
+            job.id, type(continuation_error).__name__,
+        )
 
 
 async def _provider_payload(session: AsyncSession, *, storage, job) -> dict[str, object]:

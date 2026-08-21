@@ -85,6 +85,8 @@ SCENE只参考环境与氛围，不得改变商品身份。
 PRINT是高保真视觉事实，必须保护轮廓、比例、描边、结构和朝向，不得重新设计成相似普通字体。
 多商品时必须逐件分析并保留products数组；PRIMARY和每个SECONDARY的颜色、Logo、印花、号码、版型与结构必须彼此独立，禁止串用。
 没有某类素材时，对应对象保留空摘要和空数组。"""
+REFERENCE_ANALYSIS_PROMPT_VERSION = "attachment-reference-v3"
+REFERENCE_ANALYSIS_POLICY_VERSION = "phase10-reference-routing-v1"
 
 
 def slot_definitions(module_key: str) -> list[dict[str, object]]:
@@ -223,6 +225,37 @@ async def remove_module_reference(
     module.reference_state_version += 1
     module.reference_analysis_job_id = None
     await db.flush()
+
+
+async def update_module_reference_options(
+    db: AsyncSession, *, module: AttachmentWorkbenchModulePlan, reference_id: str,
+    keywords: list[str], guidance: str, expected_reference_state_version: int,
+    user_id: str,
+) -> AttachmentModuleReference:
+    if expected_reference_state_version != module.reference_state_version:
+        raise AppError(
+            "attachment_reference.state_version_conflict",
+            "参考素材已被更新，请刷新后再保存", 409,
+            {"expected": expected_reference_state_version, "actual": module.reference_state_version},
+        )
+    row = await db.scalar(select(AttachmentModuleReference).where(
+        AttachmentModuleReference.id == reference_id,
+        AttachmentModuleReference.organization_id == module.organization_id,
+        AttachmentModuleReference.module_plan_id == module.id,
+    ).with_for_update())
+    if row is None:
+        raise AppError("attachment_reference.not_found", "参考素材引用不存在", 404)
+    next_keywords = list(dict.fromkeys(value.strip() for value in keywords if value.strip()))
+    next_guidance = guidance.strip()
+    if next_keywords != list(row.keywords or []) or next_guidance != row.guidance:
+        row.keywords = next_keywords
+        row.guidance = next_guidance
+        row.updated_by = user_id
+        module.reference_context_dirty = True
+        module.reference_state_version += 1
+        module.reference_analysis_job_id = None
+    await db.flush()
+    return row
 
 
 async def replace_product_reference(
@@ -466,7 +499,9 @@ async def start_reference_analysis(
         raise AppError("attachment_composition.product_count_invalid", "多件商品模式需要2到3件商品", 409)
     system_prompt, user_prompt, references = build_reference_analysis_input(module.module_key, grouped, snapshot)
     input_hash = sha256(json.dumps({
-        "prompt_version": "attachment-reference-v2", "module_key": module.module_key,
+        "prompt_version": REFERENCE_ANALYSIS_PROMPT_VERSION,
+        "model_policy_version": REFERENCE_ANALYSIS_POLICY_VERSION,
+        "module_key": module.module_key,
         "roles": snapshot.get("roles"), "product_composition_version_id": snapshot.get("product_composition_version_id"),
         "reference_options": snapshot.get("reference_options"),
     }, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
@@ -497,6 +532,8 @@ async def start_reference_analysis(
                     "workflow": "attachment_reference_understanding", "action": "analyze_reference",
                     "module_plan_id": module.id, "module_key": module.module_key,
                     "analysis_task_type": route.task_type, "analysis_input_hash": input_hash,
+                    "analysis_prompt_version": REFERENCE_ANALYSIS_PROMPT_VERSION,
+                    "analysis_model_policy_version": REFERENCE_ANALYSIS_POLICY_VERSION,
                     "analysis_attempt": 1, "analysis_fallback": route.used_fallback_binding,
                 },
             },
@@ -519,7 +556,7 @@ async def start_reference_analysis(
         source_snapshot_json=snapshot, ai_job_id=job.id,
         input_hash=input_hash, analysis_task_type=route.task_type,
         analysis_model_config={"operation_code": route.operation_code, "model_code": route.model_code, "fallback_binding": route.used_fallback_binding},
-        analysis_prompt_version="attachment-reference-v2",
+        analysis_prompt_version=REFERENCE_ANALYSIS_PROMPT_VERSION,
         role_snapshot=dict(snapshot.get("roles") or {}),
         keywords_snapshot={str(item.get("reference_id")): list(item.get("keywords") or []) for item in snapshot.get("reference_options", []) if isinstance(item, dict)},
         guidance_snapshot={str(item.get("reference_id")): str(item.get("guidance") or "") for item in snapshot.get("reference_options", []) if isinstance(item, dict)},
@@ -614,6 +651,8 @@ async def reconcile_reference_understandings(
                                 "module_plan_id": module.id, "module_key": module.module_key,
                                 "analysis_task_type": "REFERENCE_ANALYSIS", "analysis_input_hash": understanding.input_hash,
                                 "analysis_attempt": next_attempt, "analysis_fallback": use_fallback,
+                                "analysis_prompt_version": REFERENCE_ANALYSIS_PROMPT_VERSION,
+                                "analysis_model_policy_version": REFERENCE_ANALYSIS_POLICY_VERSION,
                                 "retry_reason": retry_reason[:300],
                             },
                         },

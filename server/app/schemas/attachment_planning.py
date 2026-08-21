@@ -135,6 +135,12 @@ class AttachmentReferenceCreateRequest(BaseModel):
     library_item_id: str | None = Field(default=None, min_length=36, max_length=36)
 
 
+class AttachmentReferenceUpdateRequest(BaseModel):
+    keywords: list[str] = Field(default_factory=list, max_length=30)
+    guidance: str = Field(default="", max_length=10000)
+    expected_reference_state_version: int = Field(ge=0)
+
+
 class AttachmentProductReferenceRequest(BaseModel):
     asset_id: str = Field(min_length=36, max_length=36)
     source_asset_id: str | None = Field(default=None, min_length=36, max_length=36)

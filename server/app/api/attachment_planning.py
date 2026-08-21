@@ -37,6 +37,7 @@ from app.schemas.attachment_planning import (
     AttachmentProductReferenceRequest,
     AttachmentReferenceAnalyzeRequest,
     AttachmentReferenceCreateRequest,
+    AttachmentReferenceUpdateRequest,
     AttachmentReferenceSlotDefinitionResponse,
     AttachmentReferenceStateResponse,
     AttachmentReferenceUnderstandingResponse,
@@ -78,9 +79,10 @@ from app.services.attachment_planning_service import (
     attachment_module_rule,
     get_or_create_attachment_plan,
     list_attachment_versions,
+    continue_pending_attachment_planning,
     reconcile_attachment_planning,
-    start_module_planning,
-    start_suite_planning,
+    request_module_planning,
+    request_suite_planning,
 )
 from app.services.task_service import dispatch_jobs, due_jobs
 from app.services.asset_service import signed_asset_response
@@ -89,11 +91,11 @@ from app.services.attachment_reference_service import (
     ensure_product_reference_group,
     latest_reference_understanding,
     list_module_references,
-    reconcile_reference_understandings,
     remove_module_reference,
     replace_product_reference,
     slot_definitions,
     start_reference_analysis,
+    update_module_reference_options,
 )
 from app.services.storage_service import StorageService, get_storage_service
 from app.services.attachment_generation_service import (
@@ -245,7 +247,7 @@ async def _load_and_reconcile(
     )
     project, _, version, plan, modules = context
     settings = get_settings()
-    retry_jobs_created = await reconcile_reference_understandings(db, settings, plan=plan, modules=modules)
+    retry_jobs_created = await continue_pending_attachment_planning(db, settings, plan_id=plan.id)
     await reconcile_attachment_planning(db, plan=plan, modules=modules, version=version)
     await db.commit()
     if retry_jobs_created:
@@ -899,6 +901,48 @@ async def create_reference(
     return await _reference_response(db, storage, settings, plan=plan, modules=modules)
 
 
+@router.patch(
+    "/projects/{project_id}/modules/{module_key}/references/{reference_id}",
+    response_model=AttachmentReferenceStateResponse,
+)
+async def update_reference_options(
+    project_id: str, module_key: str, reference_id: str,
+    payload: AttachmentReferenceUpdateRequest,
+    db: AsyncSession = Depends(get_db_session), storage: StorageService = Depends(get_storage_service),
+    settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentReferenceStateResponse:
+    project, _, _, plan, modules = await _load_and_reconcile(
+        db, project_id=project_id, principal=principal,
+    )
+    module = next((item for item in modules if item.module_key == module_key), None)
+    if module is None:
+        raise AppError("attachment_reference.module_invalid", "选择了不支持的附图模块", 422)
+    await update_module_reference_options(
+        db, module=module, reference_id=reference_id,
+        keywords=payload.keywords, guidance=payload.guidance,
+        expected_reference_state_version=payload.expected_reference_state_version,
+        user_id=principal.user.id,
+    )
+    try:
+        _, _, created = await start_reference_analysis(
+            db, settings, project=project, plan=plan, module=module,
+            idempotency_key=(
+                f"attachment-reference:auto-options:{module.id}:{module.reference_state_version}"
+            ), user_id=principal.user.id,
+        )
+    except AppError as error:
+        if error.code != "resource_pool.operation_not_bound":
+            raise
+        module.reference_context_dirty = True
+        module.reference_analysis_job_id = None
+        created = False
+    await db.commit()
+    if created:
+        await dispatch_jobs(db, await due_jobs(db, settings, limit=1))
+    return await _reference_response(db, storage, settings, plan=plan, modules=modules)
+
+
 @router.delete("/projects/{project_id}/modules/{module_key}/references/{reference_id}", response_model=AttachmentReferenceStateResponse)
 async def delete_reference(
     project_id: str, module_key: str, reference_id: str,
@@ -1009,14 +1053,14 @@ async def plan_suite(
     principal: Principal = Depends(require_permissions("jobs.submit")),
 ) -> AttachmentPlanningResponse:
     project, session, version, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
-    job, created = await start_suite_planning(
+    _, created_count = await request_suite_planning(
         db, settings, project=project, session=session, version=version, plan=plan, module_rows=modules,
         modules=payload.modules, visual_direction_cn=payload.visual_direction_cn,
         idempotency_key=payload.idempotency_key, user_id=principal.user.id,
     )
     await db.commit()
-    if created:
-        await dispatch_jobs(db, await due_jobs(db, settings, limit=1))
+    if created_count:
+        await dispatch_jobs(db, await due_jobs(db, settings, limit=created_count))
     return _response(project=project, version=version, plan=plan, modules=modules, principal=principal)
 
 
@@ -1033,15 +1077,16 @@ async def _start_one(
     module = indexed[module_key]
     if action == "optimize_prompt" and (not module.plan_summary_cn.strip() or not module.prompt_cn.strip()):
         raise AppError("attachment_planning.module_prompt_required", "当前模块尚未完成策划，不能只优化Prompt", 409)
-    job, created = await start_module_planning(
+    _, created_count = await request_module_planning(
         db, settings, project=project, session=session, version=version, plan=plan, module=module,
         action=action, aspect_ratio=payload.aspect_ratio,
         operator_requirement_cn=payload.operator_requirement_cn,
         idempotency_key=payload.idempotency_key, user_id=principal.user.id,
+        module_rows=modules,
     )
     await db.commit()
-    if created:
-        await dispatch_jobs(db, await due_jobs(db, settings, limit=1))
+    if created_count:
+        await dispatch_jobs(db, await due_jobs(db, settings, limit=created_count))
     return _response(project=project, version=version, plan=plan, modules=modules, principal=principal)
 
 

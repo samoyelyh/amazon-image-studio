@@ -56,6 +56,7 @@ interface Props {
   onOptimizePrompt: (operatorRequirement: string) => Promise<void>
   onAddReference: (slot: AttachmentReferenceSlotType, assetId: string, options: { keywords: string[]; guidance: string; libraryItemId?: string }) => Promise<void>
   onRemoveReference: (referenceId: string) => Promise<void>
+  onUpdateReference: (referenceId: string, keywords: string[], guidance: string, expectedVersion: number) => Promise<void>
   onAnalyzeReferences: () => Promise<void>
   onProductModeChange: (mode: 'SINGLE' | 'MULTI') => Promise<void>
   onAddSecondaryProduct: (sessionId: string) => Promise<void>
@@ -100,6 +101,7 @@ export default function AttachmentImageModuleCard({
   onOptimizePrompt,
   onAddReference,
   onRemoveReference,
+  onUpdateReference,
   onAnalyzeReferences,
   onProductModeChange,
   onAddSecondaryProduct,
@@ -254,6 +256,7 @@ export default function AttachmentImageModuleCard({
           busy={planningBusy}
           onAdd={onAddReference}
           onRemove={onRemoveReference}
+          onUpdate={onUpdateReference}
           onAnalyze={onAnalyzeReferences}
           onError={onReferenceError}
         />}

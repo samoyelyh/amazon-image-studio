@@ -162,6 +162,20 @@ async def test_reference_api_inherits_product_validates_slots_limits_and_protect
     assert gift["reference_context_dirty"] is True
     assert gift["references"][0]["asset"]["id"] == assets["template"]
 
+    updated = await client.patch(
+        f"/api/v1/attachment-workbench/projects/{project_id}/modules/gift_scene/references/{gift['references'][0]['id']}",
+        headers=headers,
+        json={
+            "keywords": ["45度俯拍", "礼盒布局"],
+            "guidance": "只参考构图，禁止继承模板旧商品。",
+            "expected_reference_state_version": gift["reference_state_version"],
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    updated_gift = next(item for item in updated.json()["modules"] if item["module_key"] == "gift_scene")
+    assert updated_gift["references"][0]["keywords"] == ["45度俯拍", "礼盒布局"]
+    assert updated_gift["references"][0]["guidance"].startswith("只参考构图")
+
     unsupported = await client.post(
         f"/api/v1/attachment-workbench/projects/{project_id}/modules/pure_white/references",
         headers=headers, json={"slot_type": "TEMPLATE", "asset_id": assets["template"], "metadata": {}},

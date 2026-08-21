@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 from app.core.errors import AppError
 from app.services.ai_task_model_policy_service import TASK_OPERATION_CODES, next_analysis_retry
 from app.services.attachment_planning_service import attachment_module_rule
+from app.services import attachment_planning_service
+from app.models.attachment_planning import AttachmentWorkbenchModulePlan, AttachmentWorkbenchPlan
+from app.models.listing_workflow import ListingGenerationSession, ListingImageProject, ListingVersion
+from app.schemas.attachment_planning import AttachmentPlanningModuleInput
+from app.services.attachment_reference_service import (
+    REFERENCE_ANALYSIS_POLICY_VERSION,
+    REFERENCE_ANALYSIS_PROMPT_VERSION,
+)
 from app.services.attachment_product_identity_service import parse_product_identity_lock
 from app.services.attachment_reference_library_service import parse_library_understanding
 from app.schemas.tasks import JobSubmitRequest
@@ -25,6 +35,88 @@ def test_phase10_ai_tasks_have_dedicated_operation_codes() -> None:
     assert TASK_OPERATION_CODES["PRODUCT_IDENTITY_EXTRACTION"] == "listing.product_identity_extract"
     assert TASK_OPERATION_CODES["MODEL_REFERENCE_ANALYSIS"] == "listing.model_reference_analyze"
     assert TASK_OPERATION_CODES["MODULE_PLANNING"] == "listing.plan"
+
+
+def test_reference_understanding_hash_contract_has_explicit_policy_versions() -> None:
+    assert REFERENCE_ANALYSIS_PROMPT_VERSION == "attachment-reference-v3"
+    assert REFERENCE_ANALYSIS_POLICY_VERSION == "phase10-reference-routing-v1"
+
+
+@pytest.mark.asyncio
+async def test_suite_planning_persists_one_backend_dependency_intent(monkeypatch) -> None:
+    plan = AttachmentWorkbenchPlan(
+        id="plan", organization_id="org", listing_image_project_id="image-project",
+        session_id="session", listing_version_id="version", pending_planning_json={},
+        planning_status="ready", visual_direction_cn="", created_by="user", updated_by="user",
+    )
+    module = AttachmentWorkbenchModulePlan(
+        id="module", organization_id="org", workbench_plan_id="plan", module_key="gift_scene",
+        plan_summary_cn="", prompt_cn="", operator_requirement_cn="", aspect_ratio="4:5",
+        reference_context_dirty=True, reference_state_version=3, status="draft", updated_by="user",
+    )
+    monkeypatch.setattr(
+        attachment_planning_service, "_start_planning_dependencies",
+        AsyncMock(return_value=({"gift_scene": "understanding"}, "identity", 2)),
+    )
+    monkeypatch.setattr(
+        attachment_planning_service, "_continue_pending_for_loaded_context",
+        AsyncMock(return_value=(None, False)),
+    )
+    from app.services import creative_preset_service
+    monkeypatch.setattr(
+        creative_preset_service, "creative_context_snapshot",
+        AsyncMock(return_value={"visual_preset_version_id": "visual-v1"}),
+    )
+    _, created_count = await attachment_planning_service.request_suite_planning(
+        AsyncMock(), None,
+        project=ListingImageProject(id="image-project", organization_id="org"),
+        session=ListingGenerationSession(id="session", organization_id="org"),
+        version=ListingVersion(id="version", organization_id="org", session_id="session", version_number=1),
+        plan=plan, module_rows=[module],
+        modules=[AttachmentPlanningModuleInput(
+            module_key="gift_scene", aspect_ratio="4:5", operator_requirement_cn="暖色礼品氛围",
+        )],
+        visual_direction_cn="统一真实商品质感", idempotency_key="suite-intent-001", user_id="user",
+    )
+    assert created_count == 2
+    assert plan.planning_status == "preparing"
+    assert module.status == "preparing"
+    assert plan.pending_planning_json["reference_understanding_ids"] == {"gift_scene": "understanding"}
+    assert plan.pending_planning_json["modules"][0]["operator_requirement_cn"] == "暖色礼品氛围"
+
+
+@pytest.mark.asyncio
+async def test_module_dependency_preparation_does_not_replace_suite_status(monkeypatch) -> None:
+    plan = AttachmentWorkbenchPlan(
+        id="plan", organization_id="org", listing_image_project_id="image-project",
+        session_id="session", listing_version_id="version", pending_planning_json={},
+        planning_status="ready", visual_direction_cn="整套方向", created_by="user", updated_by="user",
+    )
+    module = AttachmentWorkbenchModulePlan(
+        id="module", organization_id="org", workbench_plan_id="plan", module_key="gift_scene",
+        plan_summary_cn="礼品方案", prompt_cn="礼品Prompt", operator_requirement_cn="", aspect_ratio="4:5",
+        reference_context_dirty=True, reference_state_version=4, status="ready", updated_by="user",
+    )
+    monkeypatch.setattr(
+        attachment_planning_service, "_start_planning_dependencies",
+        AsyncMock(return_value=({"gift_scene": "understanding"}, "identity", 1)),
+    )
+    monkeypatch.setattr(
+        attachment_planning_service, "_continue_pending_for_loaded_context",
+        AsyncMock(return_value=(None, False)),
+    )
+    await attachment_planning_service.request_module_planning(
+        AsyncMock(), None,
+        project=ListingImageProject(id="image-project", organization_id="org"),
+        session=ListingGenerationSession(id="session", organization_id="org"),
+        version=ListingVersion(id="version", organization_id="org", session_id="session", version_number=1),
+        plan=plan, module_rows=[module], module=module, action="module_replan",
+        aspect_ratio="4:5", operator_requirement_cn="减少道具",
+        idempotency_key="module-intent-001", user_id="user",
+    )
+    assert plan.planning_status == "ready"
+    assert module.status == "preparing"
+    assert plan.pending_planning_json["scope"] == "module"
 
 
 @pytest.mark.parametrize("operation_code", [

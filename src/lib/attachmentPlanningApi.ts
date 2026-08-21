@@ -105,6 +105,9 @@ export interface AttachmentModuleReference {
   asset: Asset
   sort_order: number
   metadata: Record<string, unknown>
+  keywords: string[]
+  guidance: string
+  library_item_id: string | null
 }
 
 export interface AttachmentModuleReferenceState {
@@ -426,6 +429,16 @@ export function addAttachmentReference(projectId: string, moduleKey: AttachmentM
 export function removeAttachmentReference(projectId: string, moduleKey: AttachmentModuleCode, referenceId: string) {
   return authenticatedFetch<AttachmentReferenceState>(`/attachment-workbench/projects/${projectId}/modules/${moduleKey}/references/${referenceId}`, {
     method: 'DELETE',
+  })
+}
+
+export function updateAttachmentReferenceOptions(projectId: string, moduleKey: AttachmentModuleCode, referenceId: string, input: {
+  keywords: string[]
+  guidance: string
+  expected_reference_state_version: number
+}) {
+  return authenticatedFetch<AttachmentReferenceState>(`/attachment-workbench/projects/${projectId}/modules/${moduleKey}/references/${referenceId}`, {
+    method: 'PATCH', body: JSON.stringify(input),
   })
 }
 
