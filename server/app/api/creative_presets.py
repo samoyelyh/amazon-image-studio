@@ -23,6 +23,7 @@ from app.schemas.creative_presets import (
     AIModelPresetResponse,
     AIModelPresetUpdateRequest,
     AIModelGenerateRequest,
+    AIModelQuickCreateRequest,
     AIModelReferencePackRequest,
     AIModelReferenceResponse,
     ThemePresetCreateRequest,
@@ -122,6 +123,8 @@ async def model_response(
         current_identity_version_id=preset.current_identity_version_id,
         status=preset.status, sort_order=preset.sort_order,
         is_active=preset.is_active, is_published=preset.is_published,
+        source_type=preset.source_type, owner_user_id=preset.owner_user_id,
+        generation_parameters=dict(preset.generation_parameters or {}),
         identity_prompt=preset.identity_prompt if include_private else None,
         generation_prompt=preset.generation_prompt if include_private else None,
         negative_constraints=preset.negative_constraints if include_private else None,
@@ -156,8 +159,88 @@ async def list_models(
     db: AsyncSession = Depends(get_db_session),
     principal: Principal = Depends(require_permissions("jobs.read")),
 ) -> list[AIModelPresetResponse]:
-    rows = await visible_model_presets(db, organization_id=_organization_id(principal), published_only=True)
+    rows = await visible_model_presets(
+        db, organization_id=_organization_id(principal), published_only=True, user_id=principal.user.id,
+    )
     return [await model_response(db, item, include_private=False) for item in rows]
+
+
+@router.post("/models/generate", response_model=AIModelPresetResponse, status_code=status.HTTP_202_ACCEPTED)
+async def generate_personal_model(
+    payload: AIModelQuickCreateRequest, request: Request,
+    db: AsyncSession = Depends(get_db_session), settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AIModelPresetResponse:
+    organization_id = _organization_id(principal)
+    parameters = payload.model_dump(exclude={"idempotency_key", "display_name"})
+    prompt = (
+        "Create one consistent adult commercial model identity on a clean light gray studio background. "
+        "Full-body front view, neutral unbranded clothing, no logos, no text, no celebrity likeness. "
+        f"Gender presentation: {payload.gender_presentation}. Age range: {payload.age_range}. "
+        f"Body type: {payload.body_type}. Commercial style: {payload.commercial_style}. "
+        f"Personality: {payload.personality}. Hair: {payload.hair_style}. Expression: {payload.expression}."
+    )
+    preset = AIModelPreset(
+        organization_id=organization_id,
+        code=f"user-{principal.user.id[:8]}-{payload.idempotency_key[-12:]}",
+        name=payload.quick_type, display_name=payload.display_name,
+        gender_presentation=payload.gender_presentation, age_range=payload.age_range,
+        body_type=payload.body_type, short_description=f"{payload.commercial_style} · {payload.personality}",
+        identity_prompt=prompt, generation_prompt=prompt,
+        negative_constraints="No brand, logo, text, celebrity likeness, revealing clothing or identity drift.",
+        recommended_visual_presets=[], recommended_modules=[], tags=list(payload.recommended_usage),
+        source_type="USER_TEMPORARY", owner_user_id=principal.user.id, generation_parameters=parameters,
+        status="GENERATING_IDENTITY", sort_order=100, is_active=True, is_published=False,
+        created_by=principal.user.id, updated_by=principal.user.id,
+    )
+    db.add(preset)
+    await db.flush()
+    identity, job, created = await start_identity_generation(
+        db, settings, preset=preset, organization_id=organization_id,
+        user_id=principal.user.id, idempotency_key=payload.idempotency_key,
+    )
+    add_audit_log(
+        db, request=request, actor_user_id=principal.user.id, organization_id=organization_id,
+        action="ai_model.personal.generate", resource_type="ai_model_identity_version", resource_id=identity.id,
+        metadata={"model_preset_id": preset.id, "job_id": job.id, "quick_type": payload.quick_type},
+    )
+    await db.commit()
+    if created:
+        await dispatch_jobs(db, await due_jobs(db, settings, limit=1))
+    return await model_response(db, preset, include_private=True)
+
+
+@router.post("/models/{preset_id}/save-personal", response_model=AIModelPresetResponse)
+async def save_personal_model(
+    preset_id: str, request: Request, db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AIModelPresetResponse:
+    preset = await get_model_preset(db, preset_id)
+    if preset.organization_id != _organization_id(principal) or preset.owner_user_id != principal.user.id:
+        raise AppError("creative_preset.model_not_found", "AI模特不存在或无权访问", 404)
+    if not preset.current_identity_version_id:
+        raise AppError("creative_preset.identity_not_ready", "候选模特尚未生成完成", 409)
+    preset.source_type = "USER_GENERATED"
+    preset.status = "PERSONAL_SAVED"
+    preset.updated_by = principal.user.id
+    add_audit_log(db, request=request, actor_user_id=principal.user.id, organization_id=preset.organization_id,
+                  action="ai_model.personal.save", resource_type="ai_model_preset", resource_id=preset.id, metadata={})
+    await db.commit()
+    return await model_response(db, preset, include_private=True)
+
+
+@router.get("/models/{preset_id}", response_model=AIModelPresetResponse)
+async def get_personal_or_public_model(
+    preset_id: str, db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.read")),
+) -> AIModelPresetResponse:
+    preset = await get_model_preset(db, preset_id)
+    organization_id = _organization_id(principal)
+    public = preset.is_published and preset.status == "PUBLISHED"
+    owned = preset.organization_id == organization_id and preset.owner_user_id == principal.user.id
+    if not public and not owned:
+        raise AppError("creative_preset.model_not_found", "AI模特不存在或无权访问", 404)
+    return await model_response(db, preset, include_private=owned)
 
 
 @admin_router.get("/visual", response_model=list[VisualPresetResponse])

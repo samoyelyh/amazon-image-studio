@@ -124,6 +124,9 @@ class AIModelPresetResponse(BaseModel):
     sort_order: int
     is_active: bool
     is_published: bool
+    source_type: str = "ADMIN_PRESET"
+    owner_user_id: str | None = None
+    generation_parameters: dict[str, object] = Field(default_factory=dict)
     identity_prompt: str | None = None
     generation_prompt: str | None = None
     negative_constraints: str | None = None
@@ -146,6 +149,19 @@ class AIModelPresetUpdateRequest(BaseModel):
 
 class AIModelGenerateRequest(BaseModel):
     idempotency_key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$", min_length=8, max_length=160)
+
+
+class AIModelQuickCreateRequest(AIModelGenerateRequest):
+    quick_type: str = Field(min_length=1, max_length=80)
+    display_name: str = Field(default="临时AI模特", min_length=1, max_length=160)
+    gender_presentation: str = Field(min_length=1, max_length=40)
+    age_range: Literal["18-24", "25-30", "30-39", "40-49", "50+"]
+    body_type: Literal["slim", "natural", "fit", "athletic", "strong", "tall"]
+    commercial_style: Literal["amazon_ecommerce", "sports", "lifestyle", "streetwear", "premium_commercial"]
+    personality: Literal["natural", "sunny", "mature", "friendly", "confident", "cool", "energetic", "premium"]
+    hair_style: str = Field(default="natural", max_length=120)
+    expression: Literal["neutral", "subtle_smile", "confident", "relaxed"] = "neutral"
+    recommended_usage: list[Literal["stadium", "gift", "casual", "sports", "family", "street"]] = Field(default_factory=list, max_length=6)
 
 
 class AIModelReferencePackRequest(AIModelGenerateRequest):
@@ -190,6 +206,29 @@ class AttachmentCreativeContextUpdate(BaseModel):
         if self.model_selection_mode == "selected" and not self.selected_model_identity_version_ids:
             raise ValueError("selected mode requires at least one model identity")
         if self.model_selection_mode != "selected" and self.selected_model_identity_version_ids:
+            raise ValueError("only selected mode accepts explicit model identities")
+        if len(self.selected_model_identity_version_ids) != len(set(self.selected_model_identity_version_ids)):
+            raise ValueError("model identities must be unique")
+        return self
+
+
+class AttachmentModuleModelContextResponse(BaseModel):
+    module_key: str
+    selection_mode: Literal["inherit", "recommended", "selected", "none"] | str
+    effective_selection_mode: str
+    inherited: bool
+    selected_identity_version_ids: list[str]
+
+
+class AttachmentModuleModelContextUpdate(BaseModel):
+    selection_mode: Literal["inherit", "recommended", "selected", "none"]
+    selected_model_identity_version_ids: list[str] = Field(default_factory=list, max_length=3)
+
+    @model_validator(mode="after")
+    def selection_matches_mode(self) -> "AttachmentModuleModelContextUpdate":
+        if self.selection_mode == "selected" and not self.selected_model_identity_version_ids:
+            raise ValueError("selected mode requires at least one model identity")
+        if self.selection_mode != "selected" and self.selected_model_identity_version_ids:
             raise ValueError("only selected mode accepts explicit model identities")
         if len(self.selected_model_identity_version_ids) != len(set(self.selected_model_identity_version_ids)):
             raise ValueError("model identities must be unique")

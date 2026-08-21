@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from hashlib import sha256
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select
@@ -22,7 +23,7 @@ from app.models.content import Asset
 from app.models.listing_workflow import ListingGenerationSession, ListingImageProject
 from app.models.tasks import Job, JobStatus
 from app.schemas.tasks import JobSubmitRequest
-from app.services.category_listing_service import resolve_bound_model_code
+from app.services.ai_task_model_policy_service import next_analysis_retry, resolve_ai_task_route
 from app.services.attachment_product_composition_service import (
     current_composition_version,
 )
@@ -168,6 +169,7 @@ async def list_module_references(db: AsyncSession, module_plan_id: str) -> list[
 async def add_module_reference(
     db: AsyncSession, *, module: AttachmentWorkbenchModulePlan, slot_type: str,
     asset_id: str, metadata: dict[str, object], user_id: str,
+    keywords: list[str] | None = None, guidance: str = "", library_item_id: str | None = None,
 ) -> AttachmentModuleReference:
     slot_type = slot_type.upper()
     definition = _slot_definition(module.module_key, slot_type)
@@ -195,7 +197,8 @@ async def add_module_reference(
     row = AttachmentModuleReference(
         organization_id=module.organization_id, module_plan_id=module.id,
         slot_type=slot_type, asset_id=asset.id, sort_order=count,
-        metadata_json=dict(metadata), created_by=user_id, updated_by=user_id,
+        metadata_json=dict(metadata), keywords=list(keywords or []), guidance=guidance.strip(),
+        library_item_id=library_item_id, created_by=user_id, updated_by=user_id,
     )
     db.add(row)
     module.reference_context_dirty = True
@@ -294,6 +297,11 @@ async def effective_reference_snapshot(
         else:
             effective_products.extend(item for item in matching if item.source == "session")
     refs = await list_module_references(db, module.id)
+    reference_options = [{
+        "reference_id": item.id, "asset_id": item.asset_id, "role": item.slot_type,
+        "keywords": list(item.keywords or []), "guidance": item.guidance,
+        "library_item_id": item.library_item_id,
+    } for item in refs]
     grouped = {slot: [] for slot in SLOT_TYPES}
     composition = await db.scalar(select(AttachmentProductComposition).where(
         AttachmentProductComposition.module_plan_id == module.id,
@@ -384,6 +392,7 @@ async def effective_reference_snapshot(
         "product_composition_version_number": composition_version.version_number if composition_version else None,
         "products": products,
         "execution_order": execution_order,
+        "reference_options": reference_options,
     }
     return grouped, snapshot
 
@@ -412,6 +421,7 @@ def build_reference_analysis_input(
             "PRINT": "保持字形、号码和图形的视觉结构",
             "OTHER": "补充局部细节",
         },
+        "reference_keywords_and_guidance": (snapshot or {}).get("reference_options", []),
     }, ensure_ascii=False)
     return REFERENCE_ANALYSIS_SYSTEM_PROMPT, user_prompt, references
 
@@ -455,20 +465,39 @@ async def start_reference_analysis(
     if snapshot.get("product_mode") == "MULTI" and not 2 <= int(snapshot.get("product_count") or 0) <= 3:
         raise AppError("attachment_composition.product_count_invalid", "多件商品模式需要2到3件商品", 409)
     system_prompt, user_prompt, references = build_reference_analysis_input(module.module_key, grouped, snapshot)
-    model_code = await resolve_bound_model_code(
-        db, organization_id=project.organization_id, operation_code="listing.plan", capability="text_generation",
+    input_hash = sha256(json.dumps({
+        "prompt_version": "attachment-reference-v2", "module_key": module.module_key,
+        "roles": snapshot.get("roles"), "product_composition_version_id": snapshot.get("product_composition_version_id"),
+        "reference_options": snapshot.get("reference_options"),
+    }, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+    fresh = await db.scalar(select(AttachmentReferenceUnderstanding).where(
+        AttachmentReferenceUnderstanding.module_plan_id == module.id,
+        AttachmentReferenceUnderstanding.input_hash == input_hash,
+        AttachmentReferenceUnderstanding.status.in_(["analyzing", "ready"]),
+    ).order_by(AttachmentReferenceUnderstanding.version_number.desc()).limit(1))
+    if fresh and fresh.ai_job_id:
+        existing_job = await db.get(Job, fresh.ai_job_id)
+        if existing_job:
+            module.reference_analysis_job_id = existing_job.id if fresh.status == "analyzing" else None
+            if fresh.status == "ready":
+                module.reference_context_dirty = False
+            return existing_job, fresh, False
+    route = await resolve_ai_task_route(
+        db, organization_id=project.organization_id, task_type="REFERENCE_ANALYSIS", capability="text_generation",
     )
     job, created = await submit_job(
         db, settings, organization_id=project.organization_id, user_id=user_id,
         payload=JobSubmitRequest(
-            operation_code="listing.plan", workspace_type="listing", queue_name="planning_queue",
-            capability="text_generation", model_code=model_code, project_id=None,
+            operation_code=route.operation_code, workspace_type="listing", queue_name="planning_queue",
+            capability="text_generation", model_code=route.model_code, project_id=None,
             input={
                 "system_prompt": system_prompt, "user_prompt": user_prompt,
                 "response_format": "json_object", "reference_asset_ids": references,
                 "metadata": {
                     "workflow": "attachment_reference_understanding", "action": "analyze_reference",
                     "module_plan_id": module.id, "module_key": module.module_key,
+                    "analysis_task_type": route.task_type, "analysis_input_hash": input_hash,
+                    "analysis_attempt": 1, "analysis_fallback": route.used_fallback_binding,
                 },
             },
             idempotency_key=idempotency_key,
@@ -488,6 +517,12 @@ async def start_reference_analysis(
         organization_id=project.organization_id, module_plan_id=module.id,
         version_number=version_number, status="analyzing", structured_json={},
         source_snapshot_json=snapshot, ai_job_id=job.id,
+        input_hash=input_hash, analysis_task_type=route.task_type,
+        analysis_model_config={"operation_code": route.operation_code, "model_code": route.model_code, "fallback_binding": route.used_fallback_binding},
+        analysis_prompt_version="attachment-reference-v2",
+        role_snapshot=dict(snapshot.get("roles") or {}),
+        keywords_snapshot={str(item.get("reference_id")): list(item.get("keywords") or []) for item in snapshot.get("reference_options", []) if isinstance(item, dict)},
+        guidance_snapshot={str(item.get("reference_id")): str(item.get("guidance") or "") for item in snapshot.get("reference_options", []) if isinstance(item, dict)},
         product_composition_version_id=snapshot.get("product_composition_version_id"),
         created_by=user_id,
     )
@@ -498,8 +533,9 @@ async def start_reference_analysis(
 
 
 async def reconcile_reference_understandings(
-    db: AsyncSession, *, plan: AttachmentWorkbenchPlan, modules: list[AttachmentWorkbenchModulePlan],
-) -> None:
+    db: AsyncSession, settings: Settings, *, plan: AttachmentWorkbenchPlan, modules: list[AttachmentWorkbenchModulePlan],
+) -> int:
+    retry_jobs_created = 0
     indexed = {item.id: item for item in modules}
     pending = list((await db.scalars(select(AttachmentReferenceUnderstanding).where(
         AttachmentReferenceUnderstanding.module_plan_id.in_(indexed),
@@ -514,6 +550,24 @@ async def reconcile_reference_understandings(
         }:
             continue
         module = indexed[understanding.module_plan_id]
+        _, current_snapshot = await effective_reference_snapshot(db, plan=plan, module=module)
+        if (
+            current_snapshot.get("roles") != understanding.source_snapshot_json.get("roles")
+            or current_snapshot.get("product_composition_version_id")
+            != understanding.source_snapshot_json.get("product_composition_version_id")
+            or current_snapshot.get("reference_options")
+            != understanding.source_snapshot_json.get("reference_options")
+        ):
+            understanding.status = "stale"
+            module.reference_context_dirty = True
+            if module.reference_analysis_job_id == job.id:
+                module.reference_analysis_job_id = None
+            continue
+        metadata = job.input_json.get("metadata") if isinstance(job.input_json, dict) else None
+        metadata = metadata if isinstance(metadata, dict) else {}
+        attempt = int(metadata.get("analysis_attempt") or 1)
+        fallback_used = bool(metadata.get("analysis_fallback"))
+        retry_reason: str | None = None
         if job.status == JobStatus.SUCCEEDED.value:
             try:
                 text = str((job.result_json or {}).get("metadata", {}).get("text") or "")
@@ -528,27 +582,62 @@ async def reconcile_reference_understandings(
                         )
                 understanding.structured_json = parsed
                 understanding.ai_model = job.model_code
-                _, current_snapshot = await effective_reference_snapshot(db, plan=plan, module=module)
-                if (
-                    current_snapshot.get("roles") == understanding.source_snapshot_json.get("roles")
-                    and current_snapshot.get("product_composition_version_id")
-                    == understanding.source_snapshot_json.get("product_composition_version_id")
-                ):
-                    understanding.status = "ready"
-                    module.reference_context_dirty = False
-                else:
-                    understanding.status = "stale"
-                    module.reference_context_dirty = True
+                understanding.status = "ready"
+                module.reference_context_dirty = False
             except AppError as error:
-                understanding.status = "failed"
-                understanding.error_message = error.message
-                module.reference_context_dirty = True
+                retry_reason = error.message
         else:
+            retry_reason = job.error_message or "参考素材分析失败，可重试"
+        if retry_reason:
+            decision = next_analysis_retry(attempt=attempt, fallback_used=fallback_used)
+            if decision is not None:
+                next_attempt = decision.attempt
+                use_fallback = decision.use_fallback
+                system_prompt, user_prompt, references = build_reference_analysis_input(
+                    module.module_key, (await effective_reference_snapshot(db, plan=plan, module=module))[0], current_snapshot,
+                )
+                route = await resolve_ai_task_route(
+                    db, organization_id=plan.organization_id,
+                    task_type="MODULE_PLANNING" if use_fallback else "REFERENCE_ANALYSIS",
+                    capability="text_generation",
+                )
+                retry_job, created = await submit_job(
+                    db, settings, organization_id=plan.organization_id, user_id=understanding.created_by,
+                    payload=JobSubmitRequest(
+                        operation_code=route.operation_code, workspace_type="listing", queue_name="planning_queue",
+                        capability="text_generation", model_code=route.model_code, project_id=None,
+                        input={
+                            "system_prompt": system_prompt, "user_prompt": user_prompt,
+                            "response_format": "json_object", "reference_asset_ids": references,
+                            "metadata": {
+                                "workflow": "attachment_reference_understanding", "action": "analyze_reference",
+                                "module_plan_id": module.id, "module_key": module.module_key,
+                                "analysis_task_type": "REFERENCE_ANALYSIS", "analysis_input_hash": understanding.input_hash,
+                                "analysis_attempt": next_attempt, "analysis_fallback": use_fallback,
+                                "retry_reason": retry_reason[:300],
+                            },
+                        },
+                        idempotency_key=f"attachment-reference:{understanding.id}:attempt:{next_attempt}",
+                        billing_factors={"workspace": "attachment_reference_understanding", "module_key": module.module_key},
+                    ),
+                )
+                understanding.ai_job_id = retry_job.id
+                understanding.ai_model = route.model_code
+                understanding.analysis_model_config = {
+                    **dict(understanding.analysis_model_config or {}),
+                    "last_operation_code": route.operation_code, "last_model_code": route.model_code,
+                    "attempt": next_attempt, "fallback": use_fallback,
+                }
+                understanding.error_message = retry_reason
+                module.reference_analysis_job_id = retry_job.id
+                retry_jobs_created += int(created)
+                continue
             understanding.status = "failed"
-            understanding.error_message = job.error_message or "参考素材分析失败，可重试"
+            understanding.error_message = retry_reason
             module.reference_context_dirty = True
         if module.reference_analysis_job_id == job.id:
             module.reference_analysis_job_id = None
+    return retry_jobs_created
 
 
 async def current_understanding_context(

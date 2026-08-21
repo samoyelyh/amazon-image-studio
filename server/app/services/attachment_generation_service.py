@@ -335,8 +335,7 @@ async def build_attachment_generation_preview(
         operation_code="listing.generate", model_code=model_code, capability="image_edit",
     )
     supported_ratios = _supported_ratios(dict(model.config_json or {}))
-    from app.services.creative_preset_service import selected_models as current_plan_models
-    current_model_identity_ids = [row[1].id for row in await current_plan_models(db, plan=plan)]
+    from app.services.creative_preset_service import module_model_context_snapshot
     indexed = {item.module_key: item for item in modules}
     prepared: list[AttachmentGenerationModule] = []
     creative_versions = list((await db.scalars(select(AttachmentWorkbenchPlanVersion).where(
@@ -352,6 +351,11 @@ async def build_attachment_generation_preview(
     for module_key in selected:
         module = indexed[module_key]
         module_rule = attachment_module_rule(dict(version.category_skill_snapshot or {}), module_key)
+        current_model_context = await module_model_context_snapshot(db, plan=plan, module_key=module_key)
+        current_model_identity_ids = [
+            str(item.get("identity_version_id")) for item in current_model_context.get("selected_models", [])
+            if isinstance(item, dict) and item.get("identity_version_id")
+        ]
         draft = _module_draft(project, module_key)
         mode = str(draft.get("generationMode") or "standard")
         if mode not in {"standard", "creative"}:
@@ -395,6 +399,8 @@ async def build_attachment_generation_preview(
             ]
             if bool(module_rule.get("supports_model")) and plan.visual_preset_version_id and version_model_ids != current_model_identity_ids:
                 raise AppError("attachment_generation.model_stale", f"{MODULE_NAMES[module_key]}的AI模特已变化，请重新策划", 409)
+            if plan.current_product_identity_lock_version_id and plan_version.product_identity_lock_version_id != plan.current_product_identity_lock_version_id:
+                raise AppError("attachment_generation.product_identity_stale", f"{MODULE_NAMES[module_key]}的商品事实已更新，请重新策划", 409)
             selected_versions = [plan_version] * image_count
         else:
             if not creative_planning_job_id:
@@ -496,6 +502,7 @@ async def create_attachment_generation(
 
     items: list[BatchJobItemRequest] = []
     for module in preview.modules:
+        module_rule = attachment_module_rule(dict(version.category_skill_snapshot or {}), module.module_key)
         reference_ids = _flatten_references(module.grouped_references, module.reference_snapshot)
         for direction in module.directions:
             slot_index = direction.slot_index
@@ -540,6 +547,14 @@ async def create_attachment_generation(
                     "theme_preset_version_id": direction.plan_version.theme_preset_version_id,
                     "theme_prompt_snapshot": direction.plan_version.theme_prompt_snapshot,
                     "model_identity_snapshot": list(direction.plan_version.selected_model_snapshot or []),
+                    "product_identity_lock_version_id": direction.plan_version.product_identity_lock_version_id,
+                    "module_sales_objective_snapshot": {
+                        "buyer_question": module_rule.get("buyer_question", ""),
+                        "image_sales_objective": module_rule.get("image_sales_objective", ""),
+                        "required_information": list(module_rule.get("required_information", [])),
+                        "avoid_duplication": list(module_rule.get("avoid_duplication", [])),
+                    },
+                    "reference_library_snapshot": list(direction.plan_version.reference_library_snapshot or []),
                     "effective_prompt_snapshot": direction.execution_prompt,
                     "requested_aspect_ratio": module.aspect_ratio,
                     "requested_width": module.width,
@@ -600,6 +615,14 @@ async def create_attachment_generation(
         "theme_preset_id": item.plan_version.theme_preset_id,
         "theme_preset_version_id": item.plan_version.theme_preset_version_id,
         "model_identity_snapshot": list(item.plan_version.selected_model_snapshot or []),
+        "product_identity_lock_version_id": item.plan_version.product_identity_lock_version_id,
+        "module_sales_objective_snapshot": {
+            "buyer_question": attachment_module_rule(dict(version.category_skill_snapshot or {}), item.module_key).get("buyer_question", ""),
+            "image_sales_objective": attachment_module_rule(dict(version.category_skill_snapshot or {}), item.module_key).get("image_sales_objective", ""),
+            "required_information": list(attachment_module_rule(dict(version.category_skill_snapshot or {}), item.module_key).get("required_information", [])),
+            "avoid_duplication": list(attachment_module_rule(dict(version.category_skill_snapshot or {}), item.module_key).get("avoid_duplication", [])),
+        },
+        "reference_library_snapshot": list(item.plan_version.reference_library_snapshot or []),
         "reference_snapshot": item.reference_snapshot,
     } for item in preview.modules]
     group = await create_group_for_batch(

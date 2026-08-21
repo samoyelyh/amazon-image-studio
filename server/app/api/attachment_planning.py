@@ -54,6 +54,8 @@ from app.schemas.attachment_planning import (
     AttachmentProductCompositionItemResponse,
     AttachmentProductCompositionResponse,
     AttachmentProductModeUpdate,
+    AttachmentProductIdentityLockResponse,
+    AttachmentProductIdentityLockUpdate,
     AttachmentSecondaryProductRequest,
     AttachmentOutputReviewRequest,
     AttachmentOutputStateResponse,
@@ -64,6 +66,8 @@ from app.schemas.listing_workflow import ListingImageTaskGroupResponse
 from app.schemas.creative_presets import (
     AttachmentCreativeContextResponse,
     AttachmentCreativeContextUpdate,
+    AttachmentModuleModelContextResponse,
+    AttachmentModuleModelContextUpdate,
     ModelSelectionResponse,
 )
 from app.security.principal import Principal, require_permissions
@@ -121,9 +125,19 @@ from app.services.attachment_product_composition_service import (
     replace_secondary_product,
     set_product_mode,
 )
+from app.services.attachment_product_identity_service import (
+    current_product_identity_lock,
+    reconcile_product_identity_lock,
+    start_product_identity_lock,
+)
 from app.services.audit_service import add_audit_log
 from app.services.listing_image_task_group_service import task_group_response
-from app.services.creative_preset_service import selected_models, set_plan_creative_context
+from app.services.creative_preset_service import (
+    module_model_context_snapshot,
+    selected_models,
+    set_module_model_context,
+    set_plan_creative_context,
+)
 from app.api.creative_presets import model_response, theme_response, visual_response
 
 
@@ -230,9 +244,12 @@ async def _load_and_reconcile(
         db, organization_id=_organization_id(principal), project_id=project_id, user_id=principal.user.id,
     )
     project, _, version, plan, modules = context
-    await reconcile_reference_understandings(db, plan=plan, modules=modules)
+    settings = get_settings()
+    retry_jobs_created = await reconcile_reference_understandings(db, settings, plan=plan, modules=modules)
     await reconcile_attachment_planning(db, plan=plan, modules=modules, version=version)
     await db.commit()
+    if retry_jobs_created:
+        await dispatch_jobs(db, await due_jobs(db, settings, limit=retry_jobs_created))
     return project, context[1], version, plan, modules
 
 
@@ -298,6 +315,7 @@ async def _reference_response(
             references=[AttachmentModuleReferenceResponse(
                 id=item.id, slot_type=item.slot_type, asset=signed[item.asset_id],
                 sort_order=item.sort_order, metadata=dict(item.metadata_json or {}),
+                keywords=list(item.keywords or []), guidance=item.guidance, library_item_id=item.library_item_id,
             ) for item in references_by_module[module.id] if item.asset_id in signed],
             reference_context_dirty=module.reference_context_dirty,
             reference_state_version=module.reference_state_version,
@@ -454,7 +472,7 @@ async def update_creative_context(
     db: AsyncSession = Depends(get_db_session),
     principal: Principal = Depends(require_permissions("jobs.submit")),
 ) -> AttachmentCreativeContextResponse:
-    _, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    project, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
     await set_plan_creative_context(
         db, plan=plan, modules=modules,
         visual_preset_id=payload.visual_preset_id,
@@ -479,14 +497,136 @@ async def update_creative_context(
     return await _creative_context_response(db, plan=plan)
 
 
+@router.get(
+    "/projects/{project_id}/modules/{module_key}/model-context",
+    response_model=AttachmentModuleModelContextResponse,
+)
+async def get_module_model_context(
+    project_id: str, module_key: str,
+    db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.read")),
+) -> AttachmentModuleModelContextResponse:
+    _, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    module = next((item for item in modules if item.module_key == module_key), None)
+    if module is None:
+        raise AppError("attachment_planning.module_invalid", "附图模块不存在", 404)
+    snapshot = await module_model_context_snapshot(db, plan=plan, module_key=module_key)
+    return AttachmentModuleModelContextResponse(
+        module_key=module_key,
+        selection_mode=str(snapshot["selection_mode"]),
+        effective_selection_mode=str(snapshot["effective_selection_mode"]),
+        inherited=bool(snapshot["inherited"]),
+        selected_identity_version_ids=[
+            str(item["identity_version_id"]) for item in snapshot["selected_models"] if item.get("identity_version_id")
+        ],
+    )
+
+
+@router.put(
+    "/projects/{project_id}/modules/{module_key}/model-context",
+    response_model=AttachmentModuleModelContextResponse,
+)
+async def update_module_model_context(
+    project_id: str, module_key: str, payload: AttachmentModuleModelContextUpdate, request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentModuleModelContextResponse:
+    _, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    module = next((item for item in modules if item.module_key == module_key), None)
+    if module is None:
+        raise AppError("attachment_planning.module_invalid", "附图模块不存在", 404)
+    await set_module_model_context(
+        db, plan=plan, module=module, selection_mode=payload.selection_mode,
+        selected_model_identity_version_ids=payload.selected_model_identity_version_ids,
+        user_id=principal.user.id,
+    )
+    add_audit_log(
+        db, request=request, actor_user_id=principal.user.id, organization_id=plan.organization_id,
+        action="attachment.module_model.update", resource_type="attachment_workbench_module_plan", resource_id=module.id,
+        metadata={"module_key": module_key, "selection_mode": payload.selection_mode, "model_count": len(payload.selected_model_identity_version_ids)},
+    )
+    await db.commit()
+    snapshot = await module_model_context_snapshot(db, plan=plan, module_key=module_key)
+    return AttachmentModuleModelContextResponse(
+        module_key=module_key, selection_mode=str(snapshot["selection_mode"]),
+        effective_selection_mode=str(snapshot["effective_selection_mode"]), inherited=bool(snapshot["inherited"]),
+        selected_identity_version_ids=[str(item["identity_version_id"]) for item in snapshot["selected_models"] if item.get("identity_version_id")],
+    )
+
+
 @router.get("/projects/{project_id}/references", response_model=AttachmentReferenceStateResponse)
 async def get_references(
     project_id: str, db: AsyncSession = Depends(get_db_session),
     storage: StorageService = Depends(get_storage_service), settings: Settings = Depends(get_settings),
     principal: Principal = Depends(require_permissions("jobs.read")),
 ) -> AttachmentReferenceStateResponse:
-    _, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    project, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
     return await _reference_response(db, storage, settings, plan=plan, modules=modules)
+
+
+def _identity_lock_response(row) -> AttachmentProductIdentityLockResponse:
+    return AttachmentProductIdentityLockResponse(
+        id=row.id, version_number=row.version_number, status=row.status,
+        structured=dict(row.structured_json or {}), ai_model=row.ai_model,
+        error_message=row.error_message, corrected_by_user=row.corrected_by_user, created_at=row.created_at,
+    )
+
+
+@router.get("/projects/{project_id}/product-identity-lock", response_model=AttachmentProductIdentityLockResponse)
+async def get_product_identity_lock(
+    project_id: str, db: AsyncSession = Depends(get_db_session), settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.read")),
+) -> AttachmentProductIdentityLockResponse:
+    project, listing_session, version, plan, _ = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    retry_jobs_created = await reconcile_product_identity_lock(db, settings, plan=plan)
+    row = await current_product_identity_lock(db, plan=plan)
+    created = False
+    if row is None:
+        row, _, created = await start_product_identity_lock(
+            db, settings, project=project, session=listing_session, version=version,
+            plan=plan, user_id=principal.user.id,
+        )
+    await db.commit()
+    dispatch_count = int(created) + retry_jobs_created
+    if dispatch_count:
+        await dispatch_jobs(db, await due_jobs(db, settings, limit=dispatch_count))
+    return _identity_lock_response(row)
+
+
+@router.post("/projects/{project_id}/product-identity-lock/reextract", response_model=AttachmentProductIdentityLockResponse, status_code=status.HTTP_202_ACCEPTED)
+async def reextract_product_identity_lock(
+    project_id: str, db: AsyncSession = Depends(get_db_session), settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentProductIdentityLockResponse:
+    project, listing_session, version, plan, _ = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    row, _, created = await start_product_identity_lock(
+        db, settings, project=project, session=listing_session, version=version,
+        plan=plan, user_id=principal.user.id, force=True,
+    )
+    await db.commit()
+    if created:
+        await dispatch_jobs(db, await due_jobs(db, settings, limit=1))
+    return _identity_lock_response(row)
+
+
+@router.patch("/projects/{project_id}/product-identity-lock", response_model=AttachmentProductIdentityLockResponse)
+async def update_product_identity_lock(
+    project_id: str, payload: AttachmentProductIdentityLockUpdate,
+    db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentProductIdentityLockResponse:
+    _, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    row = await current_product_identity_lock(db, plan=plan)
+    if row is None or row.status != "ready":
+        raise AppError("product_identity.not_ready", "商品事实尚未提取完成", 409)
+    row.structured_json = dict(payload.structured)
+    row.corrected_by_user = True
+    for module in modules:
+        if module.current_version_number > 0:
+            module.status = "stale"
+    plan.planning_status = "stale" if plan.visual_direction_version > 0 else plan.planning_status
+    await db.commit()
+    return _identity_lock_response(row)
 
 
 @router.get(
@@ -731,15 +871,31 @@ async def create_reference(
     settings: Settings = Depends(get_settings),
     principal: Principal = Depends(require_permissions("jobs.submit")),
 ) -> AttachmentReferenceStateResponse:
-    _, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    project, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
     module = next((item for item in modules if item.module_key == module_key), None)
     if module is None:
         raise AppError("attachment_reference.module_invalid", "选择了不支持的附图模块", 422)
     await add_module_reference(
         db, module=module, slot_type=payload.slot_type, asset_id=payload.asset_id,
-        metadata=payload.metadata, user_id=principal.user.id,
+        metadata=payload.metadata, keywords=payload.keywords, guidance=payload.guidance,
+        library_item_id=payload.library_item_id, user_id=principal.user.id,
     )
+    try:
+        _, _, created = await start_reference_analysis(
+            db, settings, project=project,
+            plan=plan, module=module,
+            idempotency_key=f"attachment-reference:auto:{module.id}:{module.reference_state_version}",
+            user_id=principal.user.id,
+        )
+    except AppError as error:
+        if error.code != "resource_pool.operation_not_bound":
+            raise
+        module.reference_context_dirty = True
+        module.reference_analysis_job_id = None
+        created = False
     await db.commit()
+    if created:
+        await dispatch_jobs(db, await due_jobs(db, settings, limit=1))
     return await _reference_response(db, storage, settings, plan=plan, modules=modules)
 
 
@@ -750,12 +906,26 @@ async def delete_reference(
     settings: Settings = Depends(get_settings),
     principal: Principal = Depends(require_permissions("jobs.submit")),
 ) -> AttachmentReferenceStateResponse:
-    _, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    project, _, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
     module = next((item for item in modules if item.module_key == module_key), None)
     if module is None:
         raise AppError("attachment_reference.module_invalid", "选择了不支持的附图模块", 422)
     await remove_module_reference(db, module=module, reference_id=reference_id)
+    try:
+        _, _, created = await start_reference_analysis(
+            db, settings, project=project, plan=plan, module=module,
+            idempotency_key=f"attachment-reference:auto-remove:{module.id}:{module.reference_state_version}",
+            user_id=principal.user.id,
+        )
+    except AppError as error:
+        if error.code != "resource_pool.operation_not_bound":
+            raise
+        module.reference_context_dirty = True
+        module.reference_analysis_job_id = None
+        created = False
     await db.commit()
+    if created:
+        await dispatch_jobs(db, await due_jobs(db, settings, limit=1))
     return await _reference_response(db, storage, settings, plan=plan, modules=modules)
 
 
@@ -766,7 +936,7 @@ async def put_product_reference(
     settings: Settings = Depends(get_settings),
     principal: Principal = Depends(require_permissions("jobs.submit")),
 ) -> AttachmentReferenceStateResponse:
-    _, session, _, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    project, session, version, plan, modules = await _load_and_reconcile(db, project_id=project_id, principal=principal)
     if view_role != payload.view_role:
         raise AppError("attachment_reference.product_role_mismatch", "商品参考角色不一致", 422)
     group, _ = await ensure_product_reference_group(db, plan=plan, session=session, user_id=principal.user.id)
@@ -775,7 +945,36 @@ async def put_product_reference(
         view_role=payload.view_role, transform_metadata=payload.transform_metadata,
         user_id=principal.user.id,
     )
+    created_count = 0
+    for module in modules:
+        try:
+            _, _, created = await start_reference_analysis(
+                db, settings, project=project, plan=plan, module=module,
+                idempotency_key=f"attachment-reference:auto-product:{module.id}:{module.reference_state_version}",
+                user_id=principal.user.id,
+            )
+            created_count += int(created)
+        except AppError as error:
+            # The product reference mutation must remain usable on legacy
+            # deployments where the Phase 10 analysis pool is not configured
+            # yet. The next explicit analysis attempt will surface the
+            # configuration error; it must not roll back the saved reference.
+            if error.code != "resource_pool.operation_not_bound":
+                raise
+            module.reference_context_dirty = True
+            module.reference_analysis_job_id = None
+    try:
+        _, _, identity_created = await start_product_identity_lock(
+            db, settings, project=project, session=session, version=version, plan=plan,
+            user_id=principal.user.id, force=True,
+        )
+        created_count += int(identity_created)
+    except AppError as error:
+        if error.code != "resource_pool.operation_not_bound":
+            raise
     await db.commit()
+    if created_count:
+        await dispatch_jobs(db, await due_jobs(db, settings, limit=created_count))
     return await _reference_response(db, storage, settings, plan=plan, modules=modules)
 
 

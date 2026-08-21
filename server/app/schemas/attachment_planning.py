@@ -130,6 +130,9 @@ class AttachmentReferenceCreateRequest(BaseModel):
     slot_type: Literal["PRODUCT", "TEMPLATE", "SCENE", "PRINT", "OTHER"]
     asset_id: str = Field(min_length=36, max_length=36)
     metadata: dict[str, object] = Field(default_factory=dict)
+    keywords: list[str] = Field(default_factory=list, max_length=30)
+    guidance: str = Field(default="", max_length=10000)
+    library_item_id: str | None = Field(default=None, min_length=36, max_length=36)
 
 
 class AttachmentProductReferenceRequest(BaseModel):
@@ -166,6 +169,9 @@ class AttachmentModuleReferenceResponse(BaseModel):
     asset: AssetResponse
     sort_order: int
     metadata: dict[str, object]
+    keywords: list[str] = Field(default_factory=list)
+    guidance: str = ""
+    library_item_id: str | None = None
 
 
 class AttachmentReferenceUnderstandingResponse(BaseModel):
@@ -195,6 +201,85 @@ class AttachmentReferenceStateResponse(BaseModel):
     product_state_version: int
     product_references: list[AttachmentProductReferenceItemResponse]
     modules: list[AttachmentModuleReferenceStateResponse]
+
+
+class AttachmentProductIdentityLockResponse(BaseModel):
+    id: str
+    version_number: int
+    status: str
+    structured: dict[str, object]
+    ai_model: str | None
+    error_message: str | None
+    corrected_by_user: bool
+    created_at: datetime
+
+
+class AttachmentProductIdentityLockUpdate(BaseModel):
+    structured: dict[str, object]
+
+
+class AttachmentReferenceLibraryUnderstandingResponse(BaseModel):
+    id: str
+    version_number: int
+    status: str
+    structured: dict[str, object]
+    analysis_model: str | None
+    error_message: str | None
+
+
+class AttachmentReferenceLibraryItemResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    category_key: str | None
+    module_key: str
+    reference_role: str
+    asset: AssetResponse
+    guidance: str
+    tags: list[str]
+    is_featured: bool
+    is_active: bool
+    sort_order: int
+    state_version: int
+    understanding: AttachmentReferenceLibraryUnderstandingResponse | None
+
+
+class AttachmentReferenceLibraryCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=1000)
+    category_key: str | None = Field(default=None, max_length=100)
+    module_key: str = Field(min_length=1, max_length=60)
+    reference_role: Literal["TEMPLATE", "SCENE", "PRINT", "OTHER"]
+    asset_id: str = Field(min_length=36, max_length=36)
+    guidance: str = Field(default="", max_length=10000)
+    tags: list[str] = Field(default_factory=list, max_length=30)
+    is_featured: bool = False
+    sort_order: int = Field(default=100, ge=0, le=10000)
+
+
+class AttachmentReferenceLibrarySourceCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=1000)
+    category_key: str | None = Field(default=None, max_length=100)
+    module_key: str = Field(min_length=1, max_length=60)
+    reference_role: Literal["TEMPLATE", "SCENE", "PRINT", "OTHER"] = "TEMPLATE"
+    guidance: str = Field(default="", max_length=10000)
+    tags: list[str] = Field(default_factory=list, max_length=30)
+    is_featured: bool = False
+    sort_order: int = Field(default=100, ge=0, le=10000)
+
+
+class AttachmentReferenceLibraryUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=1000)
+    category_key: str | None = Field(default=None, max_length=100)
+    module_key: str | None = Field(default=None, min_length=1, max_length=60)
+    reference_role: Literal["TEMPLATE", "SCENE", "PRINT", "OTHER"] | None = None
+    guidance: str | None = Field(default=None, max_length=10000)
+    tags: list[str] | None = Field(default=None, max_length=30)
+    is_featured: bool | None = None
+    is_active: bool | None = None
+    sort_order: int | None = Field(default=None, ge=0, le=10000)
 
 
 class AttachmentProductCompositionAssetResponse(BaseModel):

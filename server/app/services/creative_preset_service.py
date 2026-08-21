@@ -51,7 +51,7 @@ async def visible_theme_presets(
 
 
 async def visible_model_presets(
-    db: AsyncSession, *, organization_id: str, published_only: bool = True,
+    db: AsyncSession, *, organization_id: str, published_only: bool = True, user_id: str | None = None,
 ) -> list[AIModelPreset]:
     statement = select(AIModelPreset).where(
         or_(AIModelPreset.organization_id.is_(None), AIModelPreset.organization_id == organization_id),
@@ -62,9 +62,13 @@ async def visible_model_presets(
             AIModelIdentityVersion,
             AIModelIdentityVersion.id == AIModelPreset.current_identity_version_id,
         ).where(
-            AIModelPreset.is_published.is_(True), AIModelPreset.status == "PUBLISHED",
-            AIModelIdentityVersion.status == "PUBLISHED",
             AIModelIdentityVersion.organization_id == organization_id,
+            or_(
+                (AIModelPreset.is_published.is_(True)) & (AIModelPreset.status == "PUBLISHED") & (AIModelIdentityVersion.status == "PUBLISHED"),
+                (AIModelPreset.owner_user_id == user_id) & (AIModelPreset.source_type == "USER_GENERATED") & (AIModelIdentityVersion.status == "PERSONAL_READY"),
+            ) if user_id else (
+                (AIModelPreset.is_published.is_(True)) & (AIModelPreset.status == "PUBLISHED") & (AIModelIdentityVersion.status == "PUBLISHED")
+            ),
         )
     rows = list((await db.scalars(statement.order_by(AIModelPreset.sort_order, AIModelPreset.display_name))).all())
     scoped = {item.code for item in rows if item.organization_id == organization_id}
@@ -155,15 +159,20 @@ async def _active_theme(
 
 
 async def _identity_with_model(
-    db: AsyncSession, *, organization_id: str, identity_id: str,
+    db: AsyncSession, *, organization_id: str, identity_id: str, user_id: str | None = None,
 ) -> tuple[AIModelIdentityVersion, AIModelPreset]:
     row = (await db.execute(select(AIModelIdentityVersion, AIModelPreset).join(
         AIModelPreset, AIModelPreset.id == AIModelIdentityVersion.model_preset_id,
     ).where(
         AIModelIdentityVersion.id == identity_id,
         AIModelPreset.current_identity_version_id == AIModelIdentityVersion.id,
-        AIModelPreset.is_active.is_(True), AIModelPreset.is_published.is_(True),
-        AIModelPreset.status == "PUBLISHED", AIModelIdentityVersion.status == "PUBLISHED",
+        AIModelPreset.is_active.is_(True),
+        or_(
+            (AIModelPreset.is_published.is_(True)) & (AIModelPreset.status == "PUBLISHED") & (AIModelIdentityVersion.status == "PUBLISHED"),
+            (AIModelPreset.owner_user_id == user_id) & (AIModelPreset.source_type.in_(["USER_TEMPORARY", "USER_GENERATED"])) & (AIModelIdentityVersion.status == "PERSONAL_READY"),
+        ) if user_id else (
+            (AIModelPreset.is_published.is_(True)) & (AIModelPreset.status == "PUBLISHED") & (AIModelIdentityVersion.status == "PUBLISHED")
+        ),
         AIModelIdentityVersion.organization_id == organization_id,
         or_(AIModelPreset.organization_id.is_(None), AIModelPreset.organization_id == organization_id),
     ))).first()
@@ -198,7 +207,7 @@ async def recommend_models(
 
 
 async def selected_models(
-    db: AsyncSession, *, plan: AttachmentWorkbenchPlan,
+    db: AsyncSession, *, plan: AttachmentWorkbenchPlan, module_key: str = "__global__",
 ) -> list[tuple[AttachmentPlanModelSelection, AIModelIdentityVersion, AIModelPreset]]:
     rows = list((await db.execute(select(
         AttachmentPlanModelSelection, AIModelIdentityVersion, AIModelPreset,
@@ -209,6 +218,8 @@ async def selected_models(
     ).where(
         AttachmentPlanModelSelection.workbench_plan_id == plan.id,
         AttachmentPlanModelSelection.organization_id == plan.organization_id,
+        AttachmentPlanModelSelection.module_key == module_key,
+        AttachmentPlanModelSelection.identity_version_id.is_not(None),
     ).order_by(AttachmentPlanModelSelection.product_slot))).all())
     return [(row[0], row[1], row[2]) for row in rows]
 
@@ -226,7 +237,7 @@ async def set_plan_creative_context(
     model_rows: list[tuple[AIModelIdentityVersion, AIModelPreset]] = []
     if model_selection_mode == "selected":
         model_rows = [await _identity_with_model(
-            db, organization_id=plan.organization_id, identity_id=identity_id,
+            db, organization_id=plan.organization_id, identity_id=identity_id, user_id=user_id,
         ) for identity_id in selected_model_identity_version_ids]
     elif model_selection_mode == "recommended":
         model_rows = await recommend_models(
@@ -245,10 +256,12 @@ async def set_plan_creative_context(
 
     await db.execute(delete(AttachmentPlanModelSelection).where(
         AttachmentPlanModelSelection.workbench_plan_id == plan.id,
+        AttachmentPlanModelSelection.module_key == "__global__",
     ))
     for slot, (identity, model) in enumerate(model_rows, 1):
         db.add(AttachmentPlanModelSelection(
-            organization_id=plan.organization_id, workbench_plan_id=plan.id, product_slot=slot,
+            organization_id=plan.organization_id, workbench_plan_id=plan.id,
+            module_key="__global__", product_slot=slot, selection_mode=model_selection_mode,
             model_preset_id=model.id, identity_version_id=identity.id,
             source=model_selection_mode, created_by=user_id, updated_by=user_id,
         ))
@@ -269,6 +282,98 @@ async def set_plan_creative_context(
             module.updated_by = user_id
 
 
+async def set_module_model_context(
+    db: AsyncSession, *, plan: AttachmentWorkbenchPlan, module: AttachmentWorkbenchModulePlan,
+    selection_mode: str, selected_model_identity_version_ids: list[str], user_id: str,
+) -> None:
+    """Persist one module override without mutating the global model default."""
+    if module.module_key not in MODEL_SUPPORTED_MODULES:
+        raise AppError("creative_context.module_model_unsupported", "当前模块不支持AI模特", 422)
+    if selection_mode not in {"inherit", "recommended", "selected", "none"}:
+        raise AppError("creative_context.model_mode_invalid", "模特选择方式无效", 422)
+    model_rows: list[tuple[AIModelIdentityVersion, AIModelPreset]] = []
+    if selection_mode == "selected":
+        if not selected_model_identity_version_ids:
+            raise AppError("creative_context.model_required", "请选择至少一个AI模特", 422)
+        model_rows = [await _identity_with_model(
+            db, organization_id=plan.organization_id, identity_id=identity_id, user_id=user_id,
+        ) for identity_id in selected_model_identity_version_ids]
+    elif selection_mode == "recommended":
+        visual = await db.get(VisualPreset, plan.visual_preset_id)
+        theme = await db.get(ThemePreset, plan.theme_preset_id) if plan.theme_preset_id else None
+        if visual is None:
+            raise AppError("creative_preset.visual_missing", "请先选择整套视觉模板", 409)
+        model_rows = await recommend_models(
+            db, organization_id=plan.organization_id, visual=visual, theme=theme, count=max(1, len(selected_model_identity_version_ids) or 1),
+        )
+    await db.execute(delete(AttachmentPlanModelSelection).where(
+        AttachmentPlanModelSelection.workbench_plan_id == plan.id,
+        AttachmentPlanModelSelection.module_key == module.module_key,
+    ))
+    if selection_mode != "inherit":
+        if model_rows:
+            for slot, (identity, model) in enumerate(model_rows, 1):
+                db.add(AttachmentPlanModelSelection(
+                    organization_id=plan.organization_id, workbench_plan_id=plan.id,
+                    module_key=module.module_key, product_slot=slot, selection_mode=selection_mode,
+                    model_preset_id=model.id, identity_version_id=identity.id,
+                    source=selection_mode, created_by=user_id, updated_by=user_id,
+                ))
+        else:
+            db.add(AttachmentPlanModelSelection(
+                organization_id=plan.organization_id, workbench_plan_id=plan.id,
+                module_key=module.module_key, product_slot=-1, selection_mode=selection_mode,
+                model_preset_id=None, identity_version_id=None,
+                source=selection_mode, created_by=user_id, updated_by=user_id,
+            ))
+    if module.current_version_number > 0:
+        module.status = "stale"
+    module.state_version += 1
+    module.updated_by = user_id
+    module.last_saved_at = datetime.now(UTC)
+
+
+async def module_model_context_snapshot(
+    db: AsyncSession, *, plan: AttachmentWorkbenchPlan, module_key: str,
+) -> dict[str, object]:
+    marker = await db.scalar(select(AttachmentPlanModelSelection).where(
+        AttachmentPlanModelSelection.workbench_plan_id == plan.id,
+        AttachmentPlanModelSelection.module_key == module_key,
+    ).order_by(AttachmentPlanModelSelection.product_slot))
+    inherited = marker is None
+    effective_key = "__global__" if inherited else module_key
+    mode = plan.model_selection_mode if inherited else marker.selection_mode
+    rows = await selected_models(db, plan=plan, module_key=effective_key)
+    models = await _model_snapshot_rows(db, rows)
+    return {
+        "module_key": module_key,
+        "selection_mode": "inherit" if inherited else mode,
+        "effective_selection_mode": mode,
+        "inherited": inherited,
+        "selected_models": models,
+    }
+
+
+async def _model_snapshot_rows(
+    db: AsyncSession,
+    rows: list[tuple[AttachmentPlanModelSelection, AIModelIdentityVersion, AIModelPreset]],
+) -> list[dict[str, object]]:
+    models: list[dict[str, object]] = []
+    for selection, identity, model in rows:
+        references = list((await db.scalars(select(AIModelPresetReference).where(
+            AIModelPresetReference.identity_version_id == identity.id,
+        ).order_by(AIModelPresetReference.sort_order))).all())
+        models.append({
+            "product_slot": selection.product_slot, "source": selection.source,
+            "model_preset_id": model.id, "model_code": model.code, "model_name": model.display_name,
+            "identity_version_id": identity.id, "identity_version_number": identity.version_number,
+            "identity_asset_id": identity.identity_asset_id,
+            "identity_prompt_snapshot": identity.identity_prompt_snapshot,
+            "reference_assets": [{"role": item.reference_role, "asset_id": item.asset_id, "sort_order": item.sort_order} for item in references],
+        })
+    return models
+
+
 async def creative_context_snapshot(
     db: AsyncSession, *, plan: AttachmentWorkbenchPlan,
 ) -> dict[str, object]:
@@ -280,26 +385,7 @@ async def creative_context_snapshot(
     theme = await db.get(ThemePreset, plan.theme_preset_id) if plan.theme_preset_id else None
     theme_version = await db.get(ThemePresetVersion, plan.theme_preset_version_id) if plan.theme_preset_version_id else None
     model_rows = await selected_models(db, plan=plan)
-    models: list[dict[str, object]] = []
-    for selection, identity, model in model_rows:
-        references = list((await db.scalars(select(AIModelPresetReference).where(
-            AIModelPresetReference.identity_version_id == identity.id,
-        ).order_by(AIModelPresetReference.sort_order))).all())
-        models.append({
-            "product_slot": selection.product_slot,
-            "source": selection.source,
-            "model_preset_id": model.id,
-            "model_code": model.code,
-            "model_name": model.display_name,
-            "identity_version_id": identity.id,
-            "identity_version_number": identity.version_number,
-            "identity_asset_id": identity.identity_asset_id,
-            "identity_prompt_snapshot": identity.identity_prompt_snapshot,
-            "reference_assets": [
-                {"role": item.reference_role, "asset_id": item.asset_id, "sort_order": item.sort_order}
-                for item in references
-            ],
-        })
+    models = await _model_snapshot_rows(db, model_rows)
     return {
         "visual_preset_id": visual.id,
         "visual_preset_code": visual.code,

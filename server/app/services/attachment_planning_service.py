@@ -53,11 +53,14 @@ SUITE_SYSTEM_PROMPT = """你是亚马逊电商附图策划专家。根据已确�
 - MODEL参考只决定人物身份、脸部、发型和身体特征。必须忽略MODEL图中原有衣服，服装只能来自PRODUCT。
 - plan_summary_cn回答“这张图准备做成什么样”，不要写成技术说明。
 - prompt_cn不要机械复制整套视觉方向，要把方向转化为当前模块可执行的画面要求。
+- 每个模块必须直接回答其buyer_question并完成image_sales_objective；required_information必须可见，avoid_duplication中的任务不得与其他模块重复。
+- 整套可以共享商品真实性、视觉模板、主题和商业气质，但不能把同一个卖点仅换背景后重复六次。
 - 如果product_composition.mode为MULTI，必须明确人物数量等于商品数量、Model A/B/C与PRIMARY/SECONDARY逐一对应、主商品视觉优先，并逐件写明不可串用的商品身份特征。"""
 
 MODULE_REPLAN_SYSTEM_PROMPT = """你是亚马逊电商附图策划专家。只重新策划指定模块，必须继承当前整套视觉方向与商品真实性约束。
 只返回有效 JSON：{"module_key":"指定模块编码","plan_summary_cn":"中文方案","prompt_cn":"完整中文执行提示词"}。
 不得返回其他模块，不得解释，不得使用Markdown。提示词必须写明目标比例并针对该比例组织构图。
+必须直接回答module.buyer_question、完成module.image_sales_objective、包含required_information，并避开avoid_duplication列出的重复任务。
 如果product_composition.mode为MULTI，必须明确人物数量等于商品数量、Model A/B/C与PRIMARY/SECONDARY逐一对应、主商品视觉优先，并逐件写明不可串用的商品身份特征。"""
 
 PROMPT_OPTIMIZE_SYSTEM_PROMPT = """你是亚马逊电商图片提示词编辑专家。保持当前模块方案方向不变，只重构并优化中文执行提示词。
@@ -91,6 +94,7 @@ def build_attachment_module_context(
     skill_snapshot: dict[str, object], aspect_ratio: str, operator_requirement_cn: str,
     reference_understanding: dict[str, object] | None = None,
     product_composition: dict[str, object] | None = None,
+    module_model_context: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if module_key not in MODULE_INDEX:
         raise AppError("attachment_planning.module_invalid", "选择了不支持的附图模块", 422, {"module_key": module_key})
@@ -107,6 +111,10 @@ def build_attachment_module_context(
         "module_key": module_key,
         "module_name": str(definition.get("name") or module_key),
         "module_objective": str(definition.get("objective") or ""),
+        "buyer_question": str(definition.get("buyer_question") or ""),
+        "image_sales_objective": str(definition.get("image_sales_objective") or ""),
+        "required_information": [str(value) for value in definition.get("required_information", [])],
+        "avoid_duplication": [str(value) for value in definition.get("avoid_duplication", [])],
         "module_default_rule": str(definition.get("prompt_template") or ""),
         "product_context": product_context,
         "listing_context": _compact_listing(listing_snapshot),
@@ -114,6 +122,7 @@ def build_attachment_module_context(
         "operator_requirement_cn": operator_requirement_cn.strip(),
         "reference_understanding": reference_understanding,
         "product_composition": product_composition or {"mode": "SINGLE", "products": []},
+        "model_context": module_model_context or {"selection_mode": "inherit", "selected_models": []},
         "reference_priority": ["PRODUCT", "PRINT", "module_rule", "TEMPLATE", "SCENE", "OTHER"],
         "truth_constraints": [
             "商品参考图是商品外观的最高优先级事实来源",
@@ -132,6 +141,8 @@ def build_suite_planning_input(
     reference_understandings: dict[str, dict[str, object]] | None = None,
     product_compositions: dict[str, dict[str, object]] | None = None,
     creative_context: dict[str, object] | None = None,
+    module_model_contexts: dict[str, dict[str, object]] | None = None,
+    product_identity_lock: dict[str, object] | None = None,
 ) -> tuple[str, str, dict[str, dict[str, object]]]:
     skill_snapshot = dict(version.category_skill_snapshot or {})
     contexts: dict[str, dict[str, object]] = {}
@@ -145,6 +156,7 @@ def build_suite_planning_input(
             operator_requirement_cn=item.operator_requirement_cn,
             reference_understanding=(reference_understandings or {}).get(item.module_key),
             product_composition=(product_compositions or {}).get(item.module_key),
+            module_model_context=(module_model_contexts or {}).get(item.module_key),
         )
         current = (current_modules or {}).get(item.module_key)
         if current is not None:
@@ -163,6 +175,7 @@ def build_suite_planning_input(
         },
         "existing_visual_direction_cn": visual_direction_cn.strip(),
         "creative_context": creative_context or {},
+        "product_identity_lock": product_identity_lock or {},
         "selected_modules": list(contexts.values()),
     }
     return SUITE_SYSTEM_PROMPT, json.dumps(payload, ensure_ascii=False), contexts
@@ -174,6 +187,8 @@ def build_module_planning_input(
     reference_understanding: dict[str, object] | None = None,
     product_composition: dict[str, object] | None = None,
     creative_context: dict[str, object] | None = None,
+    module_model_context: dict[str, object] | None = None,
+    product_identity_lock: dict[str, object] | None = None,
 ) -> tuple[str, str, dict[str, object]]:
     context = build_attachment_module_context(
         module_key=module.module_key,
@@ -184,10 +199,12 @@ def build_module_planning_input(
         operator_requirement_cn=module.operator_requirement_cn,
         reference_understanding=reference_understanding,
         product_composition=product_composition,
+        module_model_context=module_model_context,
     )
     payload = {
         "visual_direction_cn": visual_direction_cn,
         "creative_context": creative_context or {},
+        "product_identity_lock": product_identity_lock or {},
         "module": context,
         "current_plan_summary_cn": module.plan_summary_cn,
         "current_prompt_cn": module.prompt_cn,
@@ -347,6 +364,7 @@ async def add_suite_version(
         theme_preset_version_id=creative.get("theme_preset_version_id"),
         theme_prompt_snapshot=str(creative.get("theme_prompt") or ""),
         selected_model_snapshot=list(creative.get("selected_models") or []),
+        product_identity_lock_version_id=plan.current_product_identity_lock_version_id,
         ai_job_id=job.id if job else None, ai_model=job.model_code if job else None, created_by=user_id,
     )
     db.add(row)
@@ -373,6 +391,12 @@ async def add_module_version(
         from app.services.creative_preset_service import creative_context_snapshot
         creative_context = await creative_context_snapshot(db, plan=plan)
     creative = creative_context
+    reference_library_snapshot: list[dict[str, object]] = []
+    if reference_understanding_id:
+        from app.models.attachment_planning import AttachmentReferenceUnderstanding
+        understanding = await db.get(AttachmentReferenceUnderstanding, reference_understanding_id)
+        options = (understanding.source_snapshot_json or {}).get("reference_options", []) if understanding else []
+        reference_library_snapshot = [dict(item) for item in options if isinstance(item, dict) and item.get("library_item_id")]
     row = AttachmentWorkbenchPlanVersion(
         organization_id=plan.organization_id, workbench_plan_id=plan.id, module_plan_id=module.id,
         version_scope=scope, module_key=module.module_key, version_number=number, action=action,
@@ -387,6 +411,8 @@ async def add_module_version(
         theme_preset_version_id=creative.get("theme_preset_version_id"),
         theme_prompt_snapshot=str(creative.get("theme_prompt") or ""),
         selected_model_snapshot=list(creative.get("selected_models") or []),
+        reference_library_snapshot=reference_library_snapshot,
+        product_identity_lock_version_id=plan.current_product_identity_lock_version_id,
         source_version_id=source_version_id if source_version_id is not None else (previous.id if previous else None),
         generation_mode="standard", derived_from_output_id=derived_from_output_id,
         ai_job_id=job.id if job else None, ai_model=job.model_code if job else None, created_by=user_id,
@@ -419,6 +445,15 @@ async def start_suite_planning(
 
     understanding_ids: dict[str, str] = {}
     understanding_contexts: dict[str, dict[str, object]] = {}
+    from app.services.creative_preset_service import module_model_context_snapshot
+    module_model_contexts = {
+        key: await module_model_context_snapshot(db, plan=plan, module_key=key) for key in selected_keys
+    }
+    from app.services.attachment_product_identity_service import current_product_identity_lock
+    identity_lock_row = await current_product_identity_lock(db, plan=plan)
+    if identity_lock_row is None or identity_lock_row.status != "ready":
+        raise AppError("product_identity.not_ready", "商品事实正在自动提取，请稍候再策划", 409)
+    identity_lock = dict(identity_lock_row.structured_json or {})
     product_composition_version_ids: dict[str, str] = {}
     product_compositions: dict[str, dict[str, object]] = {}
     references: list[str] = []
@@ -450,6 +485,8 @@ async def start_suite_planning(
         current_modules=indexed, reference_understandings=understanding_contexts,
         product_compositions=product_compositions,
         creative_context=creative_context,
+        module_model_contexts=module_model_contexts,
+        product_identity_lock=identity_lock,
     )
     target_plan_version = plan.state_version + 1
     target_module_versions = {key: indexed[key].state_version + 1 for key in selected_keys}
@@ -468,7 +505,9 @@ async def start_suite_planning(
                             "planning_id": plan.id, "selected_modules": selected_keys,
                             "reference_understanding_ids": understanding_ids,
                             "product_composition_version_ids": product_composition_version_ids,
+                            "product_identity_lock_version_id": identity_lock_row.id,
                             "creative_context_snapshot": creative_context,
+                            "module_model_context_snapshots": module_model_contexts,
                             "creative_context_version": plan.creative_context_version,
                             "expected_plan_state_version": target_plan_version,
                             "expected_module_state_versions": target_module_versions}},
@@ -505,6 +544,13 @@ async def start_module_planning(
 ) -> tuple[Job, bool]:
     from app.services.creative_preset_service import creative_context_snapshot
     creative_context = await creative_context_snapshot(db, plan=plan)
+    from app.services.creative_preset_service import module_model_context_snapshot
+    module_model_context = await module_model_context_snapshot(db, plan=plan, module_key=module.module_key)
+    from app.services.attachment_product_identity_service import current_product_identity_lock
+    identity_lock_row = await current_product_identity_lock(db, plan=plan)
+    if identity_lock_row is None or identity_lock_row.status != "ready":
+        raise AppError("product_identity.not_ready", "商品事实正在自动提取，请稍候再策划", 409)
+    identity_lock = dict(identity_lock_row.structured_json or {})
     module.aspect_ratio = aspect_ratio
     module.operator_requirement_cn = operator_requirement_cn
     from app.services.attachment_reference_service import current_understanding_context, effective_reference_snapshot
@@ -522,6 +568,8 @@ async def start_module_planning(
             "products": reference_snapshot.get("products", []),
         },
         creative_context=creative_context,
+        module_model_context=module_model_context,
+        product_identity_lock=identity_lock,
     )
     target_module_version = module.state_version + 1
     model_code = await resolve_bound_model_code(
@@ -547,7 +595,9 @@ async def start_module_planning(
                             "planning_id": plan.id, "module_key": module.module_key,
                             "reference_understanding_ids": {module.module_key: understanding_id} if understanding_id else {},
                             "product_composition_version_ids": {module.module_key: product_composition_version_id},
+                            "product_identity_lock_version_id": identity_lock_row.id,
                             "creative_context_snapshot": creative_context,
+                            "module_model_context_snapshots": {module.module_key: module_model_context},
                             "creative_context_version": plan.creative_context_version,
                             "expected_plan_state_version": plan.state_version,
                             "expected_module_state_versions": {module.module_key: target_module_version}}},
@@ -611,6 +661,8 @@ async def reconcile_attachment_planning(
         )
         creative_context = metadata.get("creative_context_snapshot")
         creative_context = creative_context if isinstance(creative_context, dict) else {}
+        module_model_contexts = metadata.get("module_model_context_snapshots")
+        module_model_contexts = module_model_contexts if isinstance(module_model_contexts, dict) else {}
         expected_creative_context_version = int(metadata.get("creative_context_version") or -1)
         stale = plan.state_version != expected_plan or plan.creative_context_version != expected_creative_context_version or any(
             item.planning_job_id != job.id or item.state_version != int(expected_modules.get(item.module_key, -1))
@@ -646,7 +698,11 @@ async def reconcile_attachment_planning(
                         product_composition_version_id=(
                             str(product_composition_version_ids.get(item.module_key) or "") or None
                         ),
-                        creative_context=creative_context,
+                        creative_context={
+                            **creative_context,
+                            "selected_models": list((module_model_contexts.get(item.module_key) or {}).get("selected_models") or []),
+                            "module_model_context": module_model_contexts.get(item.module_key) or {},
+                        },
                     )
                     item.derived_from_output_id = None
                 plan.planning_status = "ready"; plan.error_message = None
@@ -665,7 +721,11 @@ async def reconcile_attachment_planning(
                     product_composition_version_id=(
                         str(product_composition_version_ids.get(item.module_key) or "") or None
                     ),
-                    creative_context=creative_context,
+                    creative_context={
+                        **creative_context,
+                        "selected_models": list((module_model_contexts.get(item.module_key) or {}).get("selected_models") or []),
+                        "module_model_context": module_model_contexts.get(item.module_key) or {},
+                    },
                 )
                 if not optimize_only:
                     item.derived_from_output_id = None

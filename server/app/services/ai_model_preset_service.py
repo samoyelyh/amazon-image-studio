@@ -189,10 +189,11 @@ async def continue_ai_model_generation(
         return
     if workflow == "ai_model_identity_generation":
         identity.identity_asset_id = generated_asset_id
-        identity.status = "AWAITING_CONFIRMATION"
+        identity.status = "PERSONAL_READY" if preset.source_type in {"USER_TEMPORARY", "USER_GENERATED"} else "AWAITING_CONFIRMATION"
         identity.updated_by = job.created_by
         preset.cover_asset_id = generated_asset_id
-        preset.status = "AWAITING_CONFIRMATION"
+        preset.current_identity_version_id = identity.id if preset.source_type in {"USER_TEMPORARY", "USER_GENERATED"} else preset.current_identity_version_id
+        preset.status = "TEMPORARY_READY" if preset.source_type == "USER_TEMPORARY" else ("PERSONAL_SAVED" if preset.source_type == "USER_GENERATED" else "AWAITING_CONFIRMATION")
         preset.updated_by = job.created_by
         return
     role = str(metadata.get("reference_role") or "")

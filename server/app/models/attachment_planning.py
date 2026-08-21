@@ -24,6 +24,9 @@ class AttachmentWorkbenchPlan(UuidPrimaryKeyMixin, TimestampMixin, Base):
     visual_preset_version_id: Mapped[str | None] = mapped_column(ForeignKey("visual_preset_versions.id", ondelete="SET NULL"), nullable=True)
     theme_preset_id: Mapped[str | None] = mapped_column(ForeignKey("theme_presets.id", ondelete="SET NULL"), nullable=True)
     theme_preset_version_id: Mapped[str | None] = mapped_column(ForeignKey("theme_preset_versions.id", ondelete="SET NULL"), nullable=True)
+    current_product_identity_lock_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("attachment_product_identity_lock_versions.id", ondelete="SET NULL", use_alter=True), nullable=True,
+    )
     model_selection_mode: Mapped[str] = mapped_column(String(30), default="recommended", nullable=False)
     creative_context_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     visual_direction_cn: Mapped[str] = mapped_column(Text, default="", nullable=False)
@@ -124,6 +127,10 @@ class AttachmentWorkbenchPlanVersion(UuidPrimaryKeyMixin, TimestampMixin, Base):
     theme_preset_version_id: Mapped[str | None] = mapped_column(ForeignKey("theme_preset_versions.id", ondelete="SET NULL"), nullable=True)
     theme_prompt_snapshot: Mapped[str] = mapped_column(Text, default="", nullable=False)
     selected_model_snapshot: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list, nullable=False)
+    reference_library_snapshot: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list, nullable=False)
+    product_identity_lock_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("attachment_product_identity_lock_versions.id", ondelete="SET NULL", use_alter=True), nullable=True,
+    )
     source_version_id: Mapped[str | None] = mapped_column(ForeignKey("attachment_workbench_plan_versions.id", ondelete="SET NULL"), nullable=True)
     ai_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
     ai_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -249,6 +256,11 @@ class AttachmentModuleReference(UuidPrimaryKeyMixin, TimestampMixin, Base):
     module_plan_id: Mapped[str] = mapped_column(ForeignKey("attachment_workbench_module_plans.id", ondelete="CASCADE"), nullable=False)
     slot_type: Mapped[str] = mapped_column(String(20), nullable=False)
     asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False)
+    library_item_id: Mapped[str | None] = mapped_column(
+        ForeignKey("attachment_reference_library_items.id", ondelete="SET NULL", use_alter=True), nullable=True,
+    )
+    keywords: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    guidance: Mapped[str] = mapped_column(Text, default="", nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     metadata_json: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict, nullable=False)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
@@ -268,10 +280,82 @@ class AttachmentReferenceUnderstanding(UuidPrimaryKeyMixin, TimestampMixin, Base
     status: Mapped[str] = mapped_column(String(30), default="analyzing", nullable=False)
     structured_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
     source_snapshot_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    input_hash: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    analysis_task_type: Mapped[str] = mapped_column(String(60), default="REFERENCE_ANALYSIS", nullable=False)
+    analysis_model_config: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    analysis_prompt_version: Mapped[str] = mapped_column(String(40), default="attachment-reference-v2", nullable=False)
+    role_snapshot: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    keywords_snapshot: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    guidance_snapshot: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
     ai_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
     ai_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
     product_composition_version_id: Mapped[str | None] = mapped_column(
         ForeignKey("attachment_product_composition_versions.id", ondelete="SET NULL"), nullable=True
     )
     error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+
+class AttachmentReferenceLibraryItem(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "attachment_reference_library_items"
+    __table_args__ = (
+        Index("ix_attachment_reference_library_browse", "organization_id", "module_key", "is_active", "sort_order"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(String(1000), default="", nullable=False)
+    category_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    module_key: Mapped[str] = mapped_column(String(60), nullable=False)
+    reference_role: Mapped[str] = mapped_column(String(20), nullable=False)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False)
+    guidance: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    is_featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    state_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+
+class AttachmentReferenceLibraryUnderstanding(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "attachment_reference_library_understandings"
+    __table_args__ = (
+        UniqueConstraint("library_item_id", "version_number", name="uq_attachment_library_understanding_version"),
+        Index("ix_attachment_library_understanding_item", "organization_id", "library_item_id", "version_number"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    library_item_id: Mapped[str] = mapped_column(ForeignKey("attachment_reference_library_items.id", ondelete="CASCADE"), nullable=False)
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="analyzing", nullable=False)
+    structured_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    analysis_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    analysis_model_config: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    analysis_prompt_version: Mapped[str] = mapped_column(String(40), default="reference-library-v1", nullable=False)
+    ai_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+
+class AttachmentProductIdentityLockVersion(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "attachment_product_identity_lock_versions"
+    __table_args__ = (
+        UniqueConstraint("workbench_plan_id", "version_number", name="uq_attachment_product_lock_version"),
+        Index("ix_attachment_product_lock_plan", "organization_id", "workbench_plan_id", "version_number"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    workbench_plan_id: Mapped[str] = mapped_column(ForeignKey("attachment_workbench_plans.id", ondelete="CASCADE"), nullable=False)
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="analyzing", nullable=False)
+    structured_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_snapshot_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    ai_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+    ai_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    corrected_by_user: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)

@@ -102,6 +102,9 @@ class AIModelPreset(UuidPrimaryKeyMixin, TimestampMixin, Base):
     recommended_visual_presets: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     recommended_modules: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     tags: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    source_type: Mapped[str] = mapped_column(String(30), default="ADMIN_PRESET", nullable=False)
+    owner_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    generation_parameters: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
     cover_asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=True)
     current_identity_version_id: Mapped[str | None] = mapped_column(
         ForeignKey("ai_model_identity_versions.id", ondelete="SET NULL", use_alter=True), nullable=True,
@@ -156,15 +159,17 @@ class AIModelPresetReference(UuidPrimaryKeyMixin, TimestampMixin, Base):
 class AttachmentPlanModelSelection(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "attachment_plan_model_selections"
     __table_args__ = (
-        UniqueConstraint("workbench_plan_id", "product_slot", name="uq_attachment_plan_model_slot"),
-        Index("ix_attachment_plan_models_plan", "workbench_plan_id", "product_slot"),
+        UniqueConstraint("workbench_plan_id", "module_key", "product_slot", name="uq_attachment_plan_model_scope_slot"),
+        Index("ix_attachment_plan_models_plan", "workbench_plan_id", "module_key", "product_slot"),
     )
 
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     workbench_plan_id: Mapped[str] = mapped_column(ForeignKey("attachment_workbench_plans.id", ondelete="CASCADE"), nullable=False)
+    module_key: Mapped[str] = mapped_column(String(60), default="__global__", nullable=False)
     product_slot: Mapped[int] = mapped_column(Integer, nullable=False)
-    model_preset_id: Mapped[str] = mapped_column(ForeignKey("ai_model_presets.id", ondelete="RESTRICT"), nullable=False)
-    identity_version_id: Mapped[str] = mapped_column(ForeignKey("ai_model_identity_versions.id", ondelete="RESTRICT"), nullable=False)
+    selection_mode: Mapped[str] = mapped_column(String(30), default="selected", nullable=False)
+    model_preset_id: Mapped[str | None] = mapped_column(ForeignKey("ai_model_presets.id", ondelete="RESTRICT"), nullable=True)
+    identity_version_id: Mapped[str | None] = mapped_column(ForeignKey("ai_model_identity_versions.id", ondelete="RESTRICT"), nullable=True)
     source: Mapped[str] = mapped_column(String(30), default="recommended", nullable=False)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
