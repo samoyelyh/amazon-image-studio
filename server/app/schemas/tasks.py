@@ -162,6 +162,16 @@ class JobSubmitRequest(BaseModel):
             "print_design": "print_design.replace" if self.capability == "mask_edit" else "print_design.blend",
         }[self.workspace_type]
         allowed_operations = {expected_operation}
+        if self.workspace_type == "listing" and self.capability == "text_generation":
+            # Phase 10 uses dedicated operation codes so reference analysis,
+            # library analysis and Product Identity can be routed independently
+            # while remaining in the Listing planning queue.
+            allowed_operations.update({
+                "listing.reference_analyze",
+                "listing.reference_library_analyze",
+                "listing.product_identity_extract",
+                "listing.model_reference_analyze",
+            })
         if self.workspace_type == "batch_tryon" and self.capability == "text_generation":
             allowed_operations.add("batch_tryon.prompt_analyze")
             allowed_operations.add("batch_tryon.prompt_analyze_detailed")

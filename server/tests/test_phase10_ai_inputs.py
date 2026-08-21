@@ -7,6 +7,7 @@ from app.services.ai_task_model_policy_service import TASK_OPERATION_CODES, next
 from app.services.attachment_planning_service import attachment_module_rule
 from app.services.attachment_product_identity_service import parse_product_identity_lock
 from app.services.attachment_reference_library_service import parse_library_understanding
+from app.schemas.tasks import JobSubmitRequest
 
 
 def test_analysis_retry_is_exactly_two_mini_attempts_then_one_luna_fallback() -> None:
@@ -24,6 +25,25 @@ def test_phase10_ai_tasks_have_dedicated_operation_codes() -> None:
     assert TASK_OPERATION_CODES["PRODUCT_IDENTITY_EXTRACTION"] == "listing.product_identity_extract"
     assert TASK_OPERATION_CODES["MODEL_REFERENCE_ANALYSIS"] == "listing.model_reference_analyze"
     assert TASK_OPERATION_CODES["MODULE_PLANNING"] == "listing.plan"
+
+
+@pytest.mark.parametrize("operation_code", [
+    "listing.reference_analyze",
+    "listing.reference_library_analyze",
+    "listing.product_identity_extract",
+    "listing.model_reference_analyze",
+])
+def test_phase10_listing_text_operations_pass_job_request_validation(operation_code: str) -> None:
+    request = JobSubmitRequest(
+        operation_code=operation_code,
+        workspace_type="listing",
+        queue_name="planning_queue",
+        capability="text_generation",
+        model_code="gpt-5.4-mini",
+        idempotency_key=f"phase10-{operation_code.replace('.', '-')}",
+        input={"system_prompt": "system", "user_prompt": "user"},
+    )
+    assert request.operation_code == operation_code
 
 
 def test_reference_library_schema_rejects_explanatory_or_partial_results() -> None:
