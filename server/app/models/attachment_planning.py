@@ -320,6 +320,21 @@ class AttachmentReferenceLibraryItem(UuidPrimaryKeyMixin, TimestampMixin, Base):
     updated_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
 
 
+class AttachmentReferenceLibraryItemModule(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "attachment_reference_library_item_modules"
+    __table_args__ = (
+        UniqueConstraint("library_item_id", "module_key", name="uq_attachment_library_item_module"),
+        Index("ix_attachment_library_module_browse", "organization_id", "module_key", "library_item_id"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    library_item_id: Mapped[str] = mapped_column(
+        ForeignKey("attachment_reference_library_items.id", ondelete="CASCADE"), nullable=False,
+    )
+    module_key: Mapped[str] = mapped_column(String(60), nullable=False)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+
 class AttachmentReferenceLibraryUnderstanding(UuidPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "attachment_reference_library_understandings"
     __table_args__ = (
@@ -337,6 +352,41 @@ class AttachmentReferenceLibraryUnderstanding(UuidPrimaryKeyMixin, TimestampMixi
     analysis_model_config: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
     analysis_prompt_version: Mapped[str] = mapped_column(String(40), default="reference-library-v1", nullable=False)
     ai_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+
+
+class AttachmentOutputEditRevision(UuidPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "attachment_output_edit_revisions"
+    __table_args__ = (
+        Index("ix_attachment_output_edits_project_root", "organization_id", "listing_image_project_id", "root_output_id"),
+        Index("ix_attachment_output_edits_parent", "organization_id", "parent_output_id", "created_at"),
+        UniqueConstraint("job_id", name="uq_attachment_output_edit_job"),
+    )
+
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    listing_image_project_id: Mapped[str] = mapped_column(
+        ForeignKey("listing_image_projects.id", ondelete="CASCADE"), nullable=False,
+    )
+    module_key: Mapped[str] = mapped_column(String(60), nullable=False)
+    root_output_id: Mapped[str] = mapped_column(ForeignKey("generated_outputs.id", ondelete="RESTRICT"), nullable=False)
+    parent_output_id: Mapped[str] = mapped_column(ForeignKey("generated_outputs.id", ondelete="RESTRICT"), nullable=False)
+    result_output_id: Mapped[str | None] = mapped_column(ForeignKey("generated_outputs.id", ondelete="SET NULL"), nullable=True)
+    job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+    batch_id: Mapped[str | None] = mapped_column(ForeignKey("job_batches.id", ondelete="SET NULL"), nullable=True)
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="queued", nullable=False)
+    instruction: Mapped[str] = mapped_column(Text, nullable=False)
+    edit_scope: Mapped[str] = mapped_column(String(30), default="whole_image", nullable=False)
+    compiled_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    explicit_overrides: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    override_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    product_identity_lock_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("attachment_product_identity_lock_versions.id", ondelete="SET NULL", use_alter=True), nullable=True,
+    )
+    model_identity_snapshot: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list, nullable=False)
+    reference_snapshot: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    execution_snapshot: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
     error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
 

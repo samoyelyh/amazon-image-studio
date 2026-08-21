@@ -269,6 +269,41 @@ export interface AttachmentOutputState {
   module_state_version: number
 }
 
+export interface AttachmentOutputEditRevision {
+  id: string
+  listing_image_project_id: string
+  module_key: string
+  root_output_id: string
+  parent_output_id: string
+  result_output_id: string | null
+  job_id: string | null
+  batch_id: string | null
+  revision_number: number
+  status: string
+  instruction: string
+  edit_scope: string
+  explicit_overrides: string[]
+  override_confirmed: boolean
+  execution_snapshot: Record<string, unknown>
+  error_message: string | null
+  created_at: string
+}
+
+export interface AttachmentOutputEditSubmitResult {
+  batch_id: string
+  task_group_id: string
+  revisions: AttachmentOutputEditRevision[]
+}
+
+export interface AttachmentOutputEditItemInput {
+  source_output_id: string
+  instruction: string
+  edit_scope?: 'whole_image' | 'product' | 'model' | 'background' | 'text' | 'custom'
+  reference_asset_ids?: string[]
+  library_item_ids?: string[]
+  override_confirmed?: boolean
+}
+
 export function previewAttachmentGeneration(projectId: string, selectedModuleKeys: AttachmentModuleCode[], creativePlanningJobId?: string) {
   return authenticatedFetch<AttachmentGenerationPreview>(`/attachment-workbench/projects/${projectId}/generation-preview`, {
     method: 'POST', body: JSON.stringify({
@@ -310,6 +345,22 @@ export function adoptAttachmentCreativeDirection(projectId: string, outputId: st
 
 export function getAttachmentResultState(projectId: string) {
   return authenticatedFetch<AttachmentResultState>(`/attachment-workbench/projects/${projectId}/results`)
+}
+
+export function getAttachmentOutputEditHistory(projectId: string, outputId: string) {
+  return authenticatedFetch<AttachmentOutputEditRevision[]>(`/attachment-workbench/projects/${projectId}/outputs/${outputId}/edit-history`)
+}
+
+export function editAttachmentOutput(projectId: string, outputId: string, input: Omit<AttachmentOutputEditItemInput, 'source_output_id'> & { idempotency_key: string }) {
+  return authenticatedFetch<AttachmentOutputEditSubmitResult>(`/attachment-workbench/projects/${projectId}/outputs/${outputId}/edit`, {
+    method: 'POST', body: JSON.stringify(input),
+  })
+}
+
+export function batchEditAttachmentOutputs(projectId: string, items: AttachmentOutputEditItemInput[], idempotencyKey: string, concurrency = 6) {
+  return authenticatedFetch<AttachmentOutputEditSubmitResult>(`/attachment-workbench/projects/${projectId}/outputs/batch-edit`, {
+    method: 'POST', body: JSON.stringify({ items, idempotency_key: idempotencyKey, concurrency }),
+  })
 }
 
 export function reviewAttachmentOutput(projectId: string, outputId: string, input: {

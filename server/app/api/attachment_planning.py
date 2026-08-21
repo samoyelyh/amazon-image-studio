@@ -64,6 +64,13 @@ from app.schemas.attachment_planning import (
     AttachmentRetryJobRequest,
 )
 from app.schemas.listing_workflow import ListingImageTaskGroupResponse
+from app.schemas.attachment_output_edit import (
+    AttachmentOutputBatchEditRequest,
+    AttachmentOutputEditItemRequest,
+    AttachmentOutputEditRequest,
+    AttachmentOutputEditRevisionResponse,
+    AttachmentOutputEditSubmitResponse,
+)
 from app.schemas.creative_presets import (
     AttachmentCreativeContextResponse,
     AttachmentCreativeContextUpdate,
@@ -134,6 +141,11 @@ from app.services.attachment_product_identity_service import (
 )
 from app.services.audit_service import add_audit_log
 from app.services.listing_image_task_group_service import task_group_response
+from app.services.attachment_output_edit_service import (
+    create_output_edits,
+    list_output_edit_revisions,
+    revision_response,
+)
 from app.services.creative_preset_service import (
     module_model_context_snapshot,
     selected_models,
@@ -882,19 +894,23 @@ async def create_reference(
         metadata=payload.metadata, keywords=payload.keywords, guidance=payload.guidance,
         library_item_id=payload.library_item_id, user_id=principal.user.id,
     )
-    try:
+    # Public-library intrinsic understanding is reusable. Linking it to a
+    # module only marks the module context stale; planning/generation resolves
+    # the snapshot lazily instead of starting a second AI call here.
+    created = False
+    if not payload.library_item_id:
+      try:
         _, _, created = await start_reference_analysis(
             db, settings, project=project,
             plan=plan, module=module,
             idempotency_key=f"attachment-reference:auto:{module.id}:{module.reference_state_version}",
             user_id=principal.user.id,
         )
-    except AppError as error:
-        if error.code != "resource_pool.operation_not_bound":
-            raise
-        module.reference_context_dirty = True
-        module.reference_analysis_job_id = None
-        created = False
+      except AppError as error:
+          if error.code != "resource_pool.operation_not_bound":
+              raise
+          module.reference_context_dirty = True
+          module.reference_analysis_job_id = None
     await db.commit()
     if created:
         await dispatch_jobs(db, await due_jobs(db, settings, limit=1))
@@ -1212,6 +1228,85 @@ async def get_result_state(
     response = await result_state_response(db, project=project, user_id=principal.user.id)
     await db.commit()
     return response
+
+
+@router.get(
+    "/projects/{project_id}/outputs/{output_id}/edit-history",
+    response_model=list[AttachmentOutputEditRevisionResponse],
+)
+async def get_output_edit_history(
+    project_id: str, output_id: str,
+    db: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("jobs.read")),
+) -> list[AttachmentOutputEditRevisionResponse]:
+    project, _, _, _, _ = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    rows = await list_output_edit_revisions(db, project=project, output_id=output_id)
+    await db.commit()
+    return [revision_response(item) for item in rows]
+
+
+@router.post(
+    "/projects/{project_id}/outputs/{output_id}/edit",
+    response_model=AttachmentOutputEditSubmitResponse, status_code=status.HTTP_202_ACCEPTED,
+)
+async def edit_output(
+    project_id: str, output_id: str, payload: AttachmentOutputEditRequest, request: Request,
+    db: AsyncSession = Depends(get_db_session), settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentOutputEditSubmitResponse:
+    project, _, version, _, _ = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    item = AttachmentOutputEditItemRequest(
+        source_output_id=output_id, instruction=payload.instruction,
+        edit_scope=payload.edit_scope, reference_asset_ids=payload.reference_asset_ids,
+        library_item_ids=payload.library_item_ids,
+        override_confirmed=payload.override_confirmed,
+    )
+    batch, group, revisions, created = await create_output_edits(
+        db, settings, project=project, version=version,
+        requests=[item],
+        idempotency_key=payload.idempotency_key, concurrency=1, user_id=principal.user.id,
+    )
+    add_audit_log(
+        db, request=request, actor_user_id=principal.user.id, organization_id=project.organization_id,
+        action="attachment_output.edit", resource_type="generated_output", resource_id=output_id,
+        metadata={"batch_id": batch.id, "revision_ids": [item.id for item in revisions]},
+    )
+    await db.commit()
+    if created:
+        await dispatch_jobs(db, await due_jobs(db, settings, limit=1, batch_id=batch.id))
+    return AttachmentOutputEditSubmitResponse(
+        batch_id=batch.id, task_group_id=group.id,
+        revisions=[revision_response(item) for item in revisions],
+    )
+
+
+@router.post(
+    "/projects/{project_id}/outputs/batch-edit",
+    response_model=AttachmentOutputEditSubmitResponse, status_code=status.HTTP_202_ACCEPTED,
+)
+async def batch_edit_outputs(
+    project_id: str, payload: AttachmentOutputBatchEditRequest, request: Request,
+    db: AsyncSession = Depends(get_db_session), settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require_permissions("jobs.submit")),
+) -> AttachmentOutputEditSubmitResponse:
+    project, _, version, _, _ = await _load_and_reconcile(db, project_id=project_id, principal=principal)
+    batch, group, revisions, created = await create_output_edits(
+        db, settings, project=project, version=version, requests=payload.items,
+        idempotency_key=payload.idempotency_key, concurrency=payload.concurrency,
+        user_id=principal.user.id,
+    )
+    add_audit_log(
+        db, request=request, actor_user_id=principal.user.id, organization_id=project.organization_id,
+        action="attachment_output.batch_edit", resource_type="listing_image_project", resource_id=project.id,
+        metadata={"batch_id": batch.id, "revision_ids": [item.id for item in revisions]},
+    )
+    await db.commit()
+    if created:
+        await dispatch_jobs(db, await due_jobs(db, settings, limit=len(revisions), batch_id=batch.id))
+    return AttachmentOutputEditSubmitResponse(
+        batch_id=batch.id, task_group_id=group.id,
+        revisions=[revision_response(item) for item in revisions],
+    )
 
 
 @router.post(

@@ -16,6 +16,8 @@ from app.models.attachment_planning import (
     AttachmentProductReferenceGroup,
     AttachmentProductReferenceItem,
     AttachmentReferenceUnderstanding,
+    AttachmentReferenceLibraryItem,
+    AttachmentReferenceLibraryItemModule,
     AttachmentWorkbenchModulePlan,
     AttachmentWorkbenchPlan,
 )
@@ -180,6 +182,19 @@ async def add_module_reference(
     ))
     if asset is None:
         raise AppError("asset.not_found", "参考图片不存在或无权访问", 404)
+    if library_item_id:
+        library_item = await db.scalar(select(AttachmentReferenceLibraryItem).where(
+            AttachmentReferenceLibraryItem.id == library_item_id,
+            AttachmentReferenceLibraryItem.organization_id == module.organization_id,
+            AttachmentReferenceLibraryItem.asset_id == asset_id,
+            AttachmentReferenceLibraryItem.is_active.is_(True),
+        ))
+        supported = await db.scalar(select(AttachmentReferenceLibraryItemModule.id).where(
+            AttachmentReferenceLibraryItemModule.library_item_id == library_item_id,
+            AttachmentReferenceLibraryItemModule.module_key == module.module_key,
+        ))
+        if library_item is None or supported is None or library_item.reference_role != slot_type:
+            raise AppError("attachment_reference.library_item_invalid", "公共参考图与当前模块、素材角色或图片不匹配", 422)
     existing = await db.scalar(select(AttachmentModuleReference).where(
         AttachmentModuleReference.module_plan_id == module.id,
         AttachmentModuleReference.slot_type == slot_type,

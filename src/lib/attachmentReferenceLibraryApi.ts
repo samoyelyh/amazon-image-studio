@@ -16,6 +16,7 @@ export interface AttachmentReferenceLibraryItem {
   description: string
   category_key: string | null
   module_key: string
+  module_keys: string[]
   reference_role: 'TEMPLATE' | 'SCENE' | 'PRINT' | 'OTHER'
   asset: Asset
   guidance: string
@@ -24,6 +25,9 @@ export interface AttachmentReferenceLibraryItem {
   is_active: boolean
   sort_order: number
   state_version: number
+  created_by: string
+  created_at: string
+  updated_at: string
   understanding: AttachmentReferenceLibraryUnderstanding | null
 }
 
@@ -39,7 +43,8 @@ export interface AttachmentReferenceLibraryMutation {
   name: string
   description?: string
   category_key?: string | null
-  module_key: string
+  module_key?: string
+  module_keys?: string[]
   reference_role: 'TEMPLATE' | 'SCENE' | 'PRINT' | 'OTHER'
   asset_id: string
   guidance?: string
@@ -47,6 +52,17 @@ export interface AttachmentReferenceLibraryMutation {
   is_featured?: boolean
   is_active?: boolean
   sort_order?: number
+  allow_duplicate_asset?: boolean
+}
+
+export interface AttachmentReferenceLibraryCategoryOption {
+  category_key: string
+  category_name: string
+  modules: Array<{ code: string; name: string; sort_order: number }>
+}
+
+export function getAdminAttachmentReferenceLibraryOptions() {
+  return authenticatedFetch<AttachmentReferenceLibraryCategoryOption[]>('/admin/attachment-reference-library/options')
 }
 
 export function listAdminAttachmentReferenceLibrary(moduleKey?: string, categoryKey?: string) {
@@ -63,7 +79,7 @@ export function createAttachmentReferenceLibraryItem(input: AttachmentReferenceL
   })
 }
 
-export type AttachmentReferenceLibrarySourceMutation = Omit<AttachmentReferenceLibraryMutation, 'asset_id' | 'is_active'>
+export type AttachmentReferenceLibrarySourceMutation = Omit<AttachmentReferenceLibraryMutation, 'asset_id'>
 
 export function addAttachmentOutputToReferenceLibrary(outputId: string, input: AttachmentReferenceLibrarySourceMutation) {
   return authenticatedFetch<AttachmentReferenceLibraryItem>(`/admin/attachment-reference-library/from-output/${outputId}`, {

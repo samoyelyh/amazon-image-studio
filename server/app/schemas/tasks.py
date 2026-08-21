@@ -351,7 +351,8 @@ class JobBatchSubmitRequest(BaseModel):
         if self.operation_code != expected_operation:
             raise ValueError(f"operation_code must be {expected_operation}")
         attachment_batch = self.workspace_type == "listing" and all(
-            item.metadata.get("workflow") == "attachment_workbench_generation" for item in self.items
+            item.metadata.get("workflow") in {"attachment_workbench_generation", "attachment_output_edit"}
+            for item in self.items
         )
         if self.workspace_type in {"listing", "aplus"} and len(self.items) > (24 if attachment_batch else 10):
             raise ValueError("listing and aplus batches support at most 10 images; attachment generation supports at most 24")

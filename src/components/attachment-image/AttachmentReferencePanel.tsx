@@ -23,6 +23,7 @@ const assetCategory: Record<AttachmentReferenceSlotType, Parameters<typeof uploa
 
 interface Props {
   state: AttachmentModuleReferenceState
+  categoryKey: string
   productReferences: AttachmentProductReferenceItem[]
   busy?: boolean
   onAdd: (slot: AttachmentReferenceSlotType, assetId: string, options: { keywords: string[]; guidance: string; libraryItemId?: string }) => Promise<void>
@@ -38,7 +39,7 @@ function summaryText(value: unknown) {
 }
 
 export default function AttachmentReferencePanel({
-  state, productReferences, busy = false, onAdd, onRemove, onUpdate, onAnalyze, onError,
+  state, categoryKey, productReferences, busy = false, onAdd, onRemove, onUpdate, onAnalyze, onError,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploadSlot, setUploadSlot] = useState<AttachmentReferenceSlotType>('OTHER')
@@ -103,7 +104,7 @@ export default function AttachmentReferencePanel({
       <div className="mt-2 flex gap-2"><button type="button" disabled={busy} onClick={() => void onUpdate(editingReferenceId, editingKeywords.split(/[，,]/).map((item) => item.trim()).filter(Boolean), editingGuidance.trim(), state.reference_state_version).then(() => setEditingReferenceId('')).catch((error) => onError(error instanceof Error ? error.message : '保存参考要求失败'))} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">保存并重新理解</button><button type="button" onClick={() => setEditingReferenceId('')} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600">取消</button></div>
     </div>}
     <div className="mt-4 flex flex-wrap items-center gap-2">
-      <button type="button" disabled={busy || uploading} onClick={() => { const next = !libraryOpen; setLibraryOpen(next); if (next && !libraryItems.length) { setLibraryLoading(true); void listAttachmentReferenceLibrary(state.module_key).then(setLibraryItems).catch((error) => onError(error instanceof Error ? error.message : '读取参考图库失败')).finally(() => setLibraryLoading(false)) } }} className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700">{libraryOpen ? '收起参考图库' : '从参考图库选择'}</button>
+      <button type="button" disabled={busy || uploading} onClick={() => { const next = !libraryOpen; setLibraryOpen(next); if (next && !libraryItems.length) { setLibraryLoading(true); void listAttachmentReferenceLibrary(state.module_key, categoryKey).then(setLibraryItems).catch((error) => onError(error instanceof Error ? error.message : '读取参考图库失败')).finally(() => setLibraryLoading(false)) } }} className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700">{libraryOpen ? '收起参考图库' : '从参考图库选择'}</button>
       {understanding?.status === 'failed' && <button type="button" disabled={busy || uploading || Boolean(state.reference_analysis_job_id)} onClick={() => void onAnalyze()} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 disabled:opacity-40">重新分析</button>}
       {understanding && <button type="button" onClick={() => setUnderstandingOpen((value) => !value)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 dark:border-white/[0.1] dark:text-gray-300">{understandingOpen ? '收起理解摘要' : '参考图理解摘要'}</button>}
       {understanding?.status === 'failed' && <span className="text-xs text-red-600">{understanding.error_message || '参考素材分析失败，可重试'}</span>}

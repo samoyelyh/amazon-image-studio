@@ -38,6 +38,7 @@ interface Props {
   unavailableReason?: string
   objective?: string
   projectId: string
+  categoryKey: string
   planning?: AttachmentModulePlan
   planningBusy?: boolean
   referenceState?: AttachmentModuleReferenceState
@@ -83,6 +84,7 @@ export default function AttachmentImageModuleCard({
   unavailableReason,
   objective,
   projectId,
+  categoryKey,
   planning,
   planningBusy = false,
   referenceState,
@@ -193,7 +195,7 @@ export default function AttachmentImageModuleCard({
 
     {expanded && <div className="grid gap-5 border-t border-gray-100 p-4 dark:border-white/[0.06] sm:p-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(300px,.95fr)]">
       <section>
-        <AttachmentResultReviewPanel moduleKey={definition.code} moduleName={definition.name} groups={groups} state={resultState} busy={generationBusy} moduleStateVersion={planning?.state_version || 0} onApprove={onApproveResult} onReject={onRejectResult} onRetry={onRetryTask} onClear={onClearResults} onReset={onResetModule} onAdoptDirection={onAdoptDirection} onSaveSingle={onSaveSingle} />
+        <AttachmentResultReviewPanel projectId={projectId} categoryKey={categoryKey} moduleKey={definition.code} moduleName={definition.name} groups={groups} state={resultState} busy={generationBusy} moduleStateVersion={planning?.state_version || 0} onApprove={onApproveResult} onReject={onRejectResult} onRetry={onRetryTask} onClear={onClearResults} onReset={onResetModule} onAdoptDirection={onAdoptDirection} onSaveSingle={onSaveSingle} />
       </section>
 
       <section className="space-y-4">
@@ -252,6 +254,7 @@ export default function AttachmentImageModuleCard({
         />}
         {referenceState && <AttachmentReferencePanel
           state={referenceState}
+          categoryKey={categoryKey}
           productReferences={productReferences}
           busy={planningBusy}
           onAdd={onAddReference}

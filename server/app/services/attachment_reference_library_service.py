@@ -15,7 +15,7 @@ from app.services.ai_task_model_policy_service import next_analysis_retry, resol
 from app.services.task_service import submit_job
 
 
-PROMPT_VERSION = "reference-library-v1"
+PROMPT_VERSION = "reference-library-v2"
 SYSTEM_PROMPT = """你是电商参考图库图片理解器。只提取图片本身可复用的构图、镜头、摆放、光线、背景、道具和空间关系。
 Role为TEMPLATE或SCENE时，严禁把模板中的旧商品颜色、Logo、号码、文字、印花或商品身份当作可复用规则。
 只返回JSON：{"role":"...","summary_cn":"...","composition":"...","camera_angle":"...","subject_placement":"...","lighting":"...","background":"...","props":[],"reusable_rules":[],"forbidden_inheritance":[]}。不要Markdown，不要解释。"""
@@ -24,7 +24,7 @@ Role为TEMPLATE或SCENE时，严禁把模板中的旧商品颜色、Logo、号�
 def library_input_hash(item: AttachmentReferenceLibraryItem) -> str:
     return sha256(json.dumps({
         "asset_id": item.asset_id, "role": item.reference_role, "guidance": item.guidance,
-        "tags": list(item.tags or []), "state_version": item.state_version, "prompt_version": PROMPT_VERSION,
+        "tags": list(item.tags or []), "prompt_version": PROMPT_VERSION,
     }, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
 
@@ -77,7 +77,7 @@ async def start_library_analysis(
         capability="text_generation", model_code=route.model_code,
         idempotency_key=f"reference-library:{item.id}:{input_hash}:{number if force else 0}", project_id=None,
         input={"system_prompt": SYSTEM_PROMPT,
-               "user_prompt": json.dumps({"role": item.reference_role, "module_key": item.module_key, "guidance": item.guidance, "tags": item.tags}, ensure_ascii=False),
+               "user_prompt": json.dumps({"role": item.reference_role, "guidance": item.guidance, "tags": item.tags}, ensure_ascii=False),
                "response_format": "json_object", "reference_asset_ids": [item.asset_id],
                "metadata": {"workflow": "attachment_reference_library_analysis", "library_item_id": item.id,
                             "input_hash": input_hash, "analysis_task_type": route.task_type,
@@ -141,7 +141,7 @@ async def reconcile_library_understanding(
                         idempotency_key=f"reference-library:{row.id}:attempt:{next_attempt}", project_id=None,
                         input={
                             "system_prompt": SYSTEM_PROMPT,
-                            "user_prompt": json.dumps({"role": item.reference_role, "module_key": item.module_key, "guidance": item.guidance, "tags": item.tags}, ensure_ascii=False),
+                            "user_prompt": json.dumps({"role": item.reference_role, "guidance": item.guidance, "tags": item.tags}, ensure_ascii=False),
                             "response_format": "json_object", "reference_asset_ids": [item.asset_id],
                             "metadata": {
                                 "workflow": "attachment_reference_library_analysis", "library_item_id": item.id,

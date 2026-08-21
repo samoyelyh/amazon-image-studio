@@ -239,6 +239,7 @@ class AttachmentReferenceLibraryItemResponse(BaseModel):
     description: str
     category_key: str | None
     module_key: str
+    module_keys: list[str] = Field(default_factory=list)
     reference_role: str
     asset: AssetResponse
     guidance: str
@@ -247,6 +248,9 @@ class AttachmentReferenceLibraryItemResponse(BaseModel):
     is_active: bool
     sort_order: int
     state_version: int
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
     understanding: AttachmentReferenceLibraryUnderstandingResponse | None
 
 
@@ -254,25 +258,31 @@ class AttachmentReferenceLibraryCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=1000)
     category_key: str | None = Field(default=None, max_length=100)
-    module_key: str = Field(min_length=1, max_length=60)
+    module_key: str | None = Field(default=None, min_length=1, max_length=60)
+    module_keys: list[str] = Field(default_factory=list, min_length=1, max_length=24)
     reference_role: Literal["TEMPLATE", "SCENE", "PRINT", "OTHER"]
     asset_id: str = Field(min_length=36, max_length=36)
     guidance: str = Field(default="", max_length=10000)
     tags: list[str] = Field(default_factory=list, max_length=30)
     is_featured: bool = False
+    is_active: bool = True
     sort_order: int = Field(default=100, ge=0, le=10000)
+    allow_duplicate_asset: bool = False
 
 
 class AttachmentReferenceLibrarySourceCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=1000)
     category_key: str | None = Field(default=None, max_length=100)
-    module_key: str = Field(min_length=1, max_length=60)
+    module_key: str | None = Field(default=None, min_length=1, max_length=60)
+    module_keys: list[str] = Field(default_factory=list, min_length=1, max_length=24)
     reference_role: Literal["TEMPLATE", "SCENE", "PRINT", "OTHER"] = "TEMPLATE"
     guidance: str = Field(default="", max_length=10000)
     tags: list[str] = Field(default_factory=list, max_length=30)
     is_featured: bool = False
+    is_active: bool = True
     sort_order: int = Field(default=100, ge=0, le=10000)
+    allow_duplicate_asset: bool = False
 
 
 class AttachmentReferenceLibraryUpdateRequest(BaseModel):
@@ -280,12 +290,19 @@ class AttachmentReferenceLibraryUpdateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=1000)
     category_key: str | None = Field(default=None, max_length=100)
     module_key: str | None = Field(default=None, min_length=1, max_length=60)
+    module_keys: list[str] | None = Field(default=None, min_length=1, max_length=24)
     reference_role: Literal["TEMPLATE", "SCENE", "PRINT", "OTHER"] | None = None
     guidance: str | None = Field(default=None, max_length=10000)
     tags: list[str] | None = Field(default=None, max_length=30)
     is_featured: bool | None = None
     is_active: bool | None = None
     sort_order: int | None = Field(default=None, ge=0, le=10000)
+
+
+class AttachmentReferenceLibraryCategoryOptionResponse(BaseModel):
+    category_key: str
+    category_name: str
+    modules: list[dict[str, object]]
 
 
 class AttachmentProductCompositionAssetResponse(BaseModel):

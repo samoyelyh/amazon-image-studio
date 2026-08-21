@@ -1049,7 +1049,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
           key={definition.code} index={index + 1} definition={definition}
           draft={draft.modules[definition.code]} expanded={expanded.has(definition.code)}
           available={available} unavailableReason={phaseOneSupported ? String(backend.unavailable_reason || '') : '首期仅支持橄榄球衣。'}
-          objective={String(backend.objective || '')} projectId={project.id} planning={modulePlanning}
+          objective={String(backend.objective || '')} projectId={project.id} categoryKey={session.category_code} planning={modulePlanning}
           planningBusy={planningBusy !== '' || planningActive || referenceBusy !== ''}
           referenceState={referenceState?.modules.find((item) => item.module_key === definition.code)}
           productReferences={referenceState?.product_references || []}

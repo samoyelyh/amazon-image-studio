@@ -83,6 +83,14 @@ def attachment_module_rule(skill_snapshot: dict[str, object], module_key: str) -
     return _module_definition(skill_snapshot, module_key)
 
 
+def attachment_module_definitions(skill_snapshot: dict[str, object]) -> list[dict[str, object]]:
+    """Return the six formal attachment-workbench modules with Skill overrides applied."""
+    return sorted(
+        [_module_definition(skill_snapshot, module_key) for module_key in STANDARD_MODULE_CODES],
+        key=lambda item: (int(item.get("sort_order") or 100), str(item.get("name") or item.get("code") or "")),
+    )
+
+
 def _compact_listing(listing: dict[str, object]) -> dict[str, object]:
     return {key: listing.get(key) for key in (
         "title", "bullet_points", "selling_points", "usage_scenarios", "customization_notes", "cautions",

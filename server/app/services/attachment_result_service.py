@@ -94,7 +94,7 @@ async def _output_context(
     metadata = job.input_json.get("metadata") if isinstance(job.input_json, dict) else None
     metadata = metadata if isinstance(metadata, dict) else {}
     module_key = str(metadata.get("item_code") or output.module_key or "")
-    if metadata.get("workflow") != "attachment_workbench_generation" or module_key not in MODULE_INDEX:
+    if metadata.get("workflow") not in {"attachment_workbench_generation", "attachment_output_edit"} or module_key not in MODULE_INDEX:
         raise AppError("attachment_result.output_invalid", "该图片不是附图生成工作台结果", 422)
     return output, job, group, module_key
 

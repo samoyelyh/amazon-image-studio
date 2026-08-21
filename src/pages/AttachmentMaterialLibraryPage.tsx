@@ -19,6 +19,7 @@ import {
 } from '../lib/attachmentMaterialLibrary'
 import { addAttachmentMaterialToReferenceLibrary } from '../lib/attachmentReferenceLibraryApi'
 import { useAuth } from '../app/AuthContext'
+import AttachmentReferencePromotionDialog from '../components/admin/AttachmentReferencePromotionDialog'
 
 const input = 'rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 dark:border-white/[0.1] dark:bg-gray-950'
 const secondary = 'rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50 dark:border-white/[0.1] dark:bg-gray-900 dark:text-gray-200'
@@ -87,6 +88,7 @@ function MaterialDetail({ materialSetId }: { materialSetId: string }) {
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [promotion, setPromotion] = useState<{ materialItemId: string; moduleKey: string } | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -107,8 +109,18 @@ function MaterialDetail({ materialSetId }: { materialSetId: string }) {
     <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-gray-900"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-base font-semibold text-gray-950 dark:text-white">版本记录</h2><p className="mt-1 text-xs text-gray-500">每个版本都是不可变快照，可随时切换查看和下载。</p></div><select className={input} value={version?.version_number || ''} onChange={(event) => setVersionNumber(Number(event.target.value))}>{detail.versions.map((item) => <option key={item.id} value={item.version_number}>{attachmentMaterialVersionLabel(item)} · {formatDate(item.created_at)}</option>)}</select></div>{version && <div className="mt-4 flex flex-wrap gap-2 text-xs"><span className={`rounded-full px-2.5 py-1 font-semibold ${version.is_complete ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{attachmentMaterialCompletionLabel(version.module_count, version.target_module_count, version.is_complete)}</span><span className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600">生成模式与来源已保存</span>{version.changed_module_keys.map((key) => <span key={key} className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">本版变更：{attachmentMaterialModuleLabels[key] || key}</span>)}</div>}</section>
     <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">{attachmentMaterialModuleOrder.map((moduleKey) => {
       const item = itemMap.get(moduleKey)
-      return <article key={moduleKey} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/[0.08] dark:bg-gray-900"><div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-white/[0.06]"><h3 className="text-sm font-semibold text-gray-900 dark:text-white">{attachmentMaterialModuleLabels[moduleKey]}</h3><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>{item ? '已保存' : '本版缺失'}</span></div>{item?.asset.url ? <AuthenticatedImage url={item.asset.url} alt={attachmentMaterialModuleLabels[moduleKey]} className="aspect-[4/3] w-full bg-gray-50 object-contain" placeholderClassName="aspect-[4/3]" /> : <div className="flex aspect-[4/3] items-center justify-center bg-gray-50 text-sm text-gray-400 dark:bg-white/[0.02]">该版本未保存此模块</div>}{item && <div className="grid grid-cols-2 gap-2 p-4 text-xs text-gray-500"><span>{item.output_size}</span><span className="text-right">{item.aspect_ratio}</span><span>{item.generation_mode}</span><span className="text-right">{item.product_mode}</span>{auth.hasPermission('platform.admin') && <button className={`${secondary} col-span-2 mt-1`} disabled={busy} onClick={() => { setBusy(true); void addAttachmentMaterialToReferenceLibrary(item.id, { name: `${attachmentMaterialModuleLabels[moduleKey]} 优秀素材`, module_key: moduleKey, reference_role: 'TEMPLATE', guidance: '参考画面构图、布局、镜头、光线与留白；禁止继承参考图中的商品身份、颜色、Logo、文字和号码。', tags: [attachmentMaterialModuleLabels[moduleKey], '个人素材'] }).then(() => window.alert('已加入参考图库，并已开始后台分析。')).catch((reason) => window.alert(reason instanceof Error ? reason.message : '加入参考图库失败')).finally(() => setBusy(false)) }}>加入参考图库</button>}</div>}</article>
+      return <article key={moduleKey} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/[0.08] dark:bg-gray-900"><div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-white/[0.06]"><h3 className="text-sm font-semibold text-gray-900 dark:text-white">{attachmentMaterialModuleLabels[moduleKey]}</h3><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>{item ? '已保存' : '本版缺失'}</span></div>{item?.asset.url ? <AuthenticatedImage url={item.asset.url} alt={attachmentMaterialModuleLabels[moduleKey]} className="aspect-[4/3] w-full bg-gray-50 object-contain" placeholderClassName="aspect-[4/3]" /> : <div className="flex aspect-[4/3] items-center justify-center bg-gray-50 text-sm text-gray-400 dark:bg-white/[0.02]">该版本未保存此模块</div>}{item && <div className="grid grid-cols-2 gap-2 p-4 text-xs text-gray-500"><span>{item.output_size}</span><span className="text-right">{item.aspect_ratio}</span><span>{item.generation_mode}</span><span className="text-right">{item.product_mode}</span>{auth.hasPermission('platform.admin') && <button className={`${secondary} col-span-2 mt-1`} disabled={busy} onClick={() => setPromotion({ materialItemId: item.id, moduleKey })}>加入参考图库</button>}</div>}</article>
     })}</section>
+    {promotion && <AttachmentReferencePromotionDialog
+      open={Boolean(promotion)}
+      title="加入公共参考图库"
+      defaultName={`${attachmentMaterialModuleLabels[promotion.moduleKey]} 优秀素材`}
+      defaultCategoryKey={detail.category_key}
+      defaultModuleKey={promotion.moduleKey}
+      defaultTags={[attachmentMaterialModuleLabels[promotion.moduleKey], '个人素材']}
+      onClose={() => setPromotion(null)}
+      onSubmit={(input) => addAttachmentMaterialToReferenceLibrary(promotion.materialItemId, input)}
+    />}
   </div>
 }
 

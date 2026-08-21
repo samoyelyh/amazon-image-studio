@@ -228,7 +228,9 @@ async def task_group_response(
         for item in jobs
     ]
     variation_jobs = [item for item in job_metadata if item.get("workflow") == "smart_image_variation"]
-    attachment_jobs = [item for item in job_metadata if item.get("workflow") == "attachment_workbench_generation"]
+    attachment_jobs = [item for item in job_metadata if item.get("workflow") in {
+        "attachment_workbench_generation", "attachment_output_edit",
+    }]
     workflow_mode = "attachment_standard" if attachment_jobs else "smart_image_variation" if variation_jobs else "standard"
     final_output_ids: set[str] = set()
     if workflow_mode == "attachment_standard":
