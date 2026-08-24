@@ -284,7 +284,7 @@ async def create_output_edits(
                 "reference_asset_ids": reference_ids, "library_item_ids": library_ids,
                 "library_items": library_snapshots,
             },
-            created_by=user_id,
+            created_by=user_id, created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
         )
         db.add(revision); await db.flush()
         item = BatchJobItemRequest(

@@ -135,6 +135,7 @@ async def create_conversation(
         metadata={"project_id": project_id, "mode": row.mode},
     )
     await db.commit()
+    await db.refresh(row)
     return await _conversation_response(db, row)
 
 

@@ -5,9 +5,10 @@ from pydantic import SecretStr
 from sqlalchemy import select
 
 from app.clients.hermes_client import HermesReply
-from app.core.config import Settings
+from app.core.config import Settings, get_settings
 from app.core.errors import AppError
 from app.models.hermes_agent import HermesToolAudit
+from app.models.creative_presets import AttachmentPlanModelSelection
 from app.models.identity import User
 from app.models.listing_workflow import CategorySkill, ListingGenerationSession, ListingImageProject, ListingVersion, ProductCategory
 from app.services.hermes_agent_service import (
@@ -72,6 +73,13 @@ def test_hermes_parser_rejects_unknown_and_implicit_expensive_actions() -> None:
     )
     assert explicit and explicit["actions"][0]["tool"] == "generate_modules"
 
+    reply, trailing_brace = parse_hermes_response(
+        '{"reply":"请确认","proposal":{"summary":"只策划礼品图","actions":[{"tool":"plan_modules","arguments":{"module_keys":["gift_scene"],"requirements":{"gift_scene":"更高级"}}}]}}}',
+        user_text="请只重新策划礼品图",
+    )
+    assert reply == "请确认"
+    assert trailing_brace and trailing_brace["actions"][0]["tool"] == "plan_modules"
+
 
 def test_hermes_tool_catalog_declares_risk_permission_and_redacts_audit_secrets() -> None:
     catalog = {item["name"]: item for item in tool_catalog()}
@@ -103,6 +111,26 @@ async def test_hermes_tool_registry_enforces_current_user_permission(identity_te
 
 
 @pytest.mark.asyncio
+async def test_hermes_module_model_accepts_safe_agent_aliases(identity_test_context) -> None:
+    project_id, user_id = await _project(identity_test_context)
+    async with identity_test_context["session_factory"]() as db:
+        context = await load_hermes_workbench_context(
+            db, organization_id=identity_test_context["first_org"], project_id=project_id, user_id=user_id,
+        )
+        result = await execute_hermes_tool(
+            db, Settings(), context=context, tool_name="set_module_model",
+            arguments={"module_key": "gift_scene", "selection_mode": "no_model", "identity_version_ids": []},
+            user_id=user_id, permissions=frozenset({"jobs.submit"}),
+        )
+        assert result.result["selection_mode"] == "none"
+        marker = await db.scalar(select(AttachmentPlanModelSelection).where(
+            AttachmentPlanModelSelection.workbench_plan_id == context.plan.id,
+            AttachmentPlanModelSelection.module_key == "gift_scene",
+        ))
+        assert marker and marker.selection_mode == "none"
+
+
+@pytest.mark.asyncio
 async def test_hermes_conversation_is_user_scoped_and_proposal_is_audited(identity_test_context, monkeypatch) -> None:
     project_id, user_id = await _project(identity_test_context)
     settings = Settings(hermes_enabled=True, hermes_api_key=SecretStr("test-hermes-key"))
@@ -123,6 +151,8 @@ async def test_hermes_conversation_is_user_scoped_and_proposal_is_audited(identi
         conversation = await get_or_create_conversation(
             db, organization_id=identity_test_context["first_org"], user_id=user_id, project_id=project_id,
         )
+        assert conversation.created_at is not None
+        assert conversation.updated_at is not None
         message, proposal = await send_hermes_message(
             db, settings, conversation=conversation,
             organization_id=identity_test_context["first_org"], user_id=user_id,
@@ -130,6 +160,8 @@ async def test_hermes_conversation_is_user_scoped_and_proposal_is_audited(identi
         )
         assert message.role == "assistant"
         assert proposal and proposal.status == "pending"
+        assert proposal.created_at is not None
+        assert proposal.updated_at is not None
         results, signature = await apply_hermes_proposal(
             db, settings, proposal=proposal,
             organization_id=identity_test_context["first_org"], user_id=user_id,
@@ -184,10 +216,15 @@ async def test_hermes_conversation_is_user_scoped_and_proposal_is_audited(identi
 async def test_hermes_status_disabled_does_not_break_workbench(identity_test_context) -> None:
     project_id, _ = await _project(identity_test_context)
     client = identity_test_context["client"]
-    login = await client.post("/api/v1/auth/login", json={"account": "first-admin", "password": "correct-password"})
-    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
-    response = await client.get(f"/api/v1/attachment-workbench/projects/{project_id}/hermes/status", headers=headers)
-    assert response.status_code == 200, response.text
-    assert response.json()["enabled"] is False
-    planning = await client.get(f"/api/v1/attachment-workbench/projects/{project_id}/planning", headers=headers)
-    assert planning.status_code == 200
+    app = identity_test_context["app"]
+    app.dependency_overrides[get_settings] = lambda: Settings(hermes_enabled=False)
+    try:
+        login = await client.post("/api/v1/auth/login", json={"account": "first-admin", "password": "correct-password"})
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        response = await client.get(f"/api/v1/attachment-workbench/projects/{project_id}/hermes/status", headers=headers)
+        assert response.status_code == 200, response.text
+        assert response.json()["enabled"] is False
+        planning = await client.get(f"/api/v1/attachment-workbench/projects/{project_id}/planning", headers=headers)
+        assert planning.status_code == 200
+    finally:
+        app.dependency_overrides.pop(get_settings, None)

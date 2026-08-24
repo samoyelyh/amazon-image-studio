@@ -59,9 +59,17 @@ TOOL_SPECS = (
     HermesToolSpec("search_model_library", "read", "搜索当前团队可用的AI模特", "READ_ONLY", "jobs.read", ("keywords",)),
     HermesToolSpec("set_visual_preset", "action", "切换整套视觉预设", "LOW_RISK_WRITE", "jobs.submit", ("preset_id_or_code",)),
     HermesToolSpec("set_theme", "action", "切换或清除主题预设", "LOW_RISK_WRITE", "jobs.submit", ("theme_id_or_code",)),
-    HermesToolSpec("set_module_model", "action", "设置模块AI模特选择方式", "LOW_RISK_WRITE", "jobs.submit", ("module_key", "selection_mode", "identity_version_ids")),
+    HermesToolSpec(
+        "set_module_model", "action",
+        "设置模块AI模特；selection_mode只允许inherit/recommended/selected/none，选择具体模特必须用selected并传identity_version_ids，无人物用none",
+        "LOW_RISK_WRITE", "jobs.submit", ("module_key", "selection_mode", "identity_version_ids"),
+    ),
     HermesToolSpec("attach_reference_library_item", "action", "把公共图库素材挂到指定模块", "LOW_RISK_WRITE", "jobs.submit", ("module_key", "library_item_id")),
-    HermesToolSpec("plan_modules", "action", "按当前Lazy AI规则策划指定模块", "AI_ACTION", "jobs.submit", ("module_keys", "visual_direction_cn", "requirements")),
+    HermesToolSpec(
+        "plan_modules", "action",
+        "按当前Lazy AI规则策划指定模块；requirements必须是以module_key为键、中文要求为值的对象，不能是字符串",
+        "AI_ACTION", "jobs.submit", ("module_keys", "visual_direction_cn", "requirements"),
+    ),
     HermesToolSpec("get_plan_result", "read", "读取当前策划结果和失败原因", "READ_ONLY", "jobs.read", ("module_keys",)),
     HermesToolSpec("generate_modules", "action", "使用现有生成预检和任务组生成指定模块", "EXPENSIVE_ACTION", "jobs.submit", ("module_keys",)),
     HermesToolSpec("edit_generated_output", "action", "使用现有图片编辑链路修改一张结果", "EXPENSIVE_ACTION", "jobs.submit", ("output_id", "instruction", "edit_scope")),
@@ -178,7 +186,16 @@ async def execute_hermes_tool(
 
     if tool_name == "set_module_model":
         module = _module(context, str(arguments.get("module_key") or ""))
-        mode = str(arguments.get("selection_mode") or "inherit")
+        raw_mode = str(arguments.get("selection_mode") or "inherit").strip().lower()
+        mode = {
+            "manual": "selected",
+            "custom": "selected",
+            "no_model": "none",
+            "no-model": "none",
+            "off": "none",
+            "auto": "recommended",
+            "default": "inherit",
+        }.get(raw_mode, raw_mode)
         ids = [str(item) for item in (arguments.get("identity_version_ids") or []) if item]
         await set_module_model_context(
             db, plan=context.plan, module=module, selection_mode=mode,
