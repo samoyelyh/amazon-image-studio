@@ -85,6 +85,15 @@ class Settings(BaseSettings):
     job_retry_recovery_per_tick_per_provider: int = 3
     job_dispatch_interval_seconds: float = 2.0
 
+    # Optional Nous Research Hermes Agent gateway. The application remains
+    # fully usable when this integration is disabled or unavailable.
+    hermes_enabled: bool = False
+    hermes_base_url: str = "http://hermes:8642"
+    hermes_api_key: SecretStr | None = None
+    hermes_model: str = "hermes-agent"
+    hermes_profile: str = "image_operator"
+    hermes_timeout_seconds: float = 90.0
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, value: object) -> object:
@@ -138,6 +147,10 @@ class Settings(BaseSettings):
             raise ValueError("Provider timeouts must be positive")
         if not 0.5 <= self.job_dispatch_interval_seconds <= 60:
             raise ValueError("JOB_DISPATCH_INTERVAL_SECONDS must be between 0.5 and 60 seconds")
+        if self.hermes_timeout_seconds < 3 or self.hermes_timeout_seconds > 600:
+            raise ValueError("HERMES_TIMEOUT_SECONDS must be between 3 and 600 seconds")
+        if self.hermes_enabled and not self.hermes_api_key:
+            raise ValueError("HERMES_API_KEY is required when HERMES_ENABLED is true")
         if self.job_timeout_seconds <= self.provider_request_timeout_seconds + 60:
             raise ValueError("JOB_TIMEOUT_SECONDS must exceed provider request timeout by at least 60 seconds")
         return self

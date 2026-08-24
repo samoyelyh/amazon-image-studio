@@ -61,6 +61,7 @@ from app.models.creative_presets import (
     AttachmentPlanModelSelection, ThemePreset, ThemePresetVersion,
     VisualPreset, VisualPresetVersion,
 )
+from app.models.hermes_agent import HermesConversation, HermesMessage, HermesProposal, HermesToolAudit
 
 __all__ = [
     "AuditLog",
@@ -103,4 +104,5 @@ __all__ = [
     "VisualPreset", "VisualPresetVersion", "ThemePreset", "ThemePresetVersion",
     "AIModelPreset", "AIModelIdentityVersion", "AIModelPresetReference",
     "AttachmentPlanModelSelection",
+    "HermesConversation", "HermesMessage", "HermesProposal", "HermesToolAudit",
 ]

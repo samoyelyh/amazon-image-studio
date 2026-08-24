@@ -5,6 +5,7 @@ import type { AttachmentResultEntry } from '../components/attachment-image/Attac
 import AttachmentMaterialSaveDialog from '../components/attachment-image/AttachmentMaterialSaveDialog'
 import AttachmentCreativeContextPanel from '../components/attachment-image/AttachmentCreativeContextPanel'
 import AttachmentProductIdentityPanel from '../components/attachment-image/AttachmentProductIdentityPanel'
+import HermesAssistantDrawer from '../components/attachment-image/HermesAssistantDrawer'
 import BatchTryOnGarmentPreprocessDialog, { type GarmentReferencePreview } from '../components/BatchTryOnGarmentPreprocessDialog'
 import AuthenticatedImage from '../components/category-listing/AuthenticatedImage'
 import {
@@ -220,6 +221,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
   const [materialSaveOutputId, setMaterialSaveOutputId] = useState<string | null>(null)
   const [materialSaveOpen, setMaterialSaveOpen] = useState(false)
   const [materialSaving, setMaterialSaving] = useState(false)
+  const [hermesOpen, setHermesOpen] = useState(false)
   const generationIdempotencyRef = useRef('')
   const visualDirtyRef = useRef(false)
   const suitePlanningAwaitingResultRef = useRef(false)
@@ -975,7 +977,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
 
   return <div className="space-y-5 pb-28 pt-6">
     <header className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-gray-900">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Attachment Image Workbench</div><h1 className="mt-2 text-2xl font-bold text-gray-950 dark:text-white">附图生成工作台</h1><p className="mt-2 text-sm text-gray-500">{session.category_name} · {session.skill_name} V{session.skill_version_number || '-'} · Listing V{session.listing_version_number}</p></div><div className="flex flex-wrap gap-2"><Link className={button} to="/materials">个人素材库</Link><button className={button} disabled={!resultState?.final_module_count || materialSaving} onClick={() => void openMaterialSave()}>保存整套</button><Link className={button} to="/workspaces/attachment-images">切换商品</Link></div></div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Attachment Image Workbench</div><h1 className="mt-2 text-2xl font-bold text-gray-950 dark:text-white">附图生成工作台</h1><p className="mt-2 text-sm text-gray-500">{session.category_name} · {session.skill_name} V{session.skill_version_number || '-'} · Listing V{session.listing_version_number}</p></div><div className="flex flex-wrap gap-2"><button className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700" onClick={() => setHermesOpen(true)}>✦ Hermes 智能助理</button><Link className={button} to="/materials">个人素材库</Link><button className={button} disabled={!resultState?.final_module_count || materialSaving} onClick={() => void openMaterialSave()}>保存整套</button><Link className={button} to="/workspaces/attachment-images">切换商品</Link></div></div>
     </header>
 
     {error && <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}<button className="ml-3 font-semibold underline" onClick={() => setError('')}>关闭</button></div>}
@@ -1091,6 +1093,24 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
         <div className="mt-5 flex justify-end gap-2"><button className={button} disabled={generationBusy === 'submit'} onClick={() => { setGenerationPreview(null); setGenerationCreativePlanningJobId(null) }}>返回修改</button><button className={primary} disabled={generationBusy === 'submit'} onClick={() => void confirmGeneration()}>{generationBusy === 'submit' ? '正在提交…' : '确认并开始生成'}</button></div>
       </div>
     </div>}
+    <HermesAssistantDrawer
+      open={hermesOpen}
+      projectId={project.id}
+      productName={productTitle(session)}
+      categoryName={session.category_name}
+      selectedModuleCount={selectedModules.length}
+      planningStatus={planning?.planning_status || 'idle'}
+      onClose={() => setHermesOpen(false)}
+      onNotice={showToast}
+      onApplied={async () => {
+        const [nextPlanning, nextReferences, nextCreative] = await Promise.all([
+          getAttachmentPlanning(project.id), getAttachmentReferences(project.id), getAttachmentCreativeContext(project.id),
+        ])
+        setPlanning(nextPlanning); setReferenceState(nextReferences); setCreativeContext(nextCreative)
+        setVisualDirection(nextPlanning.visual_direction_cn)
+        await refreshGroups(project.id)
+      }}
+    />
     <BatchTryOnGarmentPreprocessDialog
       open={productPreprocessOpen}
       garments={productPreprocessGarments}

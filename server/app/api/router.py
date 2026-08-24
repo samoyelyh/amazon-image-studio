@@ -35,6 +35,7 @@ from app.api.batch_tryon_workspace import router as batch_tryon_workspace_router
 from app.api.batch_tryon_prompts import router as batch_tryon_prompts_router
 from app.api.print_design import router as print_design_router
 from app.api.attachment_planning import router as attachment_planning_router
+from app.api.hermes_agent import router as hermes_agent_router
 from app.api.attachment_reference_library import admin_router as attachment_reference_library_admin_router, router as attachment_reference_library_router
 from app.api.attachment_materials import router as attachment_materials_router
 from app.api.creative_presets import admin_router as creative_presets_admin_router, router as creative_presets_router
@@ -72,6 +73,7 @@ api_router.include_router(batch_tryon_workspace_router)
 api_router.include_router(batch_tryon_prompts_router)
 api_router.include_router(print_design_router)
 api_router.include_router(attachment_planning_router)
+api_router.include_router(hermes_agent_router)
 api_router.include_router(attachment_reference_library_router)
 api_router.include_router(attachment_reference_library_admin_router)
 api_router.include_router(attachment_materials_router)
