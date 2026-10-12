@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildMissingGarmentReferenceMessage,
   clampNormalizedRect,
   compactGarmentTransform,
   garmentTransformMetadata,
+  getMissingRequiredGarmentReferenceViews,
   normalizedRectFromPoints,
   resolveEffectiveGarmentReferencePreviews,
 } from './batchTryOnGarmentPreprocess'
@@ -46,6 +48,37 @@ describe('batch try-on garment preprocessing', () => {
     expect(resolveEffectiveGarmentReferencePreviews(template, garment)).toEqual([{
       imageId: 'original', fileName: 'shirt.png', view: 'original', derived: false,
     }])
+  })
+
+  it('reports a missing explicit back reference instead of treating the original as valid', () => {
+    const template = {
+      id: 'template', imageId: 'template-image', fileName: 'gift.png', displayName: '礼品场景图', garmentView: 'back',
+    } as BatchTryOnTemplate
+    const garment = {
+      id: 'garment', garmentImageId: 'original', garmentFileName: 'shirt.png',
+    } as BatchTryOnGarment
+
+    expect(getMissingRequiredGarmentReferenceViews(template, garment)).toEqual(['back'])
+    expect(buildMissingGarmentReferenceMessage(template, garment)).toContain('尚未保存背面参考图')
+    garment.references = {
+      back: { imageId: 'back', fileName: 'shirt-back.png', garmentView: 'back' } as never,
+    }
+    expect(getMissingRequiredGarmentReferenceViews(template, garment)).toEqual([])
+    expect(getMissingRequiredGarmentReferenceViews(template, garment, true)).toEqual(['back'])
+  })
+
+  it('requires both clean references when front and back are selected explicitly', () => {
+    const template = {
+      id: 'template', imageId: 'template-image', fileName: 'flow.png', garmentView: 'front_back',
+    } as BatchTryOnTemplate
+    const garment = {
+      id: 'garment', garmentImageId: 'original', garmentFileName: 'shirt.png',
+      references: {
+        front: { imageId: 'front', serverAssetId: 'front-asset', fileName: 'shirt-front.png', garmentView: 'front' },
+      },
+    } as BatchTryOnGarment
+
+    expect(getMissingRequiredGarmentReferenceViews(template, garment, true)).toEqual(['back'])
   })
 
   it('compacts dense erase paths before storing transform metadata', () => {

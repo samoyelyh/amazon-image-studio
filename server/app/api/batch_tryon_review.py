@@ -36,6 +36,7 @@ from app.services.batch_tryon_export_service import (
 from app.services.batch_tryon_review_service import (
     approve_region_replace_version,
     approve_version,
+    discard_version,
     discard_region_replace_version,
     ensure_batch_try_on_review_records,
     regenerate_version,
@@ -370,6 +371,37 @@ async def approve_review_item(
     add_audit_log(
         session, request=request, actor_user_id=principal.user.id, organization_id=org_id,
         action="batch_tryon.review.approve", resource_type="batch_tryon_review_item", resource_id=item.id,
+        metadata={"version_id": payload.source_version_id},
+    )
+    await session.commit()
+    return await review_detail(session, org_id, item.id)
+
+
+@router.post("/{item_id}/discard", response_model=BatchTryOnReviewDetailResponse)
+async def discard_review_item(
+    item_id: str,
+    payload: BatchTryOnApproveRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    principal: Principal = Depends(require_permissions("batch_tryon.review")),
+) -> BatchTryOnReviewDetailResponse:
+    org_id = organization_id(principal)
+    await _require_owned_review_item(session, principal, item_id)
+    item = await discard_version(
+        session,
+        organization_id=org_id,
+        item_id=item_id,
+        version_id=payload.source_version_id,
+        user_id=principal.user.id,
+    )
+    add_audit_log(
+        session,
+        request=request,
+        actor_user_id=principal.user.id,
+        organization_id=org_id,
+        action="batch_tryon.review.discard",
+        resource_type="batch_tryon_review_item",
+        resource_id=item.id,
         metadata={"version_id": payload.source_version_id},
     )
     await session.commit()

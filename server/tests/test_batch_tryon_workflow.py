@@ -755,3 +755,40 @@ async def test_workflow_uses_the_same_clean_front_reference_for_analysis_and_gen
         assert jobs[0].input_json["reference_asset_ids"] == [template["id"], clean_front["id"]]
         assert jobs[0].input_json["metadata"]["garment_asset_id"] == garment["id"]
         assert jobs[0].input_json["metadata"]["effective_garment_reference_asset_ids"] == [clean_front["id"]]
+
+
+async def test_workflow_rejects_missing_explicit_back_reference(
+    identity_test_context, monkeypatch,
+) -> None:
+    client = identity_test_context["client"]
+    monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
+    await seed_workflow_resources(identity_test_context)
+    headers = await auth_headers(client)
+    project = (await client.post("/api/v1/projects", headers=headers, json={
+        "project_type": "batch_tryon", "name": "Missing back reference", "draft": {},
+    })).json()
+    template = await upload(client, headers, "model_template", "gift-scene.png")
+    garment = await upload(client, headers, "garment", "front-back-source.png")
+
+    response = await client.post("/api/v1/batch-tryon/workflows", headers=headers, json={
+        "project_id": project["id"], "name": "Missing back reference",
+        "idempotency_key": "workflow-missing-back-001", "prompt_mode": "ai_analysis",
+        "templates": [{
+            "template_id": "gift-template", "asset_id": template["id"], "name": "礼品场景图",
+            "order": 0, "template_type": "gift_scene", "garment_view": "back",
+        }],
+        "garments": [{
+            "garment_id": "source-garment", "asset_id": garment["id"], "filename": "front-back-source.png",
+            "order": 0,
+        }],
+        "combinations": [{
+            "client_item_id": "missing-back-item", "template_id": "gift-template",
+            "garment_id": "source-garment", "order": 0,
+        }],
+        "size": "1024x1024", "aspect_ratio": "1:1", "quality": "high",
+        "output_format": "png", "concurrency": 1,
+    })
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "batch_tryon.garment_reference_required"
+    assert "尚未保存背面参考图" in response.json()["error"]["message"]

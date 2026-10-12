@@ -81,6 +81,60 @@ def _effective_garment_references(template: object, garment: object) -> tuple[li
     return [original], "original"
 
 
+_GARMENT_REFERENCE_LABELS = {"front": "正面", "back": "背面", "detail": "细节"}
+
+
+def _missing_required_garment_reference_views(template: object, garment: object) -> list[str]:
+    """Return missing derived references for an explicit user selection.
+
+    Only ``auto`` is allowed to use the original garment. Falling back after an
+    explicit front/back/detail selection hides incomplete preprocessing and can
+    send the wrong visual side to Luna and the image provider.
+    """
+    requested = str(_value(template, "garment_view", "auto") or "auto")
+    required = ["front", "back"] if requested == "front_back" else ([] if requested == "auto" else [requested])
+    return [
+        view for view in required
+        if not str(_value(garment, f"{view}_reference_asset_id") or "")
+    ]
+
+
+def _validate_explicit_garment_references(payload: BatchTryOnWorkflowCreateRequest) -> None:
+    templates = {item.template_id: item for item in payload.templates}
+    garments = {item.garment_id: item for item in payload.garments}
+    pairs = [
+        (templates[item.template_id], garments[item.garment_id])
+        for item in payload.combinations or []
+    ] or [
+        (template, garment)
+        for template in payload.templates
+        for garment in payload.garments
+    ]
+    missing: list[dict[str, object]] = []
+    for template, garment in pairs:
+        views = _missing_required_garment_reference_views(template, garment)
+        if views:
+            missing.append({
+                "template_id": template.template_id,
+                "template_name": template.name,
+                "garment_id": garment.garment_id,
+                "garment_filename": garment.filename,
+                "missing_views": views,
+            })
+    if not missing:
+        return
+    first = missing[0]
+    view_labels = "、".join(_GARMENT_REFERENCE_LABELS.get(str(view), str(view)) for view in first["missing_views"])
+    remaining = f"，另有 {len(missing) - 1} 个组合也缺少参考图" if len(missing) > 1 else ""
+    raise AppError(
+        "batch_tryon.garment_reference_required",
+        f"模板“{first['template_name']}”已选择{view_labels}参考，但服装“{first['garment_filename']}”尚未保存{view_labels}参考图{remaining}。"
+        "请先在“批量裁剪 / 遮罩”中处理并保存；系统不会自动改用服装原图。",
+        422,
+        {"missing_references": missing[:50], "missing_count": len(missing)},
+    )
+
+
 def _job_reference_snapshot(
     *, template: object, garment: object, font_reference_asset_id: str | None,
 ) -> tuple[list[str], dict[str, object]]:
@@ -207,6 +261,7 @@ async def _validate_inputs(
                         "batch_tryon.invalid_garment_reference",
                         "服装参考图必须是由当前服装原图生成的派生参考图。", 422,
                     )
+    _validate_explicit_garment_references(payload)
 
 
 async def create_batch_tryon_workflow(

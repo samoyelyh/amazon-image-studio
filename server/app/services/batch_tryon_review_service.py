@@ -1002,6 +1002,8 @@ async def approve_version(
         raise AppError("batch_tryon.version_not_found", "审核版本不存在", 404)
     if item.current_version_id != version.id:
         raise AppError("batch_tryon.version_not_current", "只能审核当前最新版本，请刷新后重试", 409)
+    if version.review_status == "rejected":
+        raise AppError("batch_tryon.version_discarded", "当前版本已经作废，不能再审核通过", 409)
     if version.generation_status != "succeeded" or not version.generated_asset_id:
         raise AppError("batch_tryon.version_not_reviewable", "当前版本尚未生成成功，不能审核通过", 409)
     now = datetime.now(UTC)
@@ -1010,6 +1012,40 @@ async def approve_version(
     version.reviewed_at = now
     item.review_status = "approved"
     item.approved_version_id = version.id
+    item.updated_by = user_id
+    await refresh_batch_status(session, item.batch_id)
+    await session.flush()
+    return item
+
+
+async def discard_version(
+    session: AsyncSession, *, organization_id: str, item_id: str, version_id: str, user_id: str,
+) -> BatchTryOnReviewItem:
+    """Discard the current generated candidate while keeping its image as history."""
+    from app.services.task_service import refresh_batch_status
+
+    item = await get_review_item(session, organization_id, item_id, lock=True)
+    version = await session.scalar(select(BatchTryOnVersion).where(
+        BatchTryOnVersion.id == version_id,
+        BatchTryOnVersion.item_id == item.id,
+        BatchTryOnVersion.organization_id == organization_id,
+    ).with_for_update())
+    if version is None:
+        raise AppError("batch_tryon.version_not_found", "审核版本不存在", 404)
+    if item.current_version_id != version.id:
+        raise AppError("batch_tryon.version_not_current", "只能作废当前最新版本，请刷新后重试", 409)
+    if version.review_status == "approved" or item.approved_version_id == version.id:
+        raise AppError("batch_tryon.version_already_approved", "已经审核通过的版本不能作废", 409)
+    if version.generation_status != "succeeded" or not version.generated_asset_id:
+        raise AppError("batch_tryon.version_not_reviewable", "当前版本尚未生成成功，不能作废", 409)
+    if version.review_status == "rejected" and item.review_status == "rejected":
+        return item
+
+    now = datetime.now(UTC)
+    version.review_status = "rejected"
+    version.reviewed_by = user_id
+    version.reviewed_at = now
+    item.review_status = "rejected"
     item.updated_by = user_id
     await refresh_batch_status(session, item.batch_id)
     await session.flush()

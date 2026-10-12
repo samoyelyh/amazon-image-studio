@@ -47,6 +47,7 @@ import {
   approveBatchTryOnVersion,
   batchAnalyzeAndRegenerateBatchTryOnVersions,
   batchRegenerateBatchTryOnVersions,
+  discardBatchTryOnVersion,
   type BatchTryOnBatchRegenerateResponse,
   type BatchTryOnReviewDetail,
 } from '../lib/batchTryOnReviewApi'
@@ -112,7 +113,13 @@ import { restoreWorkflowStyleProfile } from '../lib/batchTryOnStyleProfile'
 import { resolveBatchTryOnAssetId } from '../lib/batchTryOnAssetCache'
 import { batchTryOnFontReferenceKey } from '../lib/batchTryOnFontReferences'
 import { matchFontReferencesByIdentifier } from '../lib/batchTryOnFontReferenceMatching'
-import { compactGarmentTransform, garmentTransformMetadata } from '../lib/batchTryOnGarmentPreprocess'
+import {
+  buildMissingGarmentReferenceMessage,
+  compactGarmentTransform,
+  GARMENT_REFERENCE_VIEW_LABELS,
+  garmentTransformMetadata,
+  getMissingRequiredGarmentReferenceViews,
+} from '../lib/batchTryOnGarmentPreprocess'
 import { resolveBatchTryOnValidationPromptValues } from '../lib/batchTryOnValidationPrompt'
 import {
   createBatchTryOnWorkspace, deleteBatchTryOnWorkspace, hardDeleteBatchTryOnWorkspace,
@@ -916,6 +923,28 @@ export default function BatchTryOnWorkspace() {
   const progress = useMemo(() => summarizeItems(batch?.items ?? []), [batch?.items])
   const selectedTemplates = useMemo(() => (batch?.templates ?? []).filter((item) => item.selected), [batch?.templates])
   const selectedGarments = useMemo(() => (batch?.garments ?? []).filter((item) => item.selected), [batch?.garments])
+  const selectedCombinationPairs = useMemo(
+    () => batch ? getBatchTryOnCombinationPairs(batch) : [],
+    [batch],
+  )
+  const referenceWarningsByTemplate = useMemo(() => {
+    const warnings: Record<string, string> = {}
+    for (const template of selectedTemplates) {
+      const garments = selectedCombinationPairs
+        .filter((pair) => pair.template.id === template.id)
+        .map((pair) => pair.garment)
+      const missing = garments.flatMap((garment) => getMissingRequiredGarmentReferenceViews(
+        template, garment, !runtimeConfig.isStandalone,
+      ))
+      if (!missing.length) continue
+      const labels = Array.from(new Set(missing)).map((view) => GARMENT_REFERENCE_VIEW_LABELS[view]).join('、')
+      const missingGarmentCount = garments.filter((garment) => (
+        getMissingRequiredGarmentReferenceViews(template, garment, !runtimeConfig.isStandalone).length > 0
+      )).length
+      warnings[template.id] = `${missingGarmentCount} 件已选服装缺少已保存的${labels}参考图，提交前需要先处理。`
+    }
+    return warnings
+  }, [selectedCombinationPairs, selectedTemplates])
   const generationTemplates = useMemo(() => runtimeConfig.isStandalone
     ? selectedTemplates
     : selectedTemplates.filter((template) => template.validationStatus === 'approved'), [selectedTemplates])
@@ -935,12 +964,21 @@ export default function BatchTryOnWorkspace() {
     const config = templatePromptDrafts[template.id]
     return !config?.presetId || !config.analysisPrompt.trim()
   }), [templatePromptDrafts, validationGenerationTargets])
+  const validationSampleGarment = (batch?.garments ?? []).find((item) => item.id === batch?.sampleGarmentId)
+    || selectedGarments[0]
+  const validationReferenceError = validationSampleGarment
+    ? validationGenerationTargets.map((template) => buildMissingGarmentReferenceMessage(
+        template, validationSampleGarment, !runtimeConfig.isStandalone,
+      )).find(Boolean) || ''
+    : ''
   const generateAllValidationDisabledReason = !selectedTemplates.length
     ? '请先选择至少一个模板'
     : !(batch?.sampleGarmentId || selectedGarments.length)
       ? '请先选择样图商品'
       : validationPromptMissingTemplates.length
         ? `请先配置提示词预设：${validationPromptMissingTemplates.map((template) => template.displayName).join('、')}`
+        : validationReferenceError
+          ? validationReferenceError
         : validationGenerationTargets.length === 0
           ? '当前没有需要生成的样图'
           : ''
@@ -980,6 +1018,9 @@ export default function BatchTryOnWorkspace() {
     (template) => pendingGenerationTemplateIds.has(template.id),
   ), [generationTemplates, pendingGenerationTemplateIds])
   const estimatedGenerationCount = pendingGenerationPairs.length
+  const pendingReferenceError = useMemo(() => pendingGenerationPairs.map(({ template, garment }) => (
+    buildMissingGarmentReferenceMessage(template, garment, !runtimeConfig.isStandalone)
+  )).find(Boolean) || '', [pendingGenerationPairs])
   const combinationError = generationBatch ? getBatchTryOnCombinationError(generationBatch) : ''
   const pairedFontReferenceCount = useMemo(() => {
     if (!batch) return 0
@@ -1006,6 +1047,8 @@ export default function BatchTryOnWorkspace() {
         ? `本次组合不能超过 ${MAX_BATCH_TRY_ON_MATRIX_ITEMS} 张`
       : combinationError
         ? combinationError
+      : pendingReferenceError
+        ? pendingReferenceError
       : estimatedGenerationCount === 0
         ? '当前已通过模板的组合都已提交，不需要重复生成'
       : profileError
@@ -1181,6 +1224,13 @@ export default function BatchTryOnWorkspace() {
     const aspectRatio = resolveOutputAspectRatio(current)
     const garment = current.garments.find((candidate) => candidate.id === item.garmentId)
     const template = current.templates.find((candidate) => candidate.id === item.templateId)
+    if (garment && template) {
+      const missingReferenceMessage = buildMissingGarmentReferenceMessage(template, garment)
+      if (missingReferenceMessage) {
+        updateItem(batchId, itemId, { status: 'error', error: missingReferenceMessage, finishedAt: Date.now() })
+        return
+      }
+    }
     const garmentReferenceImageIds = template?.garmentView === 'front'
       ? [garment?.references?.front?.imageId || item.garmentImageId]
       : template?.garmentView === 'back'
@@ -1239,6 +1289,14 @@ export default function BatchTryOnWorkspace() {
     if (!isValidation) setMatrixSubmitting(true)
     try {
       const selectedItems = current.items.filter((item) => itemIds.includes(item.id))
+      const missingReferenceMessage = selectedItems.map((item) => {
+        const template = current.templates.find((candidate) => candidate.id === item.templateId)
+        const garment = current.garments.find((candidate) => candidate.id === item.garmentId)
+        return template && garment
+          ? buildMissingGarmentReferenceMessage(template, garment, true)
+          : ''
+      }).find(Boolean)
+      if (missingReferenceMessage) throw new Error(missingReferenceMessage)
       let project = current.serverProjectId
         ? await getProject(current.serverProjectId)
         : await createProject({
@@ -1606,6 +1664,13 @@ export default function BatchTryOnWorkspace() {
       showToast('请先选择模板和样图商品。', 'error')
       return
     }
+    const missingReferenceMessage = buildMissingGarmentReferenceMessage(
+      template, sample, !runtimeConfig.isStandalone,
+    )
+    if (missingReferenceMessage) {
+      showToast(missingReferenceMessage, 'error')
+      return
+    }
     if (template.validationStatus === 'generating') return
     setValidationSubmittingTemplateIds((ids) => new Set(ids).add(templateId))
     const itemId = `validation:${template.id}:${randomUuid()}`
@@ -1701,10 +1766,18 @@ export default function BatchTryOnWorkspace() {
         || record?.analysis_prompt_used?.trim()
         || templatePromptDraftsRef.current[templateId]?.analysisPrompt.trim()
         || ''
+      const approvedDetail = sampleItem.serverReviewItemId && sampleItem.serverCurrentVersionId
+        ? await approveBatchTryOnVersion(sampleItem.serverReviewItemId, sampleItem.serverCurrentVersionId)
+        : null
       const latest = useStore.getState().batchTryOnBatch
       if (!latest) return false
       setBatch({
         ...latest,
+        items: latest.items.map((item) => item.id === sampleItem.id ? {
+          ...item,
+          serverReviewStatus: approvedDetail?.review_status || 'approved',
+          serverApprovedVersionId: approvedDetail?.approved_version_id || item.serverCurrentVersionId,
+        } : item),
         templates: latest.templates.map((template) => template.id === templateId ? {
           ...template, validationStatus: 'approved', validatedPrompt: prompt,
           validatedPromptVersion: record?.prompt_version || 1,
@@ -1725,6 +1798,30 @@ export default function BatchTryOnWorkspace() {
   const rejectValidationSample = (templateId: string) => updateTemplates((templates) => templates.map((template) => (
     template.id === templateId ? { ...template, validationStatus: 'rejected' } : template
   )))
+
+  const discardValidationSample = async (templateId: string, outputImageId?: string) => {
+    const current = useStore.getState().batchTryOnBatch
+    const sample = [...(current?.items || [])].reverse().find((item) => (
+      item.id.startsWith(`validation:${templateId}:`)
+      && item.status === 'done'
+      && (!outputImageId || item.outputImageId === outputImageId)
+    ))
+    if (!current || !sample?.serverReviewItemId || !sample.serverCurrentVersionId) {
+      throw new Error('当前样图的审核信息尚未同步完成，请刷新页面后重试。')
+    }
+    const detail = await discardBatchTryOnVersion(sample.serverReviewItemId, sample.serverCurrentVersionId)
+    const latest = useStore.getState().batchTryOnBatch
+    if (!latest) return
+    setBatch({
+      ...latest,
+      items: latest.items.map((item) => item.id === sample.id ? {
+        ...item,
+        serverReviewStatus: detail.review_status,
+        serverApprovedVersionId: detail.approved_version_id ?? undefined,
+      } : item),
+      updatedAt: Date.now(),
+    })
+  }
 
   const openValidationPromptEditor = async (templateId: string) => {
     const current = useStore.getState().batchTryOnBatch
@@ -1786,6 +1883,10 @@ export default function BatchTryOnWorkspace() {
       const currentStrategyLabel = currentStrategy === 'luna_per_image'
         ? 'Luna 精细逐图'
         : currentStrategy === 'ai_optimize' ? 'AI 分析优化' : '直接使用预设'
+      await discardValidationSample(
+        validationPromptEditor.templateId,
+        validationPromptEditor.outputImageId,
+      )
       updateTemplatePromptConfig(validationPromptEditor.templateId, { analysisPrompt: prompt })
       updateTemplates((templates) => templates.map((template) => template.id === validationPromptEditor.templateId ? {
         ...template,
@@ -1797,7 +1898,9 @@ export default function BatchTryOnWorkspace() {
       } : template))
       await generateValidationSample(validationPromptEditor.templateId)
       setValidationPromptEditor(null)
-      showToast(`已按修改后的提示词重新提交样图，并继续使用“${currentStrategyLabel}”策略。`, 'success')
+      showToast(`当前样图已作废；已按修改后的提示词重新提交，并继续使用“${currentStrategyLabel}”策略。`, 'success')
+    } catch (error) {
+      showToast(`样图调整提交失败：${friendlyError(error)}`, 'error')
     } finally {
       setValidationPromptRegenerating(false)
     }
@@ -2964,6 +3067,7 @@ export default function BatchTryOnWorkspace() {
           promptPresetIds={Object.fromEntries(Object.entries(templatePromptDrafts).map(([templateId, config]) => [templateId, config.presetId]))}
           generateAllCount={validationGenerationTargets.length}
           generateAllDisabledReason={generateAllValidationDisabledReason}
+          referenceWarnings={referenceWarningsByTemplate}
           combinationMode={batch.combinationMode || 'cartesian'}
           onUpload={(files) => void uploadTemplates(files)}
           onRemove={removeTemplate}
@@ -3324,7 +3428,7 @@ export default function BatchTryOnWorkspace() {
                   {validationPromptRegenerating ? '正在提交…' : '效果调整'}
                 </button>
               </div>
-              <p className="mt-2 text-center text-xs text-gray-500">修改右侧模板预设后，点击“效果调整”会重新执行当前样图的 AI 分析与生图，当前样图不会被覆盖。</p>
+              <p className="mt-2 text-center text-xs text-gray-500">点击“效果调整”后，当前样图会标记为已作废并保留在历史中；新样图将重新进入审核。</p>
             </section>
             <section className="flex min-h-0 flex-col overflow-y-auto p-5">
               <div>

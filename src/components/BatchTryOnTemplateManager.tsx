@@ -14,6 +14,7 @@ interface Props {
   promptPresetIds: Record<string, string | undefined>
   generateAllCount?: number
   generateAllDisabledReason?: string
+  referenceWarnings?: Record<string, string | undefined>
   onUpload: (files: File[]) => void
   onRemove: (template: BatchTryOnTemplate) => void
   onPromptPresetChange: (templateId: string, presetId: string) => void
@@ -31,6 +32,7 @@ interface Props {
 
 export default function BatchTryOnTemplateManager({
   templates, maxItems, disabled, promptPresets, promptPresetIds, generateAllCount = 0, generateAllDisabledReason,
+  referenceWarnings = {},
   onUpload, onRemove, onPromptPresetChange, onGenerateAllValidations, onSetDefault,
   onToggle, onToggleAll, onView, detailMode, combinationMode = 'cartesian', onDetailChange, onGarmentViewChange,
   onPromptStrategyChange, onGenerateValidation, onReviewValidation,
@@ -136,6 +138,9 @@ export default function BatchTryOnTemplateManager({
               <select value={template.garmentView || 'auto'} disabled={disabled} onChange={(event) => onGarmentViewChange?.(template.id, event.target.value as NonNullable<BatchTryOnTemplate['garmentView']>)} className="mt-2 h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/[0.1] dark:bg-gray-950" aria-label={`${template.displayName} 服装参考视图`}>
                 <option value="auto">参考视图：自动（原图）</option><option value="front">正面参考</option><option value="back">背面参考</option><option value="front_back">正面 + 背面</option><option value="detail">细节参考</option>
               </select>
+              {referenceWarnings[template.id] && <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
+                {referenceWarnings[template.id]}
+              </div>}
               {combinationMode === 'one_to_one' && template.selected && <div className="mt-1 text-[11px] font-semibold text-blue-600 dark:text-blue-300">配对顺序 {templates.filter((item) => item.selected).findIndex((item) => item.id === template.id) + 1}</div>}
               {detailMode && <div className="mt-2 grid gap-2">
                 <select

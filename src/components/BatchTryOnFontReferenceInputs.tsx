@@ -6,7 +6,11 @@ import type {
   BatchTryOnTemplate,
   BatchTryOnTemplateGarmentView,
 } from '../types'
-import { resolveEffectiveGarmentReferencePreviews } from '../lib/batchTryOnGarmentPreprocess'
+import {
+  GARMENT_REFERENCE_VIEW_LABELS,
+  getMissingRequiredGarmentReferenceViews,
+  resolveEffectiveGarmentReferencePreviews,
+} from '../lib/batchTryOnGarmentPreprocess'
 import { BatchTryOnImage } from './BatchTryOnImage'
 
 interface Props {
@@ -43,6 +47,7 @@ export default function BatchTryOnFontReferenceInputs({
     if (!disabled && event.dataTransfer.files[0]) onSetGarmentDefault(event.dataTransfer.files[0])
   }
   const garmentReferences = resolveEffectiveGarmentReferencePreviews(template, garment)
+  const missingViews = getMissingRequiredGarmentReferenceViews(template, garment, Boolean(template.serverAssetId))
   const hasTwoGarmentReferences = garmentReferences.length > 1
   const viewLabel = garmentReferences.map((item) => item.view === 'original' ? '原图回退' : `${VIEW_LABELS[item.view]}参考`).join(' + ')
 
@@ -74,6 +79,10 @@ export default function BatchTryOnFontReferenceInputs({
           {source !== 'none' && <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 shadow-sm dark:bg-gray-900 dark:text-blue-200">字体：{source === 'combination' ? '当前组合覆盖' : '沿用服装默认'}</span>}
         </div>
       </div>
+
+      {missingViews.length > 0 && <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
+        缺少{missingViews.map((view) => GARMENT_REFERENCE_VIEW_LABELS[view]).join('、')}参考图。当前原图只用于提示缺失，不会代替所选参考提交；请先到“待套服装 → 批量裁剪 / 遮罩”处理并保存。
+      </div>}
 
       <div className={`grid gap-3 md:grid-cols-2 ${hasTwoGarmentReferences ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}>
         <ReferenceCard label="图A" title="当前模板图" imageId={template.imageId} serverAssetId={template.serverAssetId} fileName={template.displayName || template.fileName} onView={onView} />

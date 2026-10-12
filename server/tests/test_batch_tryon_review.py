@@ -772,7 +772,6 @@ async def test_batch_try_on_review_approve_regenerate_versions_and_tenant_permis
     assert regenerating_batch.json()["succeeded_jobs"] == 0
     assert regenerating_batch.json()["status"] == "queued"
     assert [job["id"] for job in regenerating_batch.json()["jobs"]] == [regenerated_body["job"]["id"]]
-
     output_v2 = await upload_asset(client, admin, "batch_tryon_output", "result-v2.png")
     async with identity_test_context["session_factory"]() as session:
         job = await session.get(Job, regenerated_body["job"]["id"], with_for_update=True)
@@ -846,6 +845,80 @@ async def test_batch_try_on_review_approve_regenerate_versions_and_tenant_permis
         asset_v2 = await session.get(Asset, output_v2["id"])
         assert asset_v1.storage_key != asset_v2.storage_key
         assert "jersey-06" not in asset_v1.storage_key
+
+
+async def test_pending_validation_sample_can_be_discarded_without_deleting_output(
+    identity_test_context, monkeypatch,
+) -> None:
+    client = identity_test_context["client"]
+    monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
+    admin = await auth_headers(client, "first-admin", "correct-password")
+    viewer = await auth_headers(client, "first-viewer", "viewer-password")
+    model_code = await seed_batch_try_on_pool(identity_test_context)
+    model = await upload_asset(client, admin, "model_template", "validation-model.png")
+    garment = await upload_asset(client, admin, "garment", "validation-garment.png")
+    submitted = await client.post("/api/v1/job-batches", headers=admin, json={
+        "name": "Validation sample discard",
+        "workspace_type": "batch_tryon",
+        "operation_code": "batch_tryon.generate",
+        "capability": "image_edit",
+        "model_code": model_code,
+        "idempotency_key": "validation-sample-discard-001",
+        "concurrency": 1,
+        "items": [{
+            "client_item_id": "validation:template-1:sample-1",
+            "prompt": "VALIDATION SAMPLE PROMPT",
+            "reference_asset_ids": [model["id"], garment["id"]],
+            "size": "1024x1024",
+            "aspect_ratio": "1:1",
+            "output_format": "png",
+            "metadata": {"garment_filename": "validation-garment.png", "index": 0},
+        }],
+    })
+    assert submitted.status_code == 202, submitted.text
+    job_body = submitted.json()["jobs"][0]
+    output = await upload_asset(client, admin, "batch_tryon_output", "validation-result.png")
+    async with identity_test_context["session_factory"]() as session:
+        job = await session.get(Job, job_body["id"], with_for_update=True)
+        job.status = "succeeded"
+        job.progress = 100
+        job.finished_at = datetime.now(timezone.utc)
+        await sync_batch_try_on_version_for_job(session, job, generated_asset_id=output["id"])
+        await session.commit()
+
+    denied = await client.post(
+        f"/api/v1/batch-tryon/items/{job_body['review_item_id']}/discard",
+        headers=viewer,
+        json={"source_version_id": job_body["current_version_id"]},
+    )
+    assert denied.status_code == 403
+
+    discarded = await client.post(
+        f"/api/v1/batch-tryon/items/{job_body['review_item_id']}/discard",
+        headers=admin,
+        json={"source_version_id": job_body["current_version_id"]},
+    )
+    assert discarded.status_code == 200, discarded.text
+    assert discarded.json()["review_status"] == "rejected"
+    assert discarded.json()["current_version"]["review_status"] == "rejected"
+    assert discarded.json()["current_version"]["generated_asset"]["id"] == output["id"]
+
+    replay = await client.post(
+        f"/api/v1/batch-tryon/items/{job_body['review_item_id']}/discard",
+        headers=admin,
+        json={"source_version_id": job_body["current_version_id"]},
+    )
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["review_status"] == "rejected"
+
+    cannot_approve = await client.post(
+        f"/api/v1/batch-tryon/items/{job_body['review_item_id']}/approve",
+        headers=admin,
+        json={"source_version_id": job_body["current_version_id"]},
+    )
+    assert cannot_approve.status_code == 409
+    async with identity_test_context["session_factory"]() as session:
+        assert await session.get(Asset, output["id"]) is not None
 
 
 async def test_batch_try_on_zip_deduplicates_names_from_garment_assets(

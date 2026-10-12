@@ -139,6 +139,13 @@ export function approveBatchTryOnVersion(itemId: string, sourceVersionId: string
   })
 }
 
+export function discardBatchTryOnVersion(itemId: string, sourceVersionId: string) {
+  return authenticatedFetch<BatchTryOnReviewDetail>(`/batch-tryon/items/${itemId}/discard`, {
+    method: 'POST',
+    body: JSON.stringify({ source_version_id: sourceVersionId }),
+  })
+}
+
 export function regenerateBatchTryOnVersion(itemId: string, input: {
   source_version_id: string
   retry_mode: BatchTryOnRetryMode

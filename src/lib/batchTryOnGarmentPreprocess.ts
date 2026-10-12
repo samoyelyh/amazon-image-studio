@@ -73,6 +73,43 @@ export interface EffectiveGarmentReferencePreview {
   derived: boolean
 }
 
+export const GARMENT_REFERENCE_VIEW_LABELS: Record<BatchTryOnGarmentView, string> = {
+  front: '正面',
+  back: '背面',
+  detail: '细节',
+}
+
+/**
+ * Explicit reference selections are promises made by the user, so they must not
+ * silently degrade to the original garment. `auto` is the only mode that may
+ * intentionally use the original image.
+ */
+export function getMissingRequiredGarmentReferenceViews(
+  template: BatchTryOnTemplate,
+  garment: BatchTryOnGarment,
+  requireServerAsset = false,
+): BatchTryOnGarmentView[] {
+  const requested = template.garmentView || 'auto'
+  const required: BatchTryOnGarmentView[] = requested === 'front_back'
+    ? ['front', 'back']
+    : requested === 'auto' ? [] : [requested]
+  return required.filter((view) => {
+    const reference = garment.references?.[view]
+    return !reference || (requireServerAsset && !reference.serverAssetId)
+  })
+}
+
+export function buildMissingGarmentReferenceMessage(
+  template: BatchTryOnTemplate,
+  garment: BatchTryOnGarment,
+  requireServerAsset = false,
+): string {
+  const missing = getMissingRequiredGarmentReferenceViews(template, garment, requireServerAsset)
+  if (!missing.length) return ''
+  const views = missing.map((view) => GARMENT_REFERENCE_VIEW_LABELS[view]).join('、')
+  return `模板“${template.displayName || template.fileName}”已选择${views}参考，但服装“${garment.garmentFileName}”尚未保存${views}参考图。请先在“批量裁剪 / 遮罩”中处理并保存；系统不会自动改用服装原图。`
+}
+
 /** Mirrors the server-side effective garment reference selection used by Luna and image generation. */
 export function resolveEffectiveGarmentReferencePreviews(
   template: BatchTryOnTemplate,
