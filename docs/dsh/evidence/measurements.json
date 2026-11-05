@@ -1,0 +1,1799 @@
+{
+  "collected_at": "2026-11-06T02:34:36.910338+08:00",
+  "branch": "experiment/dsh-superagent",
+  "base_commit": "b838c7cf80db2d46665375ba29dda7b836163d6a",
+  "source_snapshot_commit": "502d3601073bbbee0c963215b01c5cb48f2f0246",
+  "upstream_commit": "8c32a9dc5d72c033816c6a8110b37f40cf94fba4",
+  "limits": {
+    "text": 50,
+    "image": 50,
+    "mcp": 50
+  },
+  "actual_requests": {
+    "text": 19,
+    "image": 8,
+    "mcp_tools_call": 1
+  },
+  "cost": {
+    "currency_amount": null,
+    "known_token_usage": {
+      "completion_tokens": 14394,
+      "total_tokens": 173539,
+      "prompt_tokens": 159145,
+      "reasoning_tokens": 1881
+    },
+    "text_calls_without_usage": 1,
+    "note": "No currency cost returned by this Provider. Unknown cost is not zero. MCP chargedUnits also absent. tools/list metadata probes are separate from tools/call."
+  },
+  "dsh_routing_samples": [
+    {
+      "route": "followup",
+      "planning_ms": 1.7841999999945983
+    },
+    {
+      "route": "new_task",
+      "planning_ms": 4.20240000000922
+    },
+    {
+      "route": "followup",
+      "planning_ms": 4.9200999999993655
+    },
+    {
+      "route": "new_task",
+      "planning_ms": 5.791799999977229
+    },
+    {
+      "route": "followup",
+      "planning_ms": 3.445800000044983
+    },
+    {
+      "route": "new_task",
+      "planning_ms": 1.1096000000252388
+    },
+    {
+      "route": "followup",
+      "planning_ms": 1.0433000000193715
+    },
+    {
+      "route": "followup",
+      "planning_ms": 7.160100000008242
+    },
+    {
+      "route": "new_task",
+      "planning_ms": 6.278100000003178
+    },
+    {
+      "route": "chat",
+      "planning_ms": 1.0340999999898486
+    },
+    {
+      "route": "new_task",
+      "planning_ms": 1.7789000000339001
+    },
+    {
+      "route": "followup",
+      "planning_ms": 1.5547999999835156
+    }
+  ],
+  "calls": [
+    {
+      "job_or_receipt_id": "720e1ab2-467a-4777-a4fa-8d53da048290",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 10.546,
+      "usage": {
+        "completion_tokens": 83,
+        "total_tokens": 457,
+        "prompt_tokens": 374,
+        "reasoning_tokens": 23
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 10.537,
+        "server": "cloudflare",
+        "content_type": "text/event-stream",
+        "edge_request_id": "a55d96084fae36a4-YYZ",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 8.76,
+        "first_event_seconds": 8.76,
+        "first_text_seconds": 8.76,
+        "events": 55
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "56a0e73b-c596-4a7d-8a12-2757bc95f902",
+      "kind": "text",
+      "model": "gpt-6.1-terra",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 9.786,
+      "usage": {
+        "completion_tokens": 56,
+        "total_tokens": 2434,
+        "prompt_tokens": 2378,
+        "reasoning_tokens": 0
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 9.776,
+        "server": "cloudflare",
+        "content_type": "text/event-stream",
+        "edge_request_id": "a55d99772d094cee-BOS",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 8.153,
+        "first_event_seconds": 8.153,
+        "first_text_seconds": 8.153,
+        "events": 52
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "98ea06c0-4e58-479d-a80d-78fc099b9274",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 17.906,
+      "usage": {
+        "completion_tokens": 404,
+        "total_tokens": 5973,
+        "prompt_tokens": 5569,
+        "reasoning_tokens": 66
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 17.881,
+        "server": "cloudflare",
+        "content_type": "application/json",
+        "edge_request_id": "a55d99c34fdb4688-BOS",
+        "upstream_request_id": "",
+        "stream": false,
+        "response_streamed": false
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "88a16846-6c15-46fa-bc45-d520eee79a74",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 23.663,
+      "usage": null,
+      "transport": null,
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "mcp:b40040bd073165a10249726d5821a74a31be6e9f5a206072bf70d23326c6044f",
+      "kind": "mcp",
+      "model": "mcp.ss_mcp.asin.detail",
+      "state": "failed_or_unknown",
+      "actual_requests": 0,
+      "duration_seconds": 0.976,
+      "usage": null,
+      "transport": null,
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": "agent.mcp_schema_changed",
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "mcp:34126ac6ecd21ca095da9e637228a1c96e81c7a7144e177b030d8da6f5627afb",
+      "kind": "mcp",
+      "model": "mcp.ss_mcp.asin.detail",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 3.058,
+      "usage": null,
+      "transport": null,
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "832361d8-6d44-49f9-8d72-a9f40a326784",
+      "kind": "text",
+      "model": "gpt-6.1-terra",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 5.862,
+      "usage": {
+        "completion_tokens": 56,
+        "total_tokens": 2434,
+        "prompt_tokens": 2378,
+        "reasoning_tokens": 0
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 5.853,
+        "server": "cloudflare",
+        "content_type": "text/event-stream",
+        "edge_request_id": "a55da0f35bbefc44-BOS",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 4.584,
+        "first_event_seconds": 4.584,
+        "first_text_seconds": 4.584,
+        "events": 52
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "7e8b88e5-f919-4faa-ba99-a6bb7e9b7398",
+      "kind": "text",
+      "model": "gpt-6.1-terra",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 6.154,
+      "usage": {
+        "completion_tokens": 49,
+        "total_tokens": 2509,
+        "prompt_tokens": 2460,
+        "reasoning_tokens": 0
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 6.146,
+        "server": "cloudflare",
+        "content_type": "text/event-stream",
+        "edge_request_id": "a55da0f95d45f05f-DFW",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 4.902,
+        "first_event_seconds": 4.902,
+        "first_text_seconds": 4.902,
+        "events": 46
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "e24ec01f-a3c8-442a-8604-4f507d2a91ef",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "failed_or_unknown",
+      "actual_requests": 1,
+      "duration_seconds": 15.721,
+      "usage": null,
+      "transport": null,
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": "provider.network_error",
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "c9bd2042-2ee7-45b3-8706-106ced6c9d7a",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 20.978,
+      "usage": {
+        "completion_tokens": 373,
+        "total_tokens": 7455,
+        "prompt_tokens": 7082,
+        "reasoning_tokens": 89
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 20.967,
+        "server": "cloudflare",
+        "content_type": "application/json",
+        "edge_request_id": "a55da128eb81a3db-ORD",
+        "upstream_request_id": "",
+        "stream": false,
+        "response_streamed": false
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "b888a642-6a36-4775-9067-61ba53520ca1",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 26.234,
+      "usage": null,
+      "transport": null,
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "49b08aa3-29c9-46ef-bd33-3843a44574a2",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 12.185,
+      "usage": {
+        "completion_tokens": 116,
+        "total_tokens": 9499,
+        "prompt_tokens": 9383,
+        "reasoning_tokens": 68
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 12.176,
+        "server": "cloudflare",
+        "content_type": "text/event-stream",
+        "edge_request_id": "a55da29ed882ad5f-ATL",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 11.352,
+        "first_event_seconds": 11.353,
+        "first_text_seconds": 11.355,
+        "events": 45
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "1f1c3d60-f6ac-44e1-9fb6-092b6deb9c30",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 11.34,
+      "usage": {
+        "completion_tokens": 160,
+        "total_tokens": 9942,
+        "prompt_tokens": 9782,
+        "reasoning_tokens": 65
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 11.329,
+        "server": "cloudflare",
+        "content_type": "text/event-stream",
+        "edge_request_id": "a55da2fa5b8c9113-YYZ",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 9.209,
+        "first_event_seconds": 9.209,
+        "first_text_seconds": 9.209,
+        "events": 92
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "mcp:2f1d567e0174508355ab9d355d2b4e90a1202d1dc3beea1482505178b9d1966c",
+      "kind": "mcp",
+      "model": "mcp.ss_mcp.asin.detail",
+      "state": "not_sent",
+      "actual_requests": 0,
+      "duration_seconds": 17.974,
+      "usage": null,
+      "transport": null,
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": "agent.mcp_unavailable",
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "52a96c09-f316-4c2c-9b22-bb169af0675a",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 67.67,
+      "usage": {
+        "completion_tokens": 1770,
+        "total_tokens": 13003,
+        "prompt_tokens": 11233,
+        "reasoning_tokens": 202
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 67.657,
+        "server": "cloudflare",
+        "content_type": "text/event-stream",
+        "edge_request_id": "a55da7dbfa4c4f01-DFW",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 16.764,
+        "first_event_seconds": 16.764,
+        "first_text_seconds": 16.765,
+        "events": 1545
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "06ae5f18-2516-49f6-8507-23decdbbebeb",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 66.779,
+      "usage": {
+        "completion_tokens": 1784,
+        "total_tokens": 13086,
+        "prompt_tokens": 11302,
+        "reasoning_tokens": 148
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 66.76,
+        "server": "cloudflare",
+        "content_type": "text/event-stream",
+        "edge_request_id": "a55da9947847320f-ORD",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 15.057,
+        "first_event_seconds": 15.057,
+        "first_text_seconds": 15.058,
+        "events": 1603
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "6d0c5fa0-f25a-486b-b3fa-f4b5d09d0e60",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 69.781,
+      "usage": {
+        "completion_tokens": 1842,
+        "total_tokens": 12584,
+        "prompt_tokens": 10742,
+        "reasoning_tokens": 200
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 69.768,
+        "server": "cloudflare",
+        "content_type": "text/event-stream",
+        "edge_request_id": "a55db21e0f4062e2-ORD",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 16.584,
+        "first_event_seconds": 16.584,
+        "first_text_seconds": 17.799,
+        "events": 1625
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "d543dd2d-d0cd-456d-87cc-0e242697cf9e",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 62.819,
+      "usage": {
+        "completion_tokens": 1696,
+        "total_tokens": 12482,
+        "prompt_tokens": 10786,
+        "reasoning_tokens": 164
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 62.801,
+        "server": "cloudflare",
+        "content_type": "text/event-stream",
+        "edge_request_id": "a55db3e3f99f32f4-ORD",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 13.49,
+        "first_event_seconds": 13.49,
+        "first_text_seconds": 13.672,
+        "events": 1513
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "24cfa064-5699-4442-8fcf-b95475f14c75",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 20.09,
+      "usage": {
+        "completion_tokens": 453,
+        "total_tokens": 11560,
+        "prompt_tokens": 11107,
+        "reasoning_tokens": 47
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 20.073,
+        "server": "cloudflare",
+        "content_type": "application/json",
+        "edge_request_id": "a55db96b6d762388-YYZ",
+        "upstream_request_id": "",
+        "stream": false,
+        "response_streamed": false
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "59084acd-778a-4718-b148-77df5f60aba9",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 26.393,
+      "usage": {
+        "completion_tokens": 612,
+        "total_tokens": 11953,
+        "prompt_tokens": 11341,
+        "reasoning_tokens": 108
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 26.38,
+        "server": "cloudflare",
+        "content_type": "application/json",
+        "edge_request_id": "a55db96a1d8debb6-YYZ",
+        "upstream_request_id": "",
+        "stream": false,
+        "response_streamed": false
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "de36423b-9984-4df9-9b60-6bee3f3ab01e",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 17.866,
+      "usage": null,
+      "transport": null,
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "250bbacc-1533-4e8f-af30-63c59a44b59e",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 19.058,
+      "usage": null,
+      "transport": null,
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "c15d30dd-2c07-4361-92b2-5075161156b3",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 17.122,
+      "usage": null,
+      "transport": null,
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "5fe685a1-41e7-4126-95d8-c5fc928ff91b",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 57.402,
+      "usage": {
+        "completion_tokens": 1670,
+        "total_tokens": 11832,
+        "prompt_tokens": 10162,
+        "reasoning_tokens": 203
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 57.391,
+        "server": "cloudflare",
+        "content_type": "text/event-stream",
+        "edge_request_id": "a55dd3629cc1fe52-ATL",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 12.467,
+        "first_event_seconds": 12.467,
+        "first_text_seconds": 12.536,
+        "events": 1448
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "dc288079-99b6-4930-80bf-60e93ccd92d4",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 67.468,
+      "usage": {
+        "completion_tokens": 1814,
+        "total_tokens": 12710,
+        "prompt_tokens": 10896,
+        "reasoning_tokens": 294
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 67.451,
+        "server": "cloudflare",
+        "content_type": "text/event-stream",
+        "edge_request_id": "a55dd4d9fa0f2300-ATL",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 20.284,
+        "first_event_seconds": 20.284,
+        "first_text_seconds": 20.34,
+        "events": 1501
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "82a35191-8df4-4006-b2f9-cea2ceb05c80",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 11.576,
+      "usage": {
+        "completion_tokens": 257,
+        "total_tokens": 15766,
+        "prompt_tokens": 15509,
+        "reasoning_tokens": 71
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 11.566,
+        "server": "cloudflare",
+        "content_type": "text/event-stream",
+        "edge_request_id": "a55dd690fa03fa9b-ATL",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 6.814,
+        "first_event_seconds": 6.814,
+        "first_text_seconds": 6.827,
+        "events": 183
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "3ba6baee-f8ee-45bb-b84c-cee5291aa129",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 26.684,
+      "usage": null,
+      "transport": null,
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "85a0b264-bd7c-444d-af7c-d7aa03fc668d",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 24.145,
+      "usage": null,
+      "transport": null,
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "a6924f62-7704-4e4a-a3c7-eb1bd4154563",
+      "kind": "text",
+      "model": "gpt-6.1-sol",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 40.385,
+      "usage": {
+        "completion_tokens": 1199,
+        "total_tokens": 17860,
+        "prompt_tokens": 16661,
+        "reasoning_tokens": 133
+      },
+      "transport": {
+        "http_status": 200,
+        "seconds": 40.373,
+        "server": "cloudflare",
+        "content_type": "text/event-stream",
+        "edge_request_id": "a55dd7a85e5e0ce1-ORD",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 10.742,
+        "first_event_seconds": 10.742,
+        "first_text_seconds": 10.743,
+        "events": 1056
+      },
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    },
+    {
+      "job_or_receipt_id": "96e9a5d7-20df-41aa-b7a1-efddc8494fa4",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "state": "succeeded",
+      "actual_requests": 1,
+      "duration_seconds": 29.708,
+      "usage": null,
+      "transport": null,
+      "api_cost": null,
+      "charged_units": null,
+      "error_code": null,
+      "http_status": null
+    }
+  ],
+  "cases": [
+    {
+      "case": "cup-followup",
+      "controller": "dsh",
+      "state": "completed",
+      "error_code": null,
+      "ticket": "0b98e9abaf8870cf483aa1c90869d2ee",
+      "conversation": "318fd562-6852-5ae2-a941-c65e8b3c9926",
+      "ack_seconds": 4.788800899987109,
+      "completion_seconds": 72.77657590003219,
+      "cached_replay_seconds": null,
+      "durable_run_to_last_job_seconds": 69.106,
+      "planning_to_first_image_job_seconds": 33.0,
+      "job_counts": {
+        "image_edit": 1,
+        "text_generation": 2
+      },
+      "output_count": 1,
+      "outputs": [
+        {
+          "id": "e372be74-a3b7-4ad0-b372-16cbdef82ab2",
+          "asset_id": "e09e759c-15be-4487-9c81-c12d2132e2de",
+          "version": 2,
+          "parent_output_id": "d6ccda25-8a08-4383-91e9-d5920985982d",
+          "amazon_module": null
+        }
+      ],
+      "summary": "编辑所选图片，共 1 张。"
+    },
+    {
+      "case": "langgraph-baseline",
+      "controller": "langgraph",
+      "state": "failed",
+      "error_code": "agent.checkpoint_mismatch",
+      "ticket": null,
+      "conversation": "cb3f60c8-3ed3-57af-a2e6-db92bff64760",
+      "ack_seconds": 4.219747300026938,
+      "completion_seconds": 12.394887199974619,
+      "cached_replay_seconds": null,
+      "durable_run_to_last_job_seconds": 28.179,
+      "planning_to_first_image_job_seconds": null,
+      "job_counts": {
+        "text_generation": 2
+      },
+      "output_count": 0,
+      "outputs": [],
+      "summary": "正在理解需求、参考图片并选择可用工具。"
+    },
+    {
+      "case": "asin-research",
+      "controller": "dsh",
+      "state": "blocked",
+      "error_code": "agent.research_unverified",
+      "ticket": "0bbb2833b81315717f4f11a78a58275c",
+      "conversation": "129bf719-1e3e-5293-acde-e4b458a8457c",
+      "ack_seconds": 0.8579110000282526,
+      "completion_seconds": 46.312113099964336,
+      "cached_replay_seconds": null,
+      "durable_run_to_last_job_seconds": 27.607,
+      "planning_to_first_image_job_seconds": null,
+      "job_counts": {
+        "text_generation": 2
+      },
+      "output_count": 0,
+      "outputs": [],
+      "summary": "卖家精灵调研：1次 mcp.ss_mcp.asin.detail，最多预留 1 计费单位。"
+    },
+    {
+      "case": "aplus-plan",
+      "controller": "dsh",
+      "state": "failed",
+      "error_code": "agent.aplus_design_quality",
+      "ticket": "0bbb2833b81315717f4f11a78a58275c",
+      "conversation": "129bf719-1e3e-5293-acde-e4b458a8457c",
+      "ack_seconds": 0.7967639999696985,
+      "completion_seconds": 139.02984259999357,
+      "cached_replay_seconds": null,
+      "durable_run_to_last_job_seconds": 138.465,
+      "planning_to_first_image_job_seconds": null,
+      "job_counts": {
+        "text_generation": 2
+      },
+      "output_count": 0,
+      "outputs": [],
+      "summary": "专业方案仍存在问题，未提交生图：整套A+叙事不完整，请规划完整模块集合，或说明用户明确要求的较小范围。"
+    },
+    {
+      "case": "aplus-plan-scoped",
+      "controller": "dsh",
+      "state": "failed",
+      "error_code": "agent.aplus_design_quality",
+      "ticket": "e3f2f841549bac687543591a4a5f832f",
+      "conversation": "cc5831fd-2c21-5f53-964c-43bc5b9f47b5",
+      "ack_seconds": null,
+      "completion_seconds": null,
+      "cached_replay_seconds": 0.07259120000526309,
+      "durable_run_to_last_job_seconds": 139.837,
+      "planning_to_first_image_job_seconds": null,
+      "job_counts": {
+        "text_generation": 2
+      },
+      "output_count": 0,
+      "outputs": [],
+      "summary": "专业方案仍存在问题，未提交生图：fact_user_material: 未找到用户确认原文；可选事实应省略，不得编造确认。"
+    },
+    {
+      "case": "aplus-plan-grounded",
+      "controller": "dsh",
+      "state": "awaiting_clarification",
+      "error_code": null,
+      "ticket": "e3f2f841549bac687543591a4a5f832f",
+      "conversation": "cc5831fd-2c21-5f53-964c-43bc5b9f47b5",
+      "ack_seconds": 0.07648089993745089,
+      "completion_seconds": 0.07648429996334016,
+      "cached_replay_seconds": null,
+      "durable_run_to_last_job_seconds": null,
+      "planning_to_first_image_job_seconds": null,
+      "job_counts": {},
+      "output_count": 0,
+      "outputs": [],
+      "summary": "有参考的竞品 ASIN 吗？我可以结合竞品卖点与 A+ 布局设计；没有也可以直接做，告诉我你最想突出的方向即可。"
+    },
+    {
+      "case": "aplus-plan-no-asin",
+      "controller": "dsh",
+      "state": "awaiting_review",
+      "error_code": null,
+      "ticket": "e3f2f841549bac687543591a4a5f832f",
+      "conversation": "cc5831fd-2c21-5f53-964c-43bc5b9f47b5",
+      "ack_seconds": 1.0136145000578836,
+      "completion_seconds": 131.6823185000103,
+      "cached_replay_seconds": null,
+      "durable_run_to_last_job_seconds": 130.571,
+      "planning_to_first_image_job_seconds": null,
+      "job_counts": {
+        "text_generation": 2
+      },
+      "output_count": 0,
+      "outputs": [],
+      "summary": "方案已就绪，共 2 张独立素材，正在整套并发生成。"
+    },
+    {
+      "case": "aplus-generate",
+      "controller": "dsh",
+      "state": "completed",
+      "error_code": null,
+      "ticket": "e3f2f841549bac687543591a4a5f832f",
+      "conversation": "cc5831fd-2c21-5f53-964c-43bc5b9f47b5",
+      "ack_seconds": 0.845157100004144,
+      "completion_seconds": 44.67093859997112,
+      "cached_replay_seconds": null,
+      "durable_run_to_last_job_seconds": 44.115,
+      "planning_to_first_image_job_seconds": 14.0,
+      "job_counts": {
+        "image_edit": 2,
+        "text_generation": 1
+      },
+      "output_count": 2,
+      "outputs": [
+        {
+          "id": "e714f51e-6605-43bb-b24f-f8e4cbde163c",
+          "asset_id": "8591e3cf-59da-4fc7-8273-3988cb32e541",
+          "version": 1,
+          "parent_output_id": null,
+          "amazon_module": {
+            "plan_id": "e5babdb2-e9e5-4904-a9c1-e5fbbfc572b5",
+            "module_id": "cup_hero",
+            "slot_id": "main",
+            "slot_snapshot": {
+              "id": "main",
+              "composition": "独立生成产品主视觉：红色无标识陶瓷杯以三分之四中远景置于右侧暖中性桌面，完整呈现杯体、杯口与把手，左侧保持干净留白；柔和侧上方主光、低反差补光和自然桌面接触阴影，背景轻度虚化。",
+              "headline": "A Simple Red Ceramic Cup",
+              "body": "A clean, recognizable form for everyday moments.",
+              "reference_asset_ids": [
+                "4b2c5195-bcd3-421e-a43a-72c768354923"
+              ]
+            },
+            "plan_revision": 1,
+            "module_snapshot": {
+              "id": "cup_hero",
+              "title": "产品主视觉",
+              "spec_id": "basic_header_image_text",
+              "main_point": "建立红色杯子的第一视觉识别",
+              "user_need": "建立红色杯子的第一视觉识别",
+              "evidence_ids": [
+                "fact_red_unbranded_ceramic_cup",
+                "fact_appearance_reference"
+              ],
+              "composition": "中远景三分之四视角，杯子占画面约55%，置于画面右侧的暖中性桌面场景中；红色杯体为第一焦点，前景保留轻微桌面层次，背景柔和虚化，左侧留出稳定文案空间。",
+              "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 建立红色杯子的第一视觉识别\nModel-authored scene and camera direction: 中远景三分之四视角，杯子占画面约55%，置于画面右侧的暖中性桌面场景中；红色杯体为第一焦点，前景保留轻微桌面层次，背景柔和虚化，左侧留出稳定文案空间。\nCopy zone: left. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+              "reference_asset_ids": [
+                "4b2c5195-bcd3-421e-a43a-72c768354923"
+              ],
+              "headline": "A Simple Red Ceramic Cup",
+              "body": "A clean, recognizable form for everyday moments.",
+              "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+              "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+              "prohibited": [],
+              "acceptance": [
+                "商品颜色/图案/Logo/结构",
+                "实际卖点与事实",
+                "英文拼写和可读性",
+                "移动端完整性",
+                "素材商业使用权",
+                "球队/品牌/赛事授权",
+                "无价格/促销/竞品比较"
+              ],
+              "design_direction": "white",
+              "requested_width": null,
+              "requested_height": null,
+              "design_principles": [
+                "product_identity",
+                "visual_hierarchy",
+                "commercial_lighting",
+                "copy_separation"
+              ],
+              "art_direction": {
+                "framing": "三分之四中远景，杯体约占画面55%，主体位于右侧并保持完整轮廓。",
+                "lighting": "左前上方柔和主光，右侧低强度补光，杯底形成自然接触阴影。",
+                "hierarchy": "先看红色杯体与轮廓，再看杯口和把手，左侧留白承载英文标题与短文案。",
+                "integration": "杯子与桌面保持真实透视和比例，底部有接触阴影，背景景深自然衰减，避免悬浮或贴图感。"
+              },
+              "image_slots": [
+                {
+                  "id": "main",
+                  "composition": "独立生成产品主视觉：红色无标识陶瓷杯以三分之四中远景置于右侧暖中性桌面，完整呈现杯体、杯口与把手，左侧保持干净留白；柔和侧上方主光、低反差补光和自然桌面接触阴影，背景轻度虚化。",
+                  "headline": "A Simple Red Ceramic Cup",
+                  "body": "A clean, recognizable form for everyday moments.",
+                  "reference_asset_ids": [
+                    "4b2c5195-bcd3-421e-a43a-72c768354923"
+                  ]
+                }
+              ]
+            },
+            "rules_version": "amazon-aplus-2026-11-05-r4",
+            "spec_snapshot": {
+              "type": "basic",
+              "width": 970,
+              "height": 600,
+              "minimum_width": 970,
+              "minimum_height": 600,
+              "label": "Basic 主视觉图文",
+              "layout": "header",
+              "official_module_type": "STANDARD_HEADER_IMAGE_TEXT",
+              "official_payload_field": "standardHeaderImageText",
+              "headline_max": 150,
+              "body_max": 6000,
+              "native_text_fields": {
+                "headline": "headline.value",
+                "body": "block.body.textList"
+              },
+              "slots": [
+                {
+                  "id": "main",
+                  "width": 970,
+                  "height": 600,
+                  "minimum_width": 970,
+                  "minimum_height": 600,
+                  "field": "block.image"
+                }
+              ],
+              "id": "main",
+              "field": "block.image"
+            },
+            "design_trace": {
+              "skills": [
+                {
+                  "id": "amazon-aplus-planner",
+                  "version": "2",
+                  "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+                },
+                {
+                  "id": "amazon-visual-brief",
+                  "version": "2",
+                  "content_hash": "908c382bcaf7b990db89d2e21eceea1630b31bf10dc3f9622877ff0ba37b8f06"
+                }
+              ],
+              "principles": [
+                "product_identity",
+                "visual_hierarchy",
+                "commercial_lighting",
+                "copy_separation"
+              ],
+              "art_direction": {
+                "framing": "三分之四中远景，杯体约占画面55%，主体位于右侧并保持完整轮廓。",
+                "lighting": "左前上方柔和主光，右侧低强度补光，杯底形成自然接触阴影。",
+                "hierarchy": "先看红色杯体与轮廓，再看杯口和把手，左侧留白承载英文标题与短文案。",
+                "integration": "杯子与桌面保持真实透视和比例，底部有接触阴影，背景景深自然衰减，避免悬浮或贴图感。"
+              }
+            }
+          }
+        },
+        {
+          "id": "b3474c88-bfae-4813-b5c5-5b06c546e738",
+          "asset_id": "2b98d4e5-0174-498a-b6f5-5bc952ed11f7",
+          "version": 1,
+          "parent_output_id": null,
+          "amazon_module": {
+            "plan_id": "e5babdb2-e9e5-4904-a9c1-e5fbbfc572b5",
+            "module_id": "cup_detail",
+            "slot_id": "main",
+            "slot_snapshot": {
+              "id": "main",
+              "composition": "独立生成杯口和把手细节画面：依据参考图保留红色无标识陶瓷杯的真实外观，近距离三分之四角度突出杯口边缘、内腔可见部分与把手连接，主体偏左，右侧留白；浅色中性背景、定向柔光、自然接触阴影与真实景深。",
+              "headline": "See the Shape Up Close",
+              "body": "A closer look at the cup rim and handle.",
+              "reference_asset_ids": [
+                "4b2c5195-bcd3-421e-a43a-72c768354923"
+              ]
+            },
+            "plan_revision": 1,
+            "module_snapshot": {
+              "id": "cup_detail",
+              "title": "杯口和把手特写",
+              "spec_id": "basic_single_image_left",
+              "main_point": "突出杯口与把手的可见外观细节",
+              "user_need": "突出杯口与把手的可见外观细节",
+              "evidence_ids": [
+                "fact_red_unbranded_ceramic_cup",
+                "fact_appearance_reference"
+              ],
+              "composition": "近距离三分之四特写，杯口位于左上、把手向右延展并占据主要视觉区域；以浅色中性背景压低干扰，侧上方定向光勾勒杯口边缘与把手轮廓，右侧保留文案留白。",
+              "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 突出杯口与把手的可见外观细节\nModel-authored scene and camera direction: 近距离三分之四特写，杯口位于左上、把手向右延展并占据主要视觉区域；以浅色中性背景压低干扰，侧上方定向光勾勒杯口边缘与把手轮廓，右侧保留文案留白。\nCopy zone: right. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+              "reference_asset_ids": [
+                "4b2c5195-bcd3-421e-a43a-72c768354923"
+              ],
+              "headline": "See the Shape Up Close",
+              "body": "A closer look at the cup rim and handle.",
+              "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+              "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+              "prohibited": [],
+              "acceptance": [
+                "商品颜色/图案/Logo/结构",
+                "实际卖点与事实",
+                "英文拼写和可读性",
+                "移动端完整性",
+                "素材商业使用权",
+                "球队/品牌/赛事授权",
+                "无价格/促销/竞品比较"
+              ],
+              "design_direction": "detail",
+              "requested_width": null,
+              "requested_height": null,
+              "design_principles": [
+                "product_identity",
+                "detail_truth",
+                "visual_hierarchy",
+                "commercial_lighting"
+              ],
+              "art_direction": {
+                "framing": "近距离三分之四特写，杯口与把手占画面约70%，杯口位于左上，把手向右形成清晰轮廓。",
+                "lighting": "左上方较集中的柔和主光强调边缘与曲面，正面弱补光保留红色层次，避免过度高光。",
+                "hierarchy": "先看杯口边缘和内腔轮廓，再看把手连接关系，右侧留白承载简短英文文案。",
+                "integration": "仅展示参考图可见结构，焦平面落在杯口与把手交界处，阴影贴合背景平面，不虚构材质纹理或内部结构。"
+              },
+              "image_slots": [
+                {
+                  "id": "main",
+                  "composition": "独立生成杯口和把手细节画面：依据参考图保留红色无标识陶瓷杯的真实外观，近距离三分之四角度突出杯口边缘、内腔可见部分与把手连接，主体偏左，右侧留白；浅色中性背景、定向柔光、自然接触阴影与真实景深。",
+                  "headline": "See the Shape Up Close",
+                  "body": "A closer look at the cup rim and handle.",
+                  "reference_asset_ids": [
+                    "4b2c5195-bcd3-421e-a43a-72c768354923"
+                  ]
+                }
+              ]
+            },
+            "rules_version": "amazon-aplus-2026-11-05-r4",
+            "spec_snapshot": {
+              "type": "basic",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300,
+              "label": "Basic 左图右文",
+              "layout": "image_left",
+              "official_module_type": "STANDARD_SINGLE_SIDE_IMAGE",
+              "official_payload_field": "standardSingleSideImage",
+              "image_position_type": "LEFT",
+              "headline_max": 160,
+              "body_max": 1000,
+              "native_text_fields": {
+                "headline": "block.headline.value",
+                "body": "block.body.textList"
+              },
+              "slots": [
+                {
+                  "id": "main",
+                  "width": 600,
+                  "height": 600,
+                  "minimum_width": 300,
+                  "minimum_height": 300,
+                  "field": "block.image"
+                }
+              ],
+              "id": "main",
+              "field": "block.image"
+            },
+            "design_trace": {
+              "skills": [
+                {
+                  "id": "amazon-aplus-planner",
+                  "version": "2",
+                  "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+                },
+                {
+                  "id": "amazon-visual-brief",
+                  "version": "2",
+                  "content_hash": "908c382bcaf7b990db89d2e21eceea1630b31bf10dc3f9622877ff0ba37b8f06"
+                }
+              ],
+              "principles": [
+                "product_identity",
+                "detail_truth",
+                "visual_hierarchy",
+                "commercial_lighting"
+              ],
+              "art_direction": {
+                "framing": "近距离三分之四特写，杯口与把手占画面约70%，杯口位于左上，把手向右形成清晰轮廓。",
+                "lighting": "左上方较集中的柔和主光强调边缘与曲面，正面弱补光保留红色层次，避免过度高光。",
+                "hierarchy": "先看杯口边缘和内腔轮廓，再看把手连接关系，右侧留白承载简短英文文案。",
+                "integration": "仅展示参考图可见结构，焦平面落在杯口与把手交界处，阴影贴合背景平面，不虚构材质纹理或内部结构。"
+              }
+            }
+          }
+        }
+      ],
+      "summary": "方案已就绪，共 2 张独立素材，正在整套并发生成。"
+    },
+    {
+      "case": "aplus-module-edit",
+      "controller": "dsh",
+      "state": "completed",
+      "error_code": null,
+      "ticket": "e3f2f841549bac687543591a4a5f832f",
+      "conversation": "cc5831fd-2c21-5f53-964c-43bc5b9f47b5",
+      "ack_seconds": 1.012665900052525,
+      "completion_seconds": 77.01114289998077,
+      "cached_replay_seconds": null,
+      "durable_run_to_last_job_seconds": 76.648,
+      "planning_to_first_image_job_seconds": 44.0,
+      "job_counts": {
+        "image_edit": 1,
+        "text_generation": 1
+      },
+      "output_count": 1,
+      "outputs": [
+        {
+          "id": "1993d0e6-8871-49a1-8456-f4c44f1a6379",
+          "asset_id": "214645b2-eb84-48ec-96b9-c517b97d00f2",
+          "version": 2,
+          "parent_output_id": "b3474c88-bfae-4813-b5c5-5b06c546e738",
+          "amazon_module": {
+            "plan_id": "e5babdb2-e9e5-4904-a9c1-e5fbbfc572b5",
+            "module_id": "cup_detail",
+            "slot_id": "main",
+            "slot_snapshot": {
+              "id": "main",
+              "composition": "独立生成杯口和把手特写：依据参考图保留红色无标识陶瓷杯真实外观，近距离三分之三角度呈现杯口边缘、内腔可见部分和把手连接；明亮米白色台面与柔和中性背景，左上定向柔光增强细节，主体接触阴影自然，右侧留白用于原生英文文案。",
+              "headline": "See the Shape Up Close",
+              "body": "A closer look at the cup rim and handle.",
+              "reference_asset_ids": [
+                "4b2c5195-bcd3-421e-a43a-72c768354923"
+              ]
+            },
+            "plan_revision": 2,
+            "module_snapshot": {
+              "id": "cup_detail",
+              "title": "杯口和把手特写",
+              "spec_id": "basic_single_image_left",
+              "main_point": "突出杯口与把手的可见外观细节",
+              "user_need": "将背景改成明亮的米白色台面，增强杯口和把手的细节光线。第一模块保持不变。",
+              "evidence_ids": [
+                "fact_red_unbranded_ceramic_cup",
+                "fact_appearance_reference"
+              ],
+              "composition": "近距离三分之四特写，红色杯体占画面约70%，杯口位于左上并清晰呈现内腔可见部分，把手向右延展形成主轮廓；置于明亮米白色台面，焦点落在杯口边缘与把手连接处，右侧保留简洁文案留白。",
+              "image_prompt": "Produce one independent photographic image for the cup_detail module only; do not generate a collage, grid, or any other module. Edit the existing second-module visual while preserving the red unbranded ceramic cup's visible shape, rim, handle, proportions, and surface appearance from the supplied reference asset. Use a close three-quarter detail view with the cup body filling about 70% of the frame, rim positioned upper-left, handle extending to the right, and the focal plane at the rim edge and handle connection. Replace the background with a bright matte warm ivory-beige tabletop and a softly matching neutral backdrop. Use a controlled soft key light from upper-left/front to reveal the rim edge, inner opening, handle curve, and connection detail; add gentle frontal fill to preserve red tonal gradation, with a restrained highlight and natural soft contact shadow on the tabletop. Keep realistic perspective, scale, occlusion, depth of field, and physical grounding. Preserve clean negative space on the right for separately typeset native English copy. Do not add logos, patterns, text inside the image, props, performance claims, invented material texture, or unseen structural details.",
+              "reference_asset_ids": [
+                "4b2c5195-bcd3-421e-a43a-72c768354923"
+              ],
+              "headline": "See the Shape Up Close",
+              "body": "A closer look at the cup rim and handle.",
+              "desktop_layout": "使用Basic左图右文模块，图片位于左侧，英文标题与正文由Amazon原生字段排版；画面右侧保持干净留白，不在图片内生成文字。",
+              "mobile_layout": "保持杯口、把手和红色杯体完整可见，文字独立排版；米白台面与主体边缘在移动端仍保持清晰对比。",
+              "prohibited": [],
+              "acceptance": [],
+              "design_direction": "detail",
+              "requested_width": null,
+              "requested_height": null,
+              "design_principles": [
+                "product_identity",
+                "detail_truth",
+                "visual_hierarchy",
+                "commercial_lighting"
+              ],
+              "art_direction": {
+                "framing": "近距离三分之三特写，杯体约占70%，杯口位于左上，把手向右延展并保持完整轮廓。",
+                "lighting": "左上方柔和定向主光强化杯口边缘与把手曲面，正面弱补光保留红色层次，避免过曝高光。",
+                "hierarchy": "先看杯口边缘与内腔可见轮廓，再看把手连接关系，右侧留白承载英文文案。",
+                "integration": "杯子自然落在明亮米白色台面上，接触阴影贴合平面，透视与景深真实，不虚构不可见结构。"
+              },
+              "image_slots": [
+                {
+                  "id": "main",
+                  "composition": "独立生成杯口和把手特写：依据参考图保留红色无标识陶瓷杯真实外观，近距离三分之三角度呈现杯口边缘、内腔可见部分和把手连接；明亮米白色台面与柔和中性背景，左上定向柔光增强细节，主体接触阴影自然，右侧留白用于原生英文文案。",
+                  "headline": "See the Shape Up Close",
+                  "body": "A closer look at the cup rim and handle.",
+                  "reference_asset_ids": [
+                    "4b2c5195-bcd3-421e-a43a-72c768354923"
+                  ]
+                }
+              ]
+            },
+            "rules_version": "amazon-aplus-2026-11-05-r4",
+            "spec_snapshot": {
+              "type": "basic",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300,
+              "label": "Basic 左图右文",
+              "layout": "image_left",
+              "official_module_type": "STANDARD_SINGLE_SIDE_IMAGE",
+              "official_payload_field": "standardSingleSideImage",
+              "image_position_type": "LEFT",
+              "headline_max": 160,
+              "body_max": 1000,
+              "native_text_fields": {
+                "headline": "block.headline.value",
+                "body": "block.body.textList"
+              },
+              "slots": [
+                {
+                  "id": "main",
+                  "width": 600,
+                  "height": 600,
+                  "minimum_width": 300,
+                  "minimum_height": 300,
+                  "field": "block.image"
+                }
+              ],
+              "id": "main",
+              "field": "block.image"
+            },
+            "design_trace": {
+              "skills": [
+                {
+                  "id": "amazon-aplus-planner",
+                  "version": "2",
+                  "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+                },
+                {
+                  "id": "amazon-visual-brief",
+                  "version": "2",
+                  "content_hash": "908c382bcaf7b990db89d2e21eceea1630b31bf10dc3f9622877ff0ba37b8f06"
+                }
+              ],
+              "principles": [
+                "product_identity",
+                "detail_truth",
+                "visual_hierarchy",
+                "commercial_lighting"
+              ],
+              "art_direction": {
+                "framing": "近距离三分之三特写，杯体约占70%，杯口位于左上，把手向右延展并保持完整轮廓。",
+                "lighting": "左上方柔和定向主光强化杯口边缘与把手曲面，正面弱补光保留红色层次，避免过曝高光。",
+                "hierarchy": "先看杯口边缘与内腔可见轮廓，再看把手连接关系，右侧留白承载英文文案。",
+                "integration": "杯子自然落在明亮米白色台面上，接触阴影贴合平面，透视与景深真实，不虚构不可见结构。"
+              }
+            }
+          }
+        }
+      ],
+      "summary": "方案已就绪，共 1 张独立素材，正在整套并发生成。"
+    },
+    {
+      "case": "parallel-batch",
+      "controller": "dsh",
+      "state": "completed",
+      "error_code": null,
+      "ticket": "d481e22f4929560314dae042d0209d03",
+      "conversation": "f0768c3e-f60f-5d26-a2ef-04956f2929c5",
+      "ack_seconds": null,
+      "completion_seconds": null,
+      "cached_replay_seconds": 0.17064859997481108,
+      "durable_run_to_last_job_seconds": 65.862,
+      "planning_to_first_image_job_seconds": 43.0,
+      "job_counts": {
+        "image_generation": 2,
+        "text_generation": 1
+      },
+      "output_count": 2,
+      "outputs": [
+        {
+          "id": "0805bfab-2442-4291-8022-2140bb82134f",
+          "asset_id": "0929a8ba-7482-4ec4-8128-bdd12d895cd7",
+          "version": 1,
+          "parent_output_id": null,
+          "amazon_module": null
+        },
+        {
+          "id": "2c44a447-f49f-409d-87e5-6d9bf66a7b40",
+          "asset_id": "982e8882-53e7-4954-876d-94969963928e",
+          "version": 1,
+          "parent_output_id": null,
+          "amazon_module": null
+        }
+      ],
+      "summary": "按你的要求生成图片，共 2 张。"
+    },
+    {
+      "case": "parallel-other",
+      "controller": "dsh",
+      "state": "completed",
+      "error_code": null,
+      "ticket": "8a2e2bb911f3399751a57bf3163554cb",
+      "conversation": "e17a7781-4e3f-55bc-8445-965a20a703f8",
+      "ack_seconds": null,
+      "completion_seconds": null,
+      "cached_replay_seconds": 0.19695670006331056,
+      "durable_run_to_last_job_seconds": 42.848,
+      "planning_to_first_image_job_seconds": 23.0,
+      "job_counts": {
+        "text_generation": 1,
+        "image_generation": 1
+      },
+      "output_count": 1,
+      "outputs": [
+        {
+          "id": "a9a0ee98-d73b-48a0-85ce-f609adefc967",
+          "asset_id": "02d11950-3de2-47ac-af58-5056fd183006",
+          "version": 1,
+          "parent_output_id": null,
+          "amazon_module": null
+        }
+      ],
+      "summary": "按你的要求生成图片，共 1 张。"
+    }
+  ],
+  "job_attempts": [
+    {
+      "job_id": "720e1ab2-467a-4777-a4fa-8d53da048290",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:30:31.822031",
+      "provider_responded_at": "2026-11-05 17:30:42.381955",
+      "finished_at": "2026-11-05 17:30:42.386955"
+    },
+    {
+      "job_id": "56a0e73b-c596-4a7d-8a12-2757bc95f902",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:32:52.052040",
+      "provider_responded_at": "2026-11-05 17:33:01.853851",
+      "finished_at": "2026-11-05 17:33:01.863938"
+    },
+    {
+      "job_id": "98ea06c0-4e58-479d-a80d-78fc099b9274",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:33:04.716887",
+      "provider_responded_at": "2026-11-05 17:33:22.636738",
+      "finished_at": "2026-11-05 17:33:22.647470"
+    },
+    {
+      "job_id": "88a16846-6c15-46fa-bc45-d520eee79a74",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:33:25.112832",
+      "provider_responded_at": "2026-11-05 17:33:48.800440",
+      "finished_at": "2026-11-05 17:33:49.944083"
+    },
+    {
+      "job_id": "832361d8-6d44-49f9-8d72-a9f40a326784",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:37:58.824946",
+      "provider_responded_at": "2026-11-05 17:38:04.709104",
+      "finished_at": "2026-11-05 17:38:04.717106"
+    },
+    {
+      "job_id": "7e8b88e5-f919-4faa-ba99-a6bb7e9b7398",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:38:00.040064",
+      "provider_responded_at": "2026-11-05 17:38:06.211974",
+      "finished_at": "2026-11-05 17:38:06.218496"
+    },
+    {
+      "job_id": "e24ec01f-a3c8-442a-8604-4f507d2a91ef",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": "provider.network_error",
+      "provider_requested_at": "2026-11-05 17:38:07.434527",
+      "provider_responded_at": null,
+      "finished_at": "2026-11-05 17:38:23.178724"
+    },
+    {
+      "job_id": "c9bd2042-2ee7-45b3-8706-106ced6c9d7a",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:38:07.690902",
+      "provider_responded_at": "2026-11-05 17:38:28.693255",
+      "finished_at": "2026-11-05 17:38:28.704475"
+    },
+    {
+      "job_id": "b888a642-6a36-4775-9067-61ba53520ca1",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:38:38.300350",
+      "provider_responded_at": "2026-11-05 17:39:04.561603",
+      "finished_at": "2026-11-05 17:39:06.105788"
+    },
+    {
+      "job_id": "49b08aa3-29c9-46ef-bd33-3843a44574a2",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:39:07.524508",
+      "provider_responded_at": "2026-11-05 17:39:19.747806",
+      "finished_at": "2026-11-05 17:39:19.762269"
+    },
+    {
+      "job_id": "1f1c3d60-f6ac-44e1-9fb6-092b6deb9c30",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:39:22.234032",
+      "provider_responded_at": "2026-11-05 17:39:33.590002",
+      "finished_at": "2026-11-05 17:39:33.606720"
+    },
+    {
+      "job_id": "52a96c09-f316-4c2c-9b22-bb169af0675a",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:42:42.112095",
+      "provider_responded_at": "2026-11-05 17:43:49.808305",
+      "finished_at": "2026-11-05 17:43:49.815309"
+    },
+    {
+      "job_id": "06ae5f18-2516-49f6-8507-23decdbbebeb",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:43:52.644053",
+      "provider_responded_at": "2026-11-05 17:44:59.452582",
+      "finished_at": "2026-11-05 17:44:59.464965"
+    },
+    {
+      "job_id": "6d0c5fa0-f25a-486b-b3fa-f4b5d09d0e60",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:49:42.369459",
+      "provider_responded_at": "2026-11-05 17:50:52.184153",
+      "finished_at": "2026-11-05 17:50:52.195342"
+    },
+    {
+      "job_id": "d543dd2d-d0cd-456d-87cc-0e242697cf9e",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:50:54.982330",
+      "provider_responded_at": "2026-11-05 17:51:57.817336",
+      "finished_at": "2026-11-05 17:51:57.836834"
+    },
+    {
+      "job_id": "24cfa064-5699-4442-8fcf-b95475f14c75",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:54:41.108701",
+      "provider_responded_at": "2026-11-05 17:55:01.234401",
+      "finished_at": "2026-11-05 17:55:01.249779"
+    },
+    {
+      "job_id": "59084acd-778a-4718-b148-77df5f60aba9",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:54:41.203557",
+      "provider_responded_at": "2026-11-05 17:55:07.669112",
+      "finished_at": "2026-11-05 17:55:07.681955"
+    },
+    {
+      "job_id": "de36423b-9984-4df9-9b60-6bee3f3ab01e",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:55:02.520534",
+      "provider_responded_at": "2026-11-05 17:55:20.411019",
+      "finished_at": "2026-11-05 17:55:21.847684"
+    },
+    {
+      "job_id": "250bbacc-1533-4e8f-af30-63c59a44b59e",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:55:24.294102",
+      "provider_responded_at": "2026-11-05 17:55:43.383839",
+      "finished_at": "2026-11-05 17:55:44.861595"
+    },
+    {
+      "job_id": "c15d30dd-2c07-4361-92b2-5075161156b3",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 17:55:24.415068",
+      "provider_responded_at": "2026-11-05 17:55:41.573414",
+      "finished_at": "2026-11-05 17:55:42.978452"
+    },
+    {
+      "job_id": "5fe685a1-41e7-4126-95d8-c5fc928ff91b",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 18:12:24.864637",
+      "provider_responded_at": "2026-11-05 18:13:22.283841",
+      "finished_at": "2026-11-05 18:13:22.296840"
+    },
+    {
+      "job_id": "dc288079-99b6-4930-80bf-60e93ccd92d4",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 18:13:25.072447",
+      "provider_responded_at": "2026-11-05 18:14:32.561184",
+      "finished_at": "2026-11-05 18:14:32.571180"
+    },
+    {
+      "job_id": "82a35191-8df4-4006-b2f9-cea2ceb05c80",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 18:14:35.272553",
+      "provider_responded_at": "2026-11-05 18:14:46.862652",
+      "finished_at": "2026-11-05 18:14:46.874381"
+    },
+    {
+      "job_id": "3ba6baee-f8ee-45bb-b84c-cee5291aa129",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 18:14:50.298455",
+      "provider_responded_at": "2026-11-05 18:15:17.045524",
+      "finished_at": "2026-11-05 18:15:18.114702"
+    },
+    {
+      "job_id": "85a0b264-bd7c-444d-af7c-d7aa03fc668d",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 18:14:50.337300",
+      "provider_responded_at": "2026-11-05 18:15:14.531007",
+      "finished_at": "2026-11-05 18:15:15.090393"
+    },
+    {
+      "job_id": "a6924f62-7704-4e4a-a3c7-eb1bd4154563",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 18:15:20.086764",
+      "provider_responded_at": "2026-11-05 18:16:00.522273",
+      "finished_at": "2026-11-05 18:16:00.542687"
+    },
+    {
+      "job_id": "96e9a5d7-20df-41aa-b7a1-efddc8494fa4",
+      "attempt_number": 1,
+      "http_status": null,
+      "error_code": null,
+      "provider_requested_at": "2026-11-05 18:16:04.333968",
+      "provider_responded_at": "2026-11-05 18:16:34.066185",
+      "finished_at": "2026-11-05 18:16:34.648402"
+    }
+  ],
+  "regression": {
+    "official_core_adapter_node_tests": 7,
+    "python_adapter_and_existing_amazon_tests": 26,
+    "upstream_windows": {
+      "passed": 1155,
+      "failed": 42,
+      "unhandled_errors": 17,
+      "typecheck": "passed",
+      "build": "passed"
+    },
+    "rule_routing_cases": {
+      "passed": 14,
+      "total": 14,
+      "kind": "deterministic tests; not an LLM accuracy benchmark"
+    }
+  },
+  "ui": {
+    "http_and_script_parse": "passed",
+    "interactive_browser": "not_accepted",
+    "reason": "Browser connector returned timeoutMs errors; native capture returned unavailable/minimized. No browser login or paid browser action was performed."
+  },
+  "limitations": [
+    "Official coding Harness booted, but stayed setupPending/repositoryUnset; no DSH coding executor was granted tools or credentials.",
+    "The Adapter uses deterministic Main Session routing and the existing LangGraph planner, not the official DSH Main Session LLM.",
+    "Controller restart was tested during real image I/O. Killing a Worker after an unknown paid request was not tested and cannot safely imply automatic resend."
+  ],
+  "recovery": {
+    "controller_restart": true,
+    "proof_source": "Official persisted hostRestarted Assignments and overlapping real JobAttempt Provider intervals",
+    "restart_at_utc": "2026-11-05T17:55:08.012000+00:00",
+    "inflight_job_ids": [
+      "de36423b-9984-4df9-9b60-6bee3f3ab01e"
+    ],
+    "tickets_before": [
+      {
+        "id": "d481e22f4929560314dae042d0209d03",
+        "assignments": 1
+      },
+      {
+        "id": "8a2e2bb911f3399751a57bf3163554cb",
+        "assignments": 1
+      }
+    ],
+    "tickets_after": [
+      {
+        "id": "d481e22f4929560314dae042d0209d03",
+        "assignments": 2,
+        "stage": {
+          "stage": "ended"
+        }
+      },
+      {
+        "id": "8a2e2bb911f3399751a57bf3163554cb",
+        "assignments": 2,
+        "stage": {
+          "stage": "ended"
+        }
+      }
+    ],
+    "inflight_call_records": {
+      "de36423b-9984-4df9-9b60-6bee3f3ab01e": [
+        [
+          "image",
+          "gpt-image-2.5-flare",
+          "succeeded"
+        ]
+      ]
+    },
+    "distinct_tickets": true,
+    "distinct_conversations": true,
+    "inflight_calls_not_duplicated": true
+  },
+  "plain_chat": {
+    "state": "succeeded",
+    "route": "chat",
+    "ticket_created": false,
+    "job_capability": "text_generation",
+    "image_jobs_in_turn": 0
+  },
+  "official_harness": {
+    "management_api_http": 200,
+    "setup_problem": {
+      "place": "github",
+      "code": "repositoryUnset",
+      "values": {},
+      "detail": "The GitHub Source names no repository."
+    },
+    "runtime": {
+      "state": "paused",
+      "detail": "Waiting for the deployment check",
+      "code": "setupPending",
+      "at": "2026-11-05T17:35:47.640Z"
+    },
+    "load": {
+      "running": 0,
+      "queued": 0,
+      "maxWorkers": 3
+    },
+    "stopped_after_probe": true
+  },
+  "source_protection": {
+    "original_branch": "codex/agent-control-v2",
+    "original_head": "b838c7cf80db2d46665375ba29dda7b836163d6a",
+    "git_status_unchanged": true,
+    "changed_snapshot_files": []
+  }
+}

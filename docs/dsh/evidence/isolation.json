@@ -1,0 +1,39 @@
+{
+  "version_chain": true,
+  "owners": [
+    {
+      "account": "dsh-isolation-1",
+      "tickets": 0,
+      "conversation_http": 404,
+      "file_http": 404,
+      "forged_followup_http": 404
+    },
+    {
+      "account": "dsh-isolation-2",
+      "tickets": 0,
+      "conversation_http": 404,
+      "file_http": 404,
+      "forged_followup_http": 404
+    }
+  ],
+  "downloads": [
+    {
+      "version": 1,
+      "sha256": "d2b21c769f2084d8662b3aa07397d1aeff0ab0150807e3720178cd1ce93b9027",
+      "bytes": 793573,
+      "dimensions": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "version": 2,
+      "sha256": "10cb3d6feb8044edf00a03786750c68606d970a75d7791563a433d8361fa1709",
+      "bytes": 836194,
+      "dimensions": [
+        1024,
+        1024
+      ]
+    }
+  ]
+}

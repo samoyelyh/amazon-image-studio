@@ -1,0 +1,28 @@
+{
+  "repository": "https://github.com/deepseek-ai/dsh-superagent-prototype",
+  "commit": "8c32a9dc5d72c033816c6a8110b37f40cf94fba4",
+  "files": {
+    "LICENSE": "0ff705bc48c62e2bb963f59cc77e07bc0e8f6448b77c5e37201fd9c30b668ba7",
+    "package.json": "e374e6043acc28862df0712e67c106dd531d7936c5848d2610c6fe12dfa73c0a",
+    "README.md": "d286c02351d5c8a6d95fbd4e880d6029e27c5d1f412faddd1f32acf05f9533a6",
+    "docs/001-domain.md": "cdecf46816ee895b577eb2b0df5391da8bea687eae3b6004e8bc04dd7a229c62",
+    "docs/002-authorization.md": "e3fff481e80b2750bb587008f603247d234e909541fb64b5e39ee871971e8dcd",
+    "docs/003-execution.md": "5412a65b71e7e71887ca0299d72f6a912885cad00c22b5c9c05128ff7d021797",
+    "docs/007-architecture.md": "df49a7c5b0094c7a0a28c0ca81fa940d579e0b241be749070a7a185962b6ffea",
+    "src/core/assignments.ts": "c44a47f723d24bf64617c1b9add5abae12b0dfdb4471a52dea413f278a6c926f",
+    "src/core/engine.ts": "7ddfe9171552fb71cda074681adb8ed98da203c830bffb5b4dbb05e2f5c01bc0",
+    "src/core/errors.ts": "0760583ab26762f0d980dc0ae6002bafbc81dc3f63f45cc153671fcdf3b1b6d8",
+    "src/core/evals.ts": "4260b2f67c44f618b2d89b390b2e2a05f79e3909cc108c37e3be12bd823e96cf",
+    "src/core/ids.ts": "08e14fc4c2da38f64391000c32b3a26118dc6c669172c68963e31c17f310a06d",
+    "src/core/index.ts": "fbd33ac903867a29d7ce161e63894f9e6f8b0af584c88635fc14d0791544b12b",
+    "src/core/intake.ts": "bf8b7c9db11aaef6c9e11424d6efdb8d3e4bc6606edb7e2d54670176769116e4",
+    "src/core/memory.ts": "e4bd55cd8300ac2930cad997ecb37ddab05ee32a653e1bf7cfe72ca022d8da4b",
+    "src/core/model.ts": "ab2c0aba2d0574f0e4b16f6ff039f06624c74d37b88301420ac2b9355d45d92c",
+    "src/core/part.ts": "0f94a385628876bf25d54cea1bfaccf4ccc25378faac28075b3ffe5ff604d483",
+    "src/core/ports.ts": "c394de0f691078e1d84e0b643c62bd0af00eb379e7822dd7e75497909d5986fc",
+    "src/core/reasons.ts": "7bebfee6a78b92320e03e9296168127d9ccec82fa5189aab4f5bfe0f778e5880",
+    "src/core/replies.ts": "b060b4e619c1f1ebe1b835420f620c01b7e52e1dae3c046a1a830585b60aeb07",
+    "src/core/stage.ts": "a3aababd5c25f3b13532d0cd0f1fa56df8e352b87161039a8c57613178922b79",
+    "src/core/tickets.ts": "f0da3de9038e23a711f535432a1e1863b702d4e6115b4cedc665ec2055ee6d83"
+  }
+}

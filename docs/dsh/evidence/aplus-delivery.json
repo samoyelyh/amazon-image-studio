@@ -1,0 +1,33 @@
+{
+  "same_ticket": true,
+  "same_conversation": true,
+  "original_output_count": 2,
+  "revision_output_count": 1,
+  "target_module": "cup_detail",
+  "unchanged_module_output": "e714f51e-6605-43bb-b24f-f8e4cbde163c",
+  "parent_version_correct": true,
+  "replayed_run_unchanged": true,
+  "replay_extra_calls": 0,
+  "zip_valid": true,
+  "zip_output_versions": 3,
+  "files": [
+    {
+      "name": "aplus-module-1",
+      "id": "e714f51e-6605-43bb-b24f-f8e4cbde163c",
+      "sha256": "040ecb60bd69ef0acb443ae564d70c07cb7beae9c034e4adb209383975a72deb",
+      "bytes": 601416
+    },
+    {
+      "name": "aplus-module-2-v1",
+      "id": "b3474c88-bfae-4813-b5c5-5b06c546e738",
+      "sha256": "368c7bf57afc8d23a6d216dd6e1237e4f1560872d07c410cfedc3cfa11cbfd75",
+      "bytes": 363567
+    },
+    {
+      "name": "aplus-module-2-v2",
+      "id": "1993d0e6-8871-49a1-8456-f4c44f1a6379",
+      "sha256": "1b02d361b6cd39566dc19661c704a369bf536a332a06930db26e37bfe0b34d6c",
+      "bytes": 375988
+    }
+  ]
+}
