@@ -21,7 +21,7 @@ WORKSPACES = Literal["listing", "batch_tryon", "aplus", "material_extract", "pri
 class ProviderCreateRequest(BaseModel):
     code: str = Field(pattern=r"^[a-z][a-z0-9_-]*$", max_length=80)
     name: str = Field(min_length=1, max_length=160)
-    provider_type: Literal["openai_compatible", "new_api", "custom"]
+    provider_type: Literal["openai_compatible", "new_api", "custom", "codex_local"]
     base_url: HttpUrl
     config: dict[str, object] = Field(default_factory=dict)
 

@@ -40,8 +40,8 @@ export default function QuotaPage() {
   const submitEstimate = (event: FormEvent) => { event.preventDefault(); if (operationCode) estimateMutation.mutate() }
 
   return (
-    <div className="mt-6 space-y-5">
-      <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-gray-900">
+    <div className="studio-page space-y-5">
+      <section className="studio-card p-5">
         <h1 className="text-xl font-bold text-gray-950 dark:text-white">额度中心</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">额度由服务端统一预估、冻结、结算和退款，页面不模拟扣减。</p>
         {account.isError && <div className="mt-4 text-sm text-red-500">{account.error.message}</div>}
@@ -53,7 +53,7 @@ export default function QuotaPage() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-gray-900">
           <h2 className="font-bold text-gray-950 dark:text-white">费用预估</h2>
-          <form onSubmit={submitEstimate} className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <form onSubmit={submitEstimate} className="mt-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
             <select value={operationCode} onChange={(event) => setOperationCode(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm dark:border-white/[0.1] dark:bg-gray-950 dark:text-white">{rules.data?.map((rule) => <option key={rule.id} value={rule.operation_code}>{rule.name}</option>)}</select>
             <input type="number" min={1} max={10000} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} aria-label="数量" className="rounded-xl border border-gray-200 px-3 py-2 text-sm dark:border-white/[0.1] dark:bg-gray-950 dark:text-white" />
             <select value={quality} onChange={(event) => setQuality(event.target.value)} aria-label="质量" className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm dark:border-white/[0.1] dark:bg-gray-950 dark:text-white"><option value="standard">标准质量</option><option value="high">高质量</option></select>

@@ -15,6 +15,7 @@ from app.schemas.content import (
     GeneratedAssetCategoryValue,
 )
 from app.security.principal import Principal, require_permissions
+from app.services.batch_tryon_access_service import is_private_batch_asset
 from app.services.asset_service import (
     asset_url,
     content_disposition_header,
@@ -55,17 +56,21 @@ async def upload_asset(
     request: Request,
     file: Annotated[UploadFile, File()],
     category: Annotated[AssetCategoryValue, Form()],
+    private_scope: Annotated[str | None, Form()] = None,
     session: AsyncSession = Depends(get_db_session),
     storage: StorageService = Depends(get_storage_service),
     settings: Settings = Depends(get_settings),
     principal: Principal = Depends(require_permissions("assets.upload")),
 ) -> AssetResponse:
     org_id = organization_id(principal)
+    if private_scope not in {None, "agent_chat"}:
+        raise AppError("asset.invalid_private_scope", "不支持的素材访问范围。", 422)
     data = await read_upload(file, settings.asset_max_upload_bytes)
     asset = await create_asset(
         session, storage, settings,
         organization_id=org_id, user_id=principal.user.id, category=category,
         filename=file.filename, declared_mime=file.content_type, data=data,
+        metadata_json={"private_scope": "agent_chat"} if private_scope else None,
     )
     add_audit_log(
         session, request=request, actor_user_id=principal.user.id, organization_id=org_id,
@@ -96,7 +101,7 @@ async def upload_garment_reference(
     mask. The normalized transform is retained only for audit/reproduction.
     """
     org_id = organization_id(principal)
-    source = await get_asset(session, org_id, source_asset_id)
+    source = await get_asset(session, org_id, source_asset_id, owner_user_id=principal.user.id)
     if source.category not in {"garment", "product_reference"}:
         raise AppError("asset.invalid_reference_source", "参考派生图必须来源于服装原图或商品原图。", 422)
     try:
@@ -155,7 +160,7 @@ async def upload_region_replace_reference(
 ) -> AssetResponse:
     """Persist a review-time mask or extracted Image C patch as a derived asset."""
     org_id = organization_id(principal)
-    source = await get_asset(session, org_id, source_asset_id)
+    source = await get_asset(session, org_id, source_asset_id, owner_user_id=principal.user.id)
     try:
         parsed = json.loads(transform_metadata)
     except (TypeError, ValueError) as error:
@@ -236,7 +241,7 @@ async def upload_print_design_reference(
 ) -> AssetResponse:
     """Store lossless full-resolution print-design composites and masks."""
     org_id = organization_id(principal)
-    source = await get_asset(session, org_id, source_asset_id)
+    source = await get_asset(session, org_id, source_asset_id, owner_user_id=principal.user.id)
     try:
         parsed = json.loads(metadata)
     except (TypeError, ValueError) as error:
@@ -332,7 +337,8 @@ async def get_asset_content(
         content=content,
         media_type=asset.mime_type,
         headers={
-            "Cache-Control": "private, max-age=300",
+            "Cache-Control": "private, no-store" if await is_private_batch_asset(session, asset) else "private, max-age=300",
+            "Vary": "Authorization, Cookie",
             "Content-Disposition": content_disposition_header(asset.filename, "inline"),
             "X-Content-Type-Options": "nosniff",
         },

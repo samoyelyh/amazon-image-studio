@@ -516,3 +516,86 @@ input[type="number"] {
   isolation: isolate;
   -webkit-mask-image: -webkit-radial-gradient(white, black);
 }
+
+.lovart-image-card {
+  overflow: hidden;
+  border: 1px solid var(--lovart-border);
+  border-radius: 18px;
+  background: var(--lovart-surface);
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.lovart-image-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--studio-muted);
+  box-shadow: var(--studio-shadow);
+}
+
+.lovart-image-card img {
+  transition: transform 400ms ease;
+}
+
+.lovart-image-card:hover img {
+  transform: scale(1.025);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lovart-image-card,
+  .lovart-image-card img {
+    transition: none;
+  }
+}
+
+/* Compatibility for not-yet-migrated legacy classes; semantic Studio components
+   do not depend on these selectors. Remove each rule as its callers migrate. */
+.lovart-shell [class*="bg-[#111111]"] { background-color: #f7f7f5 !important; }
+.lovart-shell [class*="bg-[#151515]"] { background-color: #f1f1ee !important; }
+.lovart-shell [class*="bg-[#181818]"] { background-color: #f4f4f1 !important; }
+.lovart-shell [class*="bg-[#1b1b1b]"] { background-color: #ffffff !important; }
+.lovart-shell [class*="bg-[#242424]"] { background-color: #ecece8 !important; }
+.lovart-shell [class*="border-white"] { border-color: rgba(0, 0, 0, 0.1) !important; }
+.lovart-shell [class*="bg-white/[0.0"] { background-color: rgba(0, 0, 0, 0.04) !important; }
+.lovart-shell [class*="bg-white/20"] { background-color: rgba(0, 0, 0, 0.09) !important; }
+.lovart-shell [class*="bg-white/9"] { background-color: rgba(255, 255, 255, 0.94) !important; }
+
+.lovart-shell .text-white { color: #171717 !important; }
+.lovart-shell .text-gray-100 { color: #252525 !important; }
+.lovart-shell .text-gray-200 { color: #353535 !important; }
+.lovart-shell .text-gray-300 { color: #555555 !important; }
+.lovart-shell .text-gray-400 { color: #666666 !important; }
+.lovart-shell .text-gray-500 { color: #71717a !important; }
+
+.lovart-shell .bg-white.text-gray-950 {
+  background-color: #272725 !important;
+  color: #ffffff !important;
+}
+
+.lovart-shell [class*="bg-black/"].text-white,
+.lovart-shell button.text-white:not(.bg-white),
+.lovart-shell a.text-white:not(.bg-white),
+.lovart-shell [class*="bg-stone-900"].text-white,
+.lovart-shell [class*="bg-gray-900"].text-white,
+.lovart-shell [class*="bg-gray-950"].text-white,
+.lovart-shell [class*="bg-emerald-600"].text-white,
+.lovart-shell [class*="bg-red-600"].text-white,
+.lovart-shell [class*="bg-amber-600"].text-white {
+  color: #ffffff !important;
+}
+
+.lovart-shell .login-visual,
+.lovart-shell .login-visual .text-white {
+  color: #ffffff !important;
+}
+
+.lovart-shell .login-visual .bg-white.text-gray-950 {
+  background-color: #ffffff !important;
+  color: #171717 !important;
+}
+
+.lovart-print :where(.bg-white) { background-color: #ffffff; }
+.lovart-print :where(.bg-\[\#E9ECF1\]) { background-color: #f0f0ed; }
+.lovart-print :where(.text-gray-950, .text-gray-900, .text-gray-800, .text-gray-700) { color: #292927; }
+.lovart-print :where(.text-gray-600) { color: #666666; }
+.lovart-print :where(input, textarea, select) { background-color: #f7f7f5; color: #292927; }
+.lovart-print :where(.bg-blue-50) { background-color: #f2eee6; color: #745f3c; }
+.lovart-print :where(.bg-gray-50) { background-color: #f0f0ed; }

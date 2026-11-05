@@ -542,6 +542,35 @@ async def test_due_job_scheduler_respects_batch_concurrency_under_load(
     assert max(wave_sizes) == concurrency
 
 
+@pytest.mark.companydb
+async def test_fair_dispatch_exposes_later_user_and_rotates_single_slot(identity_test_context):
+    from app.models.identity import User
+    settings=Settings(_env_file=None, job_system_max_concurrency=100,
+        job_organization_max_concurrency=100, job_user_max_concurrency=100)
+    _,model,_,_=await seed_pool(identity_test_context,max_concurrency=2)
+    async with identity_test_context['session_factory']() as db:
+        users=list((await db.scalars(select(User).where(User.account.in_(['first-admin','first-viewer'])).order_by(User.account))).all())
+        account=await db.scalar(select(QuotaAccount).where(QuotaAccount.organization_id==identity_test_context['first_org']))
+        account.balance=10000
+        for index in range(102):
+            user=users[0] if index<101 else users[1]
+            await submit_job(db,settings,organization_id=identity_test_context['first_org'],user_id=user.id,
+                payload=JobSubmitRequest(operation_code='listing.generate',workspace_type='listing',queue_name='listing_queue',
+                    capability='image_generation',model_code=model,idempotency_key=f'fair-job-{index}',input={'prompt':str(index),'size':'1024x1024'}))
+        await db.commit()
+    async with identity_test_context['session_factory']() as db:
+        selected=await due_jobs(db,settings,limit=2)
+        assert {j.created_by for j in selected}=={u.id for u in users}
+        first=(await due_jobs(db,settings,limit=1))[0]
+        first.status='succeeded';first.dispatched_at=datetime.now(timezone.utc)
+        await db.commit()
+    async with identity_test_context['session_factory']() as db:
+        # Even with just one usable slot, the older user's large batch cannot
+        # repeatedly take the slot before a colleague who has not been served.
+        next_job=(await due_jobs(db,settings,limit=1))[0]
+        assert next_job.created_by!=first.created_by
+
+
 async def test_batch_try_on_high_concurrency_is_available_to_members(
     identity_test_context,
     monkeypatch,

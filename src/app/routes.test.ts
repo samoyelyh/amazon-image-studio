@@ -13,6 +13,9 @@ describe('application routes', () => {
       .find((section) => section.label === '图片工作台')
       ?.items.map((item) => item.path)
     expect(workspacePaths).toEqual([
+      '/workspaces/agent-control',
+      '/tools',
+      '/skills',
       '/workspaces/attachment-images',
       '/workspaces/listing/variations',
       '/workspaces/batch-tryon',

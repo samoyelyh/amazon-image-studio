@@ -24,6 +24,7 @@ from app.services.asset_service import signed_asset_response
 from app.services.storage_service import StorageService
 from app.services.resource_pool_service import validate_operation_binding
 from app.services.image_size_service import validate_submission_dimensions
+from app.services.agent_access_service import agent_project_exists
 
 
 UTC = timezone.utc
@@ -104,7 +105,8 @@ async def submit_job(
             Project.id == payload.project_id, Project.organization_id == organization_id, Project.deleted_at.is_(None),
         ))
         if project is None or (
-            project.project_type == "batch_tryon" and project.created_by != user_id
+            project.created_by != user_id and (project.project_type == "batch_tryon"
+                or await session.scalar(select(agent_project_exists(project.id))))
         ):
             raise AppError("project.not_found", "Project was not found", 404)
     asset_ids = [str(item) for item in payload.input.get("reference_asset_ids", []) or []]
@@ -116,6 +118,10 @@ async def submit_job(
         ))).all())
         if found != set(asset_ids):
             raise AppError("asset.not_found", "One or more task assets were not found", 404)
+        # Enforce private batch references even if a caller forges workspace_type.
+        # This is authorization only; dispatch, resource selection and billing stay unchanged.
+        from app.services.batch_tryon_access_service import require_batch_asset_access
+        await require_batch_asset_access(session, organization_id=organization_id, user_id=user_id, asset_ids=asset_ids)
     factors = dict(payload.billing_factors)
     factors["model"] = payload.model_code
     factors["resource_pool"] = "platform"
@@ -727,16 +733,26 @@ async def due_jobs(
     ]
     if batch_id:
         candidate_filters.append(Job.batch_id == batch_id)
+    priority = case((Job.status == JobStatus.QUEUED.value, 0),
+        (Job.status == JobStatus.WAITING_FOR_RESOURCE.value, 1), else_=2)
+    fifo = (priority, Job.attempts, Job.created_at, Job.id)
+    query = select(Job).where(*candidate_filters)
+    if batch_id:
+        query = query.order_by(*fifo)
+    else:
+        # Fairness must happen BEFORE the bounded candidate window. Otherwise a
+        # large old batch fills the window and hides all later employees' jobs.
+        ranked = select(Job.id.label('job_id'), func.row_number().over(
+            partition_by=(Job.organization_id, Job.created_by), order_by=fifo
+        ).label('owner_position')).where(*candidate_filters).subquery()
+        served = select(Job.organization_id, Job.created_by,
+            func.max(Job.dispatched_at).label('last_dispatch')).where(Job.dispatched_at.is_not(None))\
+            .group_by(Job.organization_id, Job.created_by).subquery()
+        query = query.join(ranked, ranked.c.job_id==Job.id).outerjoin(served,
+            (served.c.organization_id==Job.organization_id)&(served.c.created_by==Job.created_by))\
+            .order_by(ranked.c.owner_position, served.c.last_dispatch, *fifo)
     candidates = list((await session.scalars(
-        select(Job).where(*candidate_filters).order_by(
-            case(
-                (Job.status == JobStatus.QUEUED.value, 0),
-                (Job.status == JobStatus.WAITING_FOR_RESOURCE.value, 1),
-                else_=2,
-            ),
-            Job.attempts,
-            Job.created_at,
-        ).limit(max(limit * 5, 100))
+        query.limit(max(limit * 5, 100))
         .with_for_update(skip_locked=True)
     )).all())
     if not candidates:

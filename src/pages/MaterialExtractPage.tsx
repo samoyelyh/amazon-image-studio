@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { runtimeConfig } from '../app/runtimeConfig'
 import AuthenticatedImage from '../components/AuthenticatedImage'
+import {ResponsiveToolsPanel,StudioButton} from '../components/ui/Studio'
 import { uploadAsset } from '../lib/contentApi'
 import { cancelServerJob, getServerJob, type JobOutput, type ServerJob } from '../lib/jobsApi'
 import { scaleSelectionBounds, scaleStrokes, workingImageSize, type SelectionBounds } from '../lib/materialExtractCanvas'
@@ -295,8 +296,8 @@ export default function MaterialExtractPage() {
         <div className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm dark:border-white/10 dark:bg-gray-900 dark:text-gray-300">异步任务 · 高清输出 · 自动透明化</div>
       </header>
 
-      <div className="grid min-h-[680px] gap-4 xl:grid-cols-[310px_minmax(420px,1fr)_330px]">
-        <aside className="space-y-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-gray-900">
+      <div className="studio-workbench-grid">
+        <ResponsiveToolsPanel title="素材与提取工具">
           <section {...sourcePasteZoneProps} className="rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20">
             <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-semibold dark:text-white">1. 上传图片</h2>{file && <button type="button" onClick={() => fileInputRef.current?.click()} className="text-xs font-semibold text-blue-600">更换</button>}</div>
             <input ref={fileInputRef} type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={onFileChange} />
@@ -337,15 +338,15 @@ export default function MaterialExtractPage() {
 
           <button type="button" disabled={busy || !file || !selectionBounds} onClick={() => void submit()} className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40">{busy ? '正在提取…' : result ? '重新提取素材' : '开始提取素材'}</button>
           {job && activeStatuses.has(job.status) && <button type="button" onClick={() => void cancelServerJob(job.id).then((next) => setJob(next))} className="w-full rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600">取消任务</button>}
-        </aside>
+        </ResponsiveToolsPanel>
 
-        <main className="flex min-h-[620px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-[#eef1f5] shadow-sm dark:border-white/10 dark:bg-gray-950">
+        <main className="studio-canvas flex min-h-[360px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-[#eef1f5] shadow-sm xl:min-h-[620px]">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 dark:border-white/10 dark:bg-gray-900">
             <div><h2 className="text-sm font-semibold dark:text-white">画布编辑</h2><p className="mt-0.5 text-xs text-gray-500">在图片上涂抹需要保留的素材</p></div>
             <div className="flex items-center gap-2 text-xs text-gray-500"><button type="button" onClick={() => setZoom((value) => Math.max(50, value - 25))} className="rounded-md border border-gray-200 px-2 py-1 dark:border-white/10">−</button><span className="w-10 text-center">{zoom}%</span><button type="button" onClick={() => setZoom((value) => Math.min(200, value + 25))} className="rounded-md border border-gray-200 px-2 py-1 dark:border-white/10">＋</button><button type="button" onClick={() => setZoom(100)} className="rounded-md border border-gray-200 px-2 py-1 dark:border-white/10">适应</button></div>
           </div>
           <div className="flex flex-1 items-center justify-center overflow-auto p-5">
-            {!file && <div className="max-w-xs text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm dark:bg-gray-900">✣</div><div className="mt-4 text-sm font-semibold text-gray-700 dark:text-gray-200">上传图片后开始涂抹</div><p className="mt-2 text-xs leading-5 text-gray-500">支持鼠标、触控笔和触摸操作。画布仅用于定位，不会直接修改原图。</p></div>}
+            {!file && <div className="max-w-xs text-center"><StudioButton variant="primary" onClick={()=>fileInputRef.current?.click()}>上传图片开始提取</StudioButton></div>}
             {file && localUrl && <div className="relative shrink-0 overflow-hidden rounded-lg bg-white shadow-xl" style={{ width: `${zoom}%`, maxWidth: zoom === 100 ? '100%' : 'none', aspectRatio: `${workingSize.width}/${workingSize.height}` }}>
               <canvas ref={baseCanvasRef} className="absolute inset-0 h-full w-full" aria-label="原始图片画布" />
               <canvas ref={overlayCanvasRef} className="absolute inset-0 h-full w-full cursor-crosshair touch-none" aria-label="素材选择画布" onPointerDown={startStroke} onPointerMove={continueStroke} onPointerUp={finishStroke} onPointerCancel={finishStroke} />

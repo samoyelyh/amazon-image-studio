@@ -94,6 +94,34 @@ class Settings(BaseSettings):
     hermes_profile: str = "image_operator"
     hermes_timeout_seconds: float = 90.0
 
+    # Opt-in control plane. Neither flag changes the existing image workspaces.
+    agent_control_enabled: bool = False
+    agent_control_writes_enabled: bool = False
+    agent_control_model_calls_enabled: bool = False
+    agent_control_planner: Literal["mock", "existing_text"] = "mock"
+    # Agent-only pin; other workspaces retain their existing operation defaults.
+    agent_control_text_model: str | None = Field(default=None, min_length=1, max_length=120)
+    agent_control_decision_model:str|None=Field(default=None,min_length=1,max_length=120)
+    agent_control_decision_enabled:bool=False
+    agent_aplus_professional_enabled:bool=False
+    agent_auto_execute_enabled: bool = False
+    agent_execution_mode: Literal['bounded', 'autonomous'] = 'autonomous'
+    agent_autonomous_max_steps: int = Field(default=12, ge=1, le=40)
+    agent_auto_max_images: int = Field(default=3, ge=1, le=10)
+    agent_auto_max_seconds: int = Field(default=300, ge=60, le=1800)
+    agent_auto_max_credits: int = Field(default=50, ge=1, le=1000)
+    agent_auto_max_text_jobs: int = Field(default=2, ge=1, le=4)
+    agent_auto_max_steps: int = Field(default=4, ge=1, le=6)
+    agent_auto_max_active_runs: int = Field(default=3, ge=1, le=10)
+    agent_auto_submissions_per_minute: int = Field(default=6, ge=1, le=30)
+    agent_auto_credits_per_hour: int = Field(default=300, ge=1, le=10000)
+    agent_checkpoint_url: SecretStr | None = None
+    agent_dynamic_capabilities_enabled: bool = True
+    # Server-owned approval file, never a path supplied by a conversation/model.
+    agent_capability_manifest: str | None = None
+    agent_capability_max_steps: int = Field(default=8, ge=1, le=16)
+    agent_capability_max_replans: int = Field(default=2, ge=0, le=4)
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, value: object) -> object:

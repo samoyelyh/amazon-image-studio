@@ -18,10 +18,12 @@ from app.core.errors import AppError
 from app.models.content import Asset, GeneratedOutput, ProjectAsset
 from app.schemas.content import AssetPage, AssetResponse, AssetUrlResponse
 from app.services.storage_service import StorageService
+from app.services.batch_tryon_access_service import BATCH_PRIVATE_ASSET_CATEGORIES, batch_asset_link_exists, is_private_batch_asset
+from app.services.agent_access_service import agent_output_exists, agent_attachment_exists
 
 
 UTC = timezone.utc
-ACCOUNT_PRIVATE_ASSET_CATEGORIES = {"batch_tryon_output"}
+ACCOUNT_PRIVATE_ASSET_CATEGORIES = BATCH_PRIVATE_ASSET_CATEGORIES
 ASSET_CONTENT_PREFIX = "/api/v1/assets"
 GENERATED_ASSET_CATEGORIES = (
     "listing_output", "batch_tryon_output", "aplus_output", "material_extract_output",
@@ -188,8 +190,8 @@ async def get_asset(
     asset = await session.scalar(statement)
     if asset is None or (
         owner_user_id
-        and asset.category in ACCOUNT_PRIVATE_ASSET_CATEGORIES
         and asset.created_by != owner_user_id
+        and await is_private_batch_asset(session, asset)
     ):
         raise AppError("asset.not_found", "Asset was not found", 404)
     return asset
@@ -252,7 +254,8 @@ async def list_assets(
         filters.append(Asset.category == category)
     if owner_user_id:
         filters.append(or_(
-            Asset.category.not_in(ACCOUNT_PRIVATE_ASSET_CATEGORIES),
+            Asset.category.not_in(ACCOUNT_PRIVATE_ASSET_CATEGORIES) & ~batch_asset_link_exists(Asset.id)
+                & ~agent_output_exists(Asset.id) & (func.coalesce(Asset.metadata_json["private_scope"].as_string(), "") != "agent_chat"),
             Asset.created_by == owner_user_id,
         ))
     if search:
@@ -295,7 +298,7 @@ async def delete_asset(
     derived_link = await session.scalar(select(Asset.id).where(
         Asset.source_asset_id == asset.id, Asset.deleted_at.is_(None),
     ).limit(1))
-    if project_link or generated_link or attachment_product_link or attachment_module_link or material_link or derived_link:
+    if project_link or generated_link or attachment_product_link or attachment_module_link or material_link or derived_link or await session.scalar(select(agent_attachment_exists(asset.id))):
         raise AppError("asset.in_use", "Asset is still referenced by a project or generated output", 409)
     try:
         await run_in_threadpool(storage.delete, asset.storage_key)

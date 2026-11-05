@@ -1,4 +1,5 @@
 import { authenticatedFetch } from './authApi'
+import type { StructuredLunaAnalysis } from './batchTryOnStructured'
 import type { BatchTryOnPresetSelection } from '../types'
 
 export type BatchTryOnGenerationMode = 'normal_tryon' | 'detail_tryon'
@@ -23,6 +24,7 @@ export interface BatchTryOnPromptPreset {
   enabled: boolean
   sort_order: number
   is_system_preset: boolean
+  execution_mode?: 'standard' | 'direct_output'
 }
 
 export interface BatchTryOnTemplatePrompt {
@@ -44,6 +46,8 @@ export interface BatchTryOnTemplatePrompt {
   prompt_version: number
   error_code: string | null
   error_message: string | null
+  structured_analysis?: StructuredLunaAnalysis | null
+  requires_manual_review?: boolean
 }
 
 export interface BatchTryOnWorkflowGarmentProfile {
@@ -76,8 +80,10 @@ export interface BatchTryOnWorkflowInput {
     visible_regions?: string[]
     template_type?: BatchTryOnTemplateType
     prompt_preset_id?: string
+    prompt_source?: 'preset' | 'custom'
     analysis_prompt?: string
     garment_view?: 'auto' | 'front' | 'back' | 'front_back' | 'detail'
+    prompt_strategy?: 'preset' | 'ai_optimize' | 'luna_per_image' | 'luna_structured'
   }>
   garments: Array<{
     garment_id: string
@@ -170,6 +176,12 @@ export function listBatchTryOnPromptPresets() {
   return authenticatedFetch<BatchTryOnPromptPreset[]>('/batch-tryon/prompt-presets')
 }
 
+export function getStructuredLunaDefault(templateType: BatchTryOnTemplateType) {
+  return authenticatedFetch<{ analysis_format: string; analysis_prompt: string }>(
+    `/batch-tryon/prompt-presets/structured-default?template_type=${encodeURIComponent(templateType)}`,
+  )
+}
+
 export function createBatchTryOnPromptPreset(input: {
   template_type: BatchTryOnTemplateType
   label: string
@@ -197,10 +209,11 @@ export function updateBatchTryOnPromptPreset(
 
 export function confirmBatchTryOnTemplatePrompt(
   workflowJobId: string, templateId: string, editedFinalPrompt: string | null,
+  manualConfirmation = false,
 ) {
   return authenticatedFetch<BatchTryOnTemplatePrompt>(
     `/batch-tryon/workflows/${workflowJobId}/template-prompts/${encodeURIComponent(templateId)}`,
-    { method: 'PATCH', body: JSON.stringify({ edited_final_prompt: editedFinalPrompt }) },
+    { method: 'PATCH', body: JSON.stringify({ edited_final_prompt: editedFinalPrompt, manual_confirmation: manualConfirmation }) },
   )
 }
 

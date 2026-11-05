@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from app.prompts.batch_tryon_structured import STRUCTURED_FORMAT, structured_analysis_prompt
+from app.prompts.batch_tryon_direct import DIRECT_REPLACEMENT_PRESET_ID
+from app.services.batch_tryon_structured_service import input_manifest
+
 from copy import deepcopy
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -602,6 +606,16 @@ async def review_detail(
         ))
         if image_c is not None:
             image_c_asset = _asset_response(image_c)
+    latest_analysis = await session.scalar(select(Job).where(
+        Job.organization_id == organization_id,
+        Job.created_by == item.created_by,
+        Job.operation_code == "batch_tryon.prompt_analyze_detailed",
+        Job.input_json["metadata"]["review_item_id"].as_string() == item.id,
+        Job.input_json["metadata"]["source_version_id"].as_string() == item.current_version_id,
+    ).order_by(Job.created_at.desc(), Job.id.desc()).limit(1))
+    linked_analysis_id = current_metadata.get("structured_analysis_job_id")
+    linked_analysis = await session.get(Job, str(linked_analysis_id)) if linked_analysis_id else None
+    analysis_result = (linked_analysis.result_json or {}).get("metadata", {}) if linked_analysis and linked_analysis.organization_id == organization_id else {}
     return BatchTryOnReviewDetailResponse(
         item_id=item.id,
         batch_id=item.batch_id,
@@ -625,6 +639,9 @@ async def review_detail(
             else None
         ),
         effective_prompt_snapshot=effective_prompt_snapshot,
+        prompt_execution_mode="direct_output" if template_prompt_record and template_prompt_record.preset_id == DIRECT_REPLACEMENT_PRESET_ID else "standard",
+        latest_analysis_job_id=latest_analysis.id if latest_analysis else None,
+        structured_analysis=analysis_result.get("structured_analysis"),
         garment_asset=_asset_response(garment),
         model_asset=_asset_response(model),
         image_c_asset=image_c_asset,
@@ -1147,6 +1164,10 @@ async def submit_detailed_review_analysis(
         selected_preset_id = selected.id
         selected_preset_label = selected.label
         template_preset = selected.analysis_prompt_template.strip()
+    if payload.analysis_format == STRUCTURED_FORMAT:
+        template_preset = structured_analysis_prompt(template_type)
+    if payload.prompt_preset_id == DIRECT_REPLACEMENT_PRESET_ID or (not payload.prompt_preset_id and template_prompt_record and template_prompt_record.preset_id == DIRECT_REPLACEMENT_PRESET_ID):
+        raise AppError("batch_tryon.direct_preset_requires_direct", "当前预设直接用于生图，不调用Luna。请使用“直接使用此提示词重新生成”。", 422)
     if payload.template_prompt_override:
         template_preset = payload.template_prompt_override
     template_preset = template_preset.strip()
@@ -1177,11 +1198,18 @@ async def submit_detailed_review_analysis(
                 # The selected/edited preset is the complete and only text instruction.
                 # Reference images remain attached in their existing deterministic order.
                 "system_prompt": template_preset,
-                "user_prompt": "",
+                "user_prompt": input_manifest(
+                    garment_id=str(source_metadata.get("garment_id") or item.garment_asset_id),
+                    template_type=template_type, references=reference_ids,
+                    garment_references=list(source_metadata.get("effective_garment_reference_asset_ids") or [item.garment_asset_id]),
+                    font_reference=source_metadata.get("font_reference_asset_id"),
+                ) if payload.analysis_format == STRUCTURED_FORMAT else "",
                 "response_format": "text",
                 "reference_asset_ids": reference_ids,
                 "metadata": {
                     "workflow": "batch_tryon_review_analysis",
+                    "analysis_format": payload.analysis_format,
+                    "garment_id": str(source_metadata.get("garment_id") or item.garment_asset_id),
                     "workflow_role": "review_detailed_analysis",
                     "review_item_id": item.id,
                     "source_version_id": source.id,
@@ -1225,6 +1253,7 @@ async def submit_detailed_review_analysis_batch(
                     organization_id=organization_id,
                     item_id=selected.item_id,
                     payload=BatchTryOnDetailedReviewAnalysisRequest(
+                        analysis_format=payload.analysis_format,
                         source_version_id=selected.version_id,
                         focus_notes=payload.focus_notes,
                         template_type=payload.template_type,
@@ -1275,6 +1304,11 @@ async def continue_detailed_review_auto_regeneration(
     result_metadata = analysis_job.result_json.get("metadata") if isinstance(analysis_job.result_json, dict) else None
     if not isinstance(result_metadata, dict):
         raise AppError("batch_tryon.analysis_result_missing", "Luna 分析结果不存在，无法自动重新生成", 409)
+    if result_metadata.get("requires_manual_review"):
+        analysis_job.result_json = {**analysis_job.result_json, "metadata": {
+            **result_metadata, "auto_regeneration_status": "awaiting_manual_confirmation",
+        }}
+        return None, False
     generated_prompt = str(result_metadata.get("text") or "").strip()
     if not generated_prompt:
         raise AppError("batch_tryon.analysis_result_empty", "Luna 未返回可用提示词，无法自动重新生成", 409)

@@ -5,6 +5,7 @@ import type { AttachmentResultEntry } from '../components/attachment-image/Attac
 import AttachmentMaterialSaveDialog from '../components/attachment-image/AttachmentMaterialSaveDialog'
 import AttachmentCreativeContextPanel from '../components/attachment-image/AttachmentCreativeContextPanel'
 import AttachmentProductIdentityPanel from '../components/attachment-image/AttachmentProductIdentityPanel'
+import { ResponsiveToolsPanel } from '../components/ui/Studio'
 import HermesAssistantDrawer from '../components/attachment-image/HermesAssistantDrawer'
 import BatchTryOnGarmentPreprocessDialog, { type GarmentReferencePreview } from '../components/BatchTryOnGarmentPreprocessDialog'
 import AuthenticatedImage from '../components/category-listing/AuthenticatedImage'
@@ -104,7 +105,7 @@ import {
   type VisualPreset,
 } from '../lib/creativePresetApi'
 
-const panel = 'rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-gray-900'
+const panel = 'studio-card p-5'
 const button = 'rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[0.1] dark:bg-gray-950 dark:text-gray-200'
 const primary = 'rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50'
 const terminalGroupStatuses = new Set(['succeeded', 'partially_succeeded', 'failed', 'cancelled'])
@@ -993,7 +994,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
       </div>
     </section>
 
-    {creativeContext && <AttachmentCreativeContextPanel
+    {creativeContext && <ResponsiveToolsPanel title="创作方向与参考设置"><AttachmentCreativeContextPanel
       context={creativeContext}
       visuals={visualPresets}
       themes={themePresets}
@@ -1001,7 +1002,7 @@ function WorkbenchDetail({ sessionId }: { sessionId: string }) {
       supportsModel={selectedModules.some((definition) => planning?.modules.find((item) => item.module_key === definition.code)?.supports_model)}
       busy={creativeContextBusy || Boolean(planningActive)}
       onChange={(value) => void changeCreativeContext(value)}
-    />}
+    /></ResponsiveToolsPanel>}
 
     <AttachmentProductIdentityPanel
       value={productIdentityLock}

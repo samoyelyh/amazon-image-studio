@@ -176,6 +176,8 @@ async def add_project_asset(
 ) -> ProjectResponse:
     org_id = organization_id(principal)
     await get_project(session, org_id, project_id, owner_user_id=principal.user.id)
+    from app.services.batch_tryon_access_service import require_batch_asset_access
+    await require_batch_asset_access(session, organization_id=org_id, user_id=principal.user.id, asset_ids=[payload.asset_id])
     link = await link_asset(
         session, organization_id=org_id, project_id=project_id, asset_id=payload.asset_id,
         user_id=principal.user.id, role=payload.role, sort_order=payload.sort_order,
@@ -207,6 +209,8 @@ async def add_project_asset_compact(
     """Link one asset without serializing the project's entire asset collection."""
     org_id = organization_id(principal)
     await get_project(session, org_id, project_id, owner_user_id=principal.user.id)
+    from app.services.batch_tryon_access_service import require_batch_asset_access
+    await require_batch_asset_access(session, organization_id=org_id, user_id=principal.user.id, asset_ids=[payload.asset_id])
     link = await link_asset(
         session, organization_id=org_id, project_id=project_id, asset_id=payload.asset_id,
         user_id=principal.user.id, role=payload.role, sort_order=payload.sort_order,

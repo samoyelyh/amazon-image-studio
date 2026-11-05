@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { isPerGarmentLuna, type LunaAnalysisFormat } from '../lib/batchTryOnStructured'
+import BatchTryOnStructuredAnalysis from './BatchTryOnStructuredAnalysis'
+import BatchTryOnSharedQueue from './BatchTryOnSharedQueue'
 import type {
   BatchTryOnAspectRatio, BatchTryOnBatch, BatchTryOnGarment, BatchTryOnItem,
   BatchTryOnTemplate, TaskParams, BatchTryOnGarmentReference, BatchTryOnTemplateGarmentView,
@@ -11,8 +14,6 @@ import { createBatchTryOnFileNames, downloadBatchTryOnZip } from '../lib/batchTr
 import { downloadImageIds } from '../lib/downloadImages'
 import {
   downloadAuthenticatedFile,
-  downloadBatchTryOnResultsZip,
-  downloadSelectedBatchTryOnTemplateZip,
 } from '../lib/serverDownloads'
 import { runtimeConfig } from '../app/runtimeConfig'
 import { uploadDataUrlAsset, uploadGarmentReferenceDataUrl, importServerAsset } from '../lib/serverImageAssets'
@@ -93,6 +94,7 @@ import {
   applySubmittedBatchTryOnJobs,
 } from '../lib/batchTryOnSubmission'
 import { useBatchTryOnServerPolling } from '../hooks/useBatchTryOnServerPolling'
+import { useBatchTryOnDownloads } from '../hooks/useBatchTryOnDownloads'
 import {
   confirmBatchTryOnTemplatePrompt,
   createBatchTryOnPromptPreset,
@@ -100,6 +102,7 @@ import {
   getBatchTryOnWorkflow,
   getLatestBatchTryOnWorkflow,
   listBatchTryOnPromptPresets,
+  getStructuredLunaDefault,
   reanalyzeBatchTryOnTemplatePrompt,
   submitConfirmedBatchTryOnWorkflow,
   resolveValidationWorkflowTemplateId,
@@ -266,6 +269,7 @@ export default function BatchTryOnWorkspace() {
   const globalParams = useStore((state) => state.params)
   const tasks = useStore((state) => state.tasks)
   const showToast = useStore((state) => state.showToast)
+  const downloads = useBatchTryOnDownloads(showToast)
   const setLightboxImageId = useStore((state) => state.setLightboxImageId)
   const setShowSettings = useStore((state) => state.setShowSettings)
   const setConfirmDialog = useStore((state) => state.setConfirmDialog)
@@ -284,6 +288,11 @@ export default function BatchTryOnWorkspace() {
   const [templatePromptDrafts, setTemplatePromptDrafts] = useState<Record<string, TemplatePromptDraftConfig>>({})
   const templatePromptDraftsRef = useRef<Record<string, TemplatePromptDraftConfig>>({})
   const [templatePromptRecords, setTemplatePromptRecords] = useState<BatchTryOnTemplatePrompt[]>([])
+  const [structuredPromptDrafts, setStructuredPromptDrafts] = useState<Record<string, string>>({})
+  const [structuredPage, setStructuredPage] = useState(0)
+  const structuredRecords = useMemo(() => [...templatePromptRecords].reverse().filter((record) => record.structured_analysis), [templatePromptRecords])
+  const structuredPages = Math.max(1, Math.ceil(structuredRecords.length / 20))
+  const currentStructuredPage = Math.min(structuredPage, structuredPages - 1)
   const [promptWorkflowStatus, setPromptWorkflowStatus] = useState<BatchTryOnWorkflowResponse['status'] | null>(null)
   const [promptActionBusy, setPromptActionBusy] = useState(false)
   const [showSystemPresetManager, setShowSystemPresetManager] = useState(false)
@@ -293,6 +302,7 @@ export default function BatchTryOnWorkspace() {
   const [preprocessSaving, setPreprocessSaving] = useState(false)
   const [workspaceTabs, setWorkspaceTabs] = useState<BatchTryOnWorkspaceTab[]>([])
   const [workspaceTabsBusy, setWorkspaceTabsBusy] = useState(false)
+  const [queueView, setQueueView] = useState<'mine' | 'all'>('mine')
   const workspaceSaveTimerRef = useRef<number | null>(null)
   const workspaceSaveChainRef = useRef<Promise<void>>(Promise.resolve())
   const workspaceSaveRevisionRef = useRef(new Map<string, number>())
@@ -329,6 +339,7 @@ export default function BatchTryOnWorkspace() {
     return workspaceSaveChainRef.current
   }, [showToast])
   const projectId = searchParams.get('project_id') || batch?.serverProjectId || null
+  const requestedWorkspaceId = searchParams.get('workspace_id')
   const templateUpdated = searchParams.get('template_updated') === 'true'
   const {
     pollServerBatch,
@@ -358,7 +369,10 @@ export default function BatchTryOnWorkspace() {
         validationWorkflowTemplateRef.current.set(workflow.workflow_job_id, validationTemplateId)
       }
       setPromptWorkflowStatus(workflow.status)
-      setTemplatePromptRecords(workflow.template_prompts || [])
+      setTemplatePromptRecords((current) => [
+        ...current.filter((record) => record.workflow_job_id !== workflow.workflow_job_id),
+        ...(workflow.template_prompts || []),
+      ])
       const workflowPrompt = workflow.template_prompts?.[0]
       if (workflowPrompt) setTemplatePromptDrafts(restoreWorkflowPromptDrafts(
         workflow.template_prompts, useStore.getState().batchTryOnBatch?.templates || [],
@@ -423,6 +437,10 @@ export default function BatchTryOnWorkspace() {
     stopValidationWorkflowPolling(workflowJobId)
     try {
       const workflow = await getBatchTryOnWorkflow(workflowJobId)
+      setTemplatePromptRecords((current) => [
+        ...current.filter((record) => record.workflow_job_id !== workflowJobId),
+        ...(workflow.template_prompts || []),
+      ])
       const validationTemplateId = resolveValidationWorkflowTemplateId(workflow)
       if (validationTemplateId) validationWorkflowTemplateRef.current.set(workflowJobId, validationTemplateId)
       if (workflow.status === 'failed' || workflow.status === 'cancelled') {
@@ -524,7 +542,8 @@ export default function BatchTryOnWorkspace() {
             suppressedWorkspaceIdsRef.current,
           ))
           const current = useStore.getState().batchTryOnBatch
-          const tab = page.items.find((item) => item.id === current?.serverWorkspaceId) || page.items[0]
+          const tab = page.items.find((item) => item.id === requestedWorkspaceId)
+            || page.items.find((item) => item.id === current?.serverWorkspaceId) || page.items[0]
           if (workspaceHydratedRef.current !== tab.id) {
             workspaceHydratedRef.current = tab.id
             const saved = tab.config.batch as BatchTryOnBatch | undefined
@@ -594,7 +613,7 @@ export default function BatchTryOnWorkspace() {
       }).catch(() => undefined)
     }, 8_000)
     return () => { cancelled = true; window.clearInterval(timer) }
-  }, [batch?.serverProjectId, pollBatchTryOnWorkflow, pollServerBatch, showToast, setBatch])
+  }, [batch?.serverProjectId, requestedWorkspaceId, pollBatchTryOnWorkflow, pollServerBatch, showToast, setBatch])
 
   useEffect(() => {
     if (runtimeConfig.isStandalone || !batch?.serverWorkspaceId || switchingWorkspaceRef.current) return
@@ -610,6 +629,9 @@ export default function BatchTryOnWorkspace() {
 
   useEffect(() => {
     setSelectedReviewItems(new Map())
+    setTemplatePromptRecords([])
+    setStructuredPromptDrafts({})
+    setStructuredPage(0)
     setShowBulkRegenerate(false)
     setTemplateAnalysisProfiles({})
   }, [batch?.id])
@@ -962,7 +984,7 @@ export default function BatchTryOnWorkspace() {
   )), [selectedTemplates])
   const validationPromptMissingTemplates = useMemo(() => validationGenerationTargets.filter((template) => {
     const config = templatePromptDrafts[template.id]
-    return !config?.presetId || !config.analysisPrompt.trim()
+    return !config?.analysisPrompt.trim()
   }), [templatePromptDrafts, validationGenerationTargets])
   const validationSampleGarment = (batch?.garments ?? []).find((item) => item.id === batch?.sampleGarmentId)
     || selectedGarments[0]
@@ -976,7 +998,7 @@ export default function BatchTryOnWorkspace() {
     : !(batch?.sampleGarmentId || selectedGarments.length)
       ? '请先选择样图商品'
       : validationPromptMissingTemplates.length
-        ? `请先配置提示词预设：${validationPromptMissingTemplates.map((template) => template.displayName).join('、')}`
+        ? `请先填写提示词：${validationPromptMissingTemplates.map((template) => template.displayName).join('、')}`
         : validationReferenceError
           ? validationReferenceError
         : validationGenerationTargets.length === 0
@@ -1061,6 +1083,7 @@ export default function BatchTryOnWorkspace() {
 
   const switchWorkspaceTab = (tab: BatchTryOnWorkspaceTab) => {
     if (tab.id === batch?.serverWorkspaceId) return
+    setSearchParams((current) => { const next = new URLSearchParams(current); next.set('workspace_id', tab.id); return next })
     const saved = tab.config.batch as BatchTryOnBatch | undefined
     const next = saved ? normalizeBatchTryOnBatch({
       ...saved,
@@ -1423,7 +1446,7 @@ export default function BatchTryOnWorkspace() {
         const template = current.templates.find((candidate) => candidate.id === entry.item.templateId)
         const id = entry.item.templateId || entry.item.templateImageId || entry.item.id
         const promptConfig = templatePromptDraftsRef.current[id]
-        const lockedPrompt = options.submissionKind !== 'validation' && template?.promptStrategy !== 'luna_per_image'
+        const lockedPrompt = options.submissionKind !== 'validation' && !isPerGarmentLuna(template?.promptStrategy)
           ? template?.validatedPrompt
           : undefined
         const promptText = lockedPrompt || promptConfig?.analysisPrompt.trim()
@@ -1439,6 +1462,7 @@ export default function BatchTryOnWorkspace() {
           visible_regions: template?.visibleRegions,
           template_type: promptConfig.templateType,
           prompt_preset_id: promptConfig.presetId || undefined,
+          prompt_source: promptConfig.presetId ? 'preset' as const : 'custom' as const,
           analysis_prompt: promptText,
           garment_view: template?.garmentView || 'auto',
           prompt_strategy: template?.promptStrategy,
@@ -1644,8 +1668,8 @@ export default function BatchTryOnWorkspace() {
     })
     if (runtimeConfig.isStandalone) startItems(matrix.map((item) => item.id))
     else {
-      const directIds = matrix.filter((item) => productionCurrent.templates.find((template) => template.id === item.templateId)?.promptStrategy !== 'luna_per_image').map((item) => item.id)
-      const detailedIds = matrix.filter((item) => productionCurrent.templates.find((template) => template.id === item.templateId)?.promptStrategy === 'luna_per_image').map((item) => item.id)
+      const directIds = matrix.filter((item) => !isPerGarmentLuna(productionCurrent.templates.find((template) => template.id === item.templateId)?.promptStrategy)).map((item) => item.id)
+      const detailedIds = matrix.filter((item) => isPerGarmentLuna(productionCurrent.templates.find((template) => template.id === item.templateId)?.promptStrategy)).map((item) => item.id)
       if (directIds.length) await startServerWorkflowItems(directIds, { promptMode: 'direct', submissionKind: 'production' })
       if (detailedIds.length) await startServerWorkflowItems(detailedIds, { promptMode: 'ai_detailed', submissionKind: 'production' })
     }
@@ -1692,7 +1716,7 @@ export default function BatchTryOnWorkspace() {
       } : item),
       updatedAt: Date.now(),
     } : latest)
-    const mode: BatchTryOnPromptMode = template.promptStrategy === 'luna_per_image'
+    const mode: BatchTryOnPromptMode = isPerGarmentLuna(template.promptStrategy)
       ? 'ai_detailed'
       : template.promptStrategy === 'ai_optimize' ? 'ai_analysis' : 'direct'
     try {
@@ -1722,15 +1746,30 @@ export default function BatchTryOnWorkspace() {
     await Promise.all(templateIds.map((templateId) => generateValidationSample(templateId)))
   }
 
-  const setTemplatePromptStrategy = (
+  const setTemplatePromptStrategy = async (
     templateId: string, strategy: NonNullable<BatchTryOnTemplate['promptStrategy']>,
-  ) => updateTemplates((templates) => templates.map((template) => template.id === templateId ? {
+  ) => {
+    const config = templatePromptDraftsRef.current[templateId]
+    if (strategy === 'luna_structured' && config) {
+      try {
+        const defaults = await getStructuredLunaDefault(config.templateType)
+        updateTemplatePromptConfig(templateId, {
+          analysisPrompt: config.structuredAnalysisPrompt || defaults.analysis_prompt,
+          plainAnalysisPrompt: config.analysisPrompt,
+        })
+      } catch (error) { showToast(friendlyError(error), 'error'); return }
+    } else if (config && batch?.templates.find((t) => t.id === templateId)?.promptStrategy === 'luna_structured') {
+      updateTemplatePromptConfig(templateId, { analysisPrompt: config.plainAnalysisPrompt || config.analysisPrompt,
+        structuredAnalysisPrompt: config.analysisPrompt })
+    }
+    updateTemplates((templates) => templates.map((template) => template.id === templateId ? {
     ...template,
     promptStrategy: strategy,
     validationStatus: template.validationStatus === 'approved' ? 'needs_revalidation' : 'not_generated',
     validatedPrompt: undefined, validatedPromptVersion: undefined,
     validatedSampleOutputId: undefined, validatedAt: undefined,
   } : template))
+  }
 
   const setSampleGarment = (garmentId: string) => {
     if (batch?.sampleGarmentId === garmentId) return
@@ -1880,7 +1919,7 @@ export default function BatchTryOnWorkspace() {
       const currentStrategy = useStore.getState().batchTryOnBatch?.templates.find(
         (template) => template.id === validationPromptEditor.templateId,
       )?.promptStrategy || 'luna_per_image'
-      const currentStrategyLabel = currentStrategy === 'luna_per_image'
+      const currentStrategyLabel = currentStrategy === 'luna_structured' ? 'Luna 结构化逐图 V1.1' : currentStrategy === 'luna_per_image'
         ? 'Luna 精细逐图'
         : currentStrategy === 'ai_optimize' ? 'AI 分析优化' : '直接使用预设'
       await discardValidationSample(
@@ -1913,7 +1952,7 @@ export default function BatchTryOnWorkspace() {
       showToast('AI 模板分析仅支持多人模式。', 'error')
       return
     }
-    if (promptMode === 'direct') {
+    if (promptMode === 'direct' && !isPerGarmentLuna(current.templates.find((item) => item.id === templateId)?.promptStrategy)) {
       showToast('请先选择“AI 分析优化”或“Luna 精细逐图”。', 'error')
       return
     }
@@ -1946,7 +1985,7 @@ export default function BatchTryOnWorkspace() {
       updatedAt: Date.now(),
     })
     showToast(`已提交“${template.displayName || template.fileName}”的独立提示词分析。`, 'success')
-    await startServerWorkflowItems(matrix.map((item) => item.id))
+    await startServerWorkflowItems(matrix.map((item) => item.id), { promptMode: isPerGarmentLuna(template.promptStrategy) ? 'ai_detailed' : promptMode })
   }
 
   const updateTemplatePromptConfig = (templateId: string, patch: Partial<TemplatePromptDraftConfig>) => {
@@ -2024,11 +2063,13 @@ export default function BatchTryOnWorkspace() {
   }
 
   const confirmTemplatePrompt = async (record: BatchTryOnTemplatePrompt, finalPrompt: string) => {
-    if (!batch?.serverWorkflowId) return
     setPromptActionBusy(true)
     try {
-      const saved = await confirmBatchTryOnTemplatePrompt(batch.serverWorkflowId, record.id, finalPrompt)
+      const saved = await confirmBatchTryOnTemplatePrompt(record.workflow_job_id, record.id, finalPrompt, Boolean(record.requires_manual_review))
       setTemplatePromptRecords((current) => current.map((item) => item.id === saved.id ? saved : item))
+      // Confirmation resumes only this record's durable workflow, even if a
+      // newer template submission has become the current workspace workflow.
+      await getBatchTryOnWorkflow(record.workflow_job_id)
       showToast('最终换衣提示词已确认并生效。', 'success')
     } catch (error) {
       showToast(friendlyError(error), 'error')
@@ -2092,7 +2133,7 @@ export default function BatchTryOnWorkspace() {
     const workflowId = batch?.serverWorkflowId
     if (!workflowId || !validationWorkflowTemplateRef.current.has(workflowId)) return
     if (!templatePromptRecords.length || validationWorkflowSubmittingRef.current.has(workflowId)) return
-    const ready = templatePromptRecords.every((record) => ['ready', 'effective'].includes(record.prompt_status))
+    const ready = templatePromptRecords.every((record) => ['ready', 'effective'].includes(record.prompt_status) && !record.requires_manual_review)
     if (!ready) return
     validationWorkflowSubmittingRef.current.add(workflowId)
     void (async () => {
@@ -2620,12 +2661,7 @@ export default function BatchTryOnWorkspace() {
   const downloadAll = async () => {
     if (!batch) return
     if (!runtimeConfig.isStandalone && batch.serverBatchId) {
-      try {
-        await downloadBatchTryOnResultsZip(batch.serverBatchId)
-        showToast('批量套图结果已开始下载', 'success')
-      } catch (error) {
-        showToast(`批量下载失败：${friendlyError(error)}`, 'error')
-      }
+      await downloads.downloadQueue(batch)
       return
     }
     const items = batch.items.flatMap((item) => {
@@ -2876,10 +2912,11 @@ export default function BatchTryOnWorkspace() {
     setShowBulkLuna(true)
   }
 
-  const submitBulkLuna = async ({ autoRegenerate }: { autoRegenerate: boolean }) => {
+  const submitBulkLuna = async ({ autoRegenerate, analysisFormat }: { autoRegenerate: boolean; analysisFormat: LunaAnalysisFormat }) => {
     const selected = validBulkSelections()
     showToast(autoRegenerate ? '正在创建 Luna 分析与自动重生成任务…' : '正在创建 Luna 批量分析任务…', 'success')
     const result = await batchAnalyzeAndRegenerateBatchTryOnVersions({
+      analysis_format: analysisFormat,
       items: selected.map((item) => ({ item_id: item.itemId, version_id: item.versionId })),
       focus_notes: null,
       template_type: null,
@@ -3025,13 +3062,8 @@ export default function BatchTryOnWorkspace() {
       showToast('当前模板没有已同步到服务端的结果，不能打包。', 'error')
       return
     }
-    try {
-      showToast(`正在打包“${templateName}”结果...`, 'success')
-      await downloadSelectedBatchTryOnTemplateZip(templateId, reviewItemIds, scope)
-      showToast(`“${templateName}”结果已开始下载`, 'success')
-    } catch (error) {
-      showToast(`模板打包失败：${friendlyError(error)}`, 'error')
-    }
+    showToast(`正在打包“${templateName}”结果...`, 'success')
+    await downloads.downloadTemplate(templateId, reviewItemIds, scope)
   }
 
   const advanceReview = (currentReviewItemId: string) => {
@@ -3046,7 +3078,17 @@ export default function BatchTryOnWorkspace() {
   if (!batch) return <div className="p-6 text-sm text-gray-400">正在恢复批量套图批次...</div>
 
   return (
-    <div className="bg-gray-50/70 p-4 dark:bg-gray-950/50 sm:p-5">
+    <div className="studio-page bg-gray-50/70 p-4 sm:p-5">
+      {!runtimeConfig.isStandalone && <BatchTryOnSharedQueue mode={queueView} onModeChange={setQueueView} onOpen={(entry) => {
+        if (!entry.can_open || !entry.navigation) return
+        setQueueView('mine')
+        const target = workspaceTabs.find((tab) => tab.id === entry.navigation?.workspace_id)
+        if (target) { switchWorkspaceTab(target); return }
+        if (entry.navigation.project_id && entry.navigation.workspace_id) {
+          setSearchParams({ project_id: entry.navigation.project_id, workspace_id: entry.navigation.workspace_id })
+        } else { window.location.assign(`/tasks?batch_id=${encodeURIComponent(entry.navigation.batch_id || '')}`) }
+      }} />}
+      <div hidden={!runtimeConfig.isStandalone && queueView === 'all'}>
       {!runtimeConfig.isStandalone && batch.serverProjectId && <BatchTryOnWorkspaceTabs
         tabs={workspaceTabs}
         activeId={batch.serverWorkspaceId}
@@ -3065,19 +3107,35 @@ export default function BatchTryOnWorkspace() {
           disabled={configurationLocked}
           promptPresets={promptPresets}
           promptPresetIds={Object.fromEntries(Object.entries(templatePromptDrafts).map(([templateId, config]) => [templateId, config.presetId]))}
+          promptValues={Object.fromEntries(Object.entries(templatePromptDrafts).map(([templateId, config]) => [templateId, config.analysisPrompt]))}
+          onPromptChange={(templateId, value) => updateTemplatePromptConfig(templateId, { presetId: '', analysisPrompt: value })}
           generateAllCount={validationGenerationTargets.length}
           generateAllDisabledReason={generateAllValidationDisabledReason}
           referenceWarnings={referenceWarningsByTemplate}
           combinationMode={batch.combinationMode || 'cartesian'}
           onUpload={(files) => void uploadTemplates(files)}
           onRemove={removeTemplate}
-          onPromptPresetChange={(templateId, presetId) => {
+          onPromptPresetChange={async (templateId, presetId) => {
+            if (!presetId) {
+              updateTemplatePromptConfig(templateId, { presetId: '' })
+              return
+            }
             const preset = promptPresets.find((item) => item.id === presetId)
             if (!preset) return
+            if (preset.execution_mode === 'direct_output') {
+              await setTemplatePromptStrategy(templateId, 'preset')
+              setPromptMode('direct')
+            }
+            let text = preset.analysis_prompt_template
+            if (preset.execution_mode !== 'direct_output' && batch.templates.find((t) => t.id === templateId)?.promptStrategy === 'luna_structured') {
+              try { text = (await getStructuredLunaDefault(preset.template_type)).analysis_prompt }
+              catch (error) { showToast(friendlyError(error), 'error'); return }
+            }
             updateTemplatePromptConfig(templateId, {
               templateType: preset.template_type,
               presetId: preset.id,
-              analysisPrompt: preset.analysis_prompt_template,
+              analysisPrompt: text,
+              plainAnalysisPrompt: preset.analysis_prompt_template,
             })
           }}
           onGenerateAllValidations={() => void generateAllValidationSamples()}
@@ -3129,7 +3187,7 @@ export default function BatchTryOnWorkspace() {
           {selectedTemplates.map((template) => {
             const sample = [...batch.items].reverse().find((item) => item.id.startsWith(`validation:${template.id}:`))
             return <article id={`validation-${template.id}`} key={template.id} className="rounded-xl border border-gray-200 p-3 dark:border-white/[0.08]">
-              <div className="flex items-center justify-between gap-2"><div className="truncate text-xs font-semibold">{template.displayName}</div><span className="text-[11px] text-gray-500">{template.promptStrategy === 'ai_optimize' ? 'AI分析优化' : template.promptStrategy === 'luna_per_image' ? 'Luna逐图' : '直接预设'}</span></div>
+              <div className="flex items-center justify-between gap-2"><div className="truncate text-xs font-semibold">{template.displayName}</div><span className="text-[11px] text-gray-500">{template.promptStrategy === 'luna_structured' ? 'Luna结构化V1.1' : template.promptStrategy === 'ai_optimize' ? 'AI分析优化' : template.promptStrategy === 'luna_per_image' ? 'Luna逐图' : '直接预设'}</span></div>
               {sample?.outputImageId ? <button type="button" onClick={() => void openValidationPromptEditor(template.id)} className="mt-2 block aspect-square w-full overflow-hidden rounded-lg bg-gray-100" title="打开样图审核与提示词调整"><BatchTryOnImage imageId={sample.outputImageId} alt={`${template.displayName} 验证样图`} className="h-full w-full object-cover" /></button> : <div className="mt-2 flex aspect-square items-center justify-center rounded-lg bg-gray-50 text-xs text-gray-400 dark:bg-white/[0.03]">{template.validationStatus === 'generating' ? '样图生成中…' : sample?.error || '尚无样图'}</div>}
               <div className="mt-2 flex gap-2">
                 {template.validationStatus === 'pending_review' && <><button type="button" disabled={promptActionBusy} onClick={() => void approveValidationSample(template.id)} className="h-8 flex-1 rounded-lg bg-emerald-600 text-xs font-semibold text-white disabled:opacity-40">效果通过</button><button type="button" disabled={promptActionBusy} onClick={() => void openValidationPromptEditor(template.id)} className="h-8 flex-1 rounded-lg border border-gray-200 text-xs font-semibold disabled:opacity-40">效果调整</button></>}
@@ -3150,13 +3208,27 @@ export default function BatchTryOnWorkspace() {
         </div>}
       </section>}
 
+      {templatePromptRecords.some((record) => record.structured_analysis) && <section id="structured-luna-results" className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-950">
+        <h3 className="text-sm font-semibold">Luna 结构化逐图分析</h3>
+        <p className="mt-1 text-xs text-gray-500">每件服装独立分析。需要人工确认的结果不会自动进入生图；确认后将继续当前任务，不重复分析。</p>
+        <div className="mt-2 flex items-center gap-3 text-xs"><span>共 {structuredRecords.length} 项 · 第 {currentStructuredPage + 1}/{structuredPages} 页</span><button type="button" disabled={currentStructuredPage === 0} onClick={() => setStructuredPage(currentStructuredPage - 1)} className="disabled:opacity-40">上一页</button><button type="button" disabled={currentStructuredPage + 1 >= structuredPages} onClick={() => setStructuredPage(currentStructuredPage + 1)} className="disabled:opacity-40">下一页</button></div>
+        {structuredRecords.slice(currentStructuredPage * 20, (currentStructuredPage + 1) * 20).map((record) => <article key={record.id} className="mt-3 border-t border-gray-100 pt-3 dark:border-white/10">
+          <div className="text-xs font-medium">{batch.templates.find((t) => t.id === record.template_id)?.displayName} · {batch.garments.find((g) => g.id === record.garment_id)?.garmentFileName || record.garment_id}</div>
+          <BatchTryOnStructuredAnalysis analysis={record.structured_analysis} />
+          <details className="text-xs" open={record.requires_manual_review}><summary className="cursor-pointer">当前服装最终中文提示词</summary>
+            <textarea aria-label={`当前服装提示词 ${record.garment_id}`} readOnly={!record.requires_manual_review} value={structuredPromptDrafts[record.id] ?? record.edited_final_prompt ?? record.generated_final_prompt ?? ''} onChange={(e) => setStructuredPromptDrafts((drafts) => ({ ...drafts, [record.id]: e.target.value }))} rows={5} className="mt-2 w-full rounded-lg border bg-transparent p-3 text-xs leading-6" />
+          </details>
+          {record.requires_manual_review && <button type="button" disabled={promptActionBusy} onClick={() => void confirmTemplatePrompt(record, structuredPromptDrafts[record.id] ?? record.generated_final_prompt ?? '')} className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">我已核对，确认当前服装提示词并继续生图</button>}
+        </article>)}
+      </section>}
+
       {runtimeConfig.isStandalone && <BatchTryOnPresetPanel
         selection={batch.presetSelection}
         disabled={configurationLocked}
         onChange={(presetSelection) => updateBatch({ presetSelection })}
       />}
 
-      <details open={runtimeConfig.isStandalone} className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-gray-950">
+      <details open={runtimeConfig.isStandalone} className="studio-card mt-4 p-4">
         <summary className="cursor-pointer list-none text-sm font-semibold text-gray-800 dark:text-gray-100">高级设置 <span className="ml-2 text-xs font-normal text-gray-400">输出尺寸、质量、格式、组合与并发</span></summary>
         <div className={`mt-4 ${runtimeConfig.isStandalone ? 'grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.85fr)]' : ''}`}>
           {runtimeConfig.isStandalone && <label>
@@ -3166,7 +3238,7 @@ export default function BatchTryOnWorkspace() {
           </label>}
           <div>
             <div className="text-sm font-bold text-gray-900 dark:text-gray-100">输出设置</div>
-            <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2">
+            <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <FieldSelect
                 label="生成模式"
                 value={batch.generationMode || 'normal_tryon'}
@@ -3237,7 +3309,13 @@ export default function BatchTryOnWorkspace() {
           workflowReady={promptWorkflowStatus === 'awaiting_prompt_confirmation'}
           canManageSystemPresets={isPlatformAdmin}
           onManageSystemPresets={() => setShowSystemPresetManager(true)}
-          onTemplateConfigChange={updateTemplatePromptConfig}
+          onTemplateConfigChange={(templateId, patch) => {
+            if (patch.presetId && promptPresets.find((p) => p.id === patch.presetId)?.execution_mode === 'direct_output') {
+              updateTemplates((templates) => templates.map((t) => t.id === templateId ? { ...t, promptStrategy: 'preset' } : t))
+              setPromptMode('direct')
+            }
+            updateTemplatePromptConfig(templateId, patch)
+          }}
           onAnalyzeCurrentTemplate={analyzeCurrentTemplate}
           onReanalyze={reanalyzeTemplatePrompt}
           onConfirm={confirmTemplatePrompt}
@@ -3436,7 +3514,7 @@ export default function BatchTryOnWorkspace() {
                 <p className="mt-1 text-xs leading-5 text-gray-500">这里编辑的是当前模板交给 Luna / AI 的系统预设，不是第一件服装分析后的单图提示词。</p>
               </div>
               <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-200">
-                {validationPromptEditor.promptStrategy === 'luna_per_image'
+                {isPerGarmentLuna(validationPromptEditor.promptStrategy)
                   ? '正式批量时，每个“模板 × 服装”组合都会使用这份预设独立执行 Luna 分析；当前样图的单图输出不会复用到其他服装。'
                   : validationPromptEditor.promptStrategy === 'ai_optimize'
                     ? '修改后会重新执行当前模板的 AI 分析。下方单图输出仅用于核对，不会反向覆盖系统预设。'
@@ -3478,6 +3556,7 @@ export default function BatchTryOnWorkspace() {
           </div>
         </div>
       </div>}
+      </div>
     </div>
   )
 }

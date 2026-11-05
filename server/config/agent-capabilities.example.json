@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "skills": [
+    {
+      "path": "skills/public-research/SKILL.md",
+      "version": "1",
+      "enabled": false,
+      "approved_by": "REQUIRES_ADMIN_REVIEW",
+      "organizations": ["REPLACE_WITH_ORGANIZATION_ID"],
+      "users": [],
+      "permissions": ["jobs.read"],
+      "allowed_tools": ["mcp.public_research.search"],
+      "keywords": ["公开资料", "市场调研", "research"]
+    }
+  ],
+  "mcp_servers": [
+    {
+      "id": "public_research",
+      "version": "1",
+      "enabled": false,
+      "approved_by": "REQUIRES_ADMIN_REVIEW",
+      "organizations": ["REPLACE_WITH_ORGANIZATION_ID"],
+      "users": [],
+      "url": "https://mcp.example.invalid/mcp",
+      "credential_env": "AGENT_MCP_RESEARCH_TOKEN",
+      "timeout_seconds": 10,
+      "max_calls_per_run": 3,
+      "trust_environment_proxy": false,
+      "tools": [
+        {
+          "name": "search",
+          "description": "在管理员审核的公开资料源中检索，并返回真实来源链接。",
+          "permissions": ["jobs.read"],
+          "risk": "read_only",
+          "may_charge": false,
+          "keywords": ["公开资料", "市场调研", "research"],
+          "input_schema": {
+            "type": "object",
+            "properties": {"query": {"type": "string", "maxLength": 500}},
+            "required": ["query"],
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+  ]
+}

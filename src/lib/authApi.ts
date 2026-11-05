@@ -58,12 +58,13 @@ export interface AuthSessionResponse {
 }
 
 interface ApiErrorPayload {
-  error?: { code?: string; message?: string }
+  error?: { code?: string; message?: string; details?: Record<string, unknown>; request_id?: string }
   detail?: Array<{ msg?: string }>
 }
 
 export class AuthApiError extends Error {
-  constructor(public status: number, public code: string, message: string) {
+  constructor(public status: number, public code: string, message: string,
+    public details: Record<string, unknown> = {}, public requestId: string | null = null) {
     super(message)
   }
 }
@@ -211,6 +212,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
     response.status,
     payload.error?.code || 'request.failed',
     payload.error?.message || payload.detail?.[0]?.msg || '请求失败，请稍后重试',
+    payload.error?.details || {}, payload.error?.request_id || response.headers.get('X-Request-ID'),
   )
 }
 

@@ -331,7 +331,7 @@ export interface BatchTryOnTemplate {
   detailPriority?: string
   visibleRegions?: string[]
   garmentView?: BatchTryOnTemplateGarmentView
-  promptStrategy?: 'preset' | 'ai_optimize' | 'luna_per_image'
+  promptStrategy?: 'preset' | 'ai_optimize' | 'luna_per_image' | 'luna_structured'
   validationStatus?: 'not_generated' | 'generating' | 'pending_review' | 'approved' | 'rejected' | 'needs_revalidation'
   validatedPrompt?: string
   validatedPromptVersion?: number
@@ -425,6 +425,8 @@ export interface BatchTryOnTemplatePromptConfig {
   templateType: 'pure_white' | 'gift_scene' | 'stadium_scene' | 'detail_display' | 'casual_scene' | 'custom_process'
   presetId: string
   analysisPrompt: string
+  plainAnalysisPrompt?: string
+  structuredAnalysisPrompt?: string
 }
 
 export interface BatchTryOnBatch {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 
 from sqlalchemy import func, select
@@ -11,7 +12,11 @@ from app.models.content import Project
 from app.models.tasks import JobBatch
 
 
-MAX_WORKSPACE_CONFIG_BYTES = 1_000_000
+# Workspaces include per-garment crop/erase transforms and per-template prompt
+# drafts. The former 1 MB cap rejected ordinary multi-garment workspaces even
+# though the images themselves are stored as Assets. Keep a bounded JSON limit.
+MAX_WORKSPACE_CONFIG_BYTES = 10_000_000
+logger = logging.getLogger(__name__)
 WORKSPACE_KIND = "workspace"
 VALID_STATUSES = {"draft", "validating", "ready", "queued", "running", "review", "completed", "failed"}
 
@@ -22,7 +27,16 @@ def _validate_config(config: dict[str, object]) -> dict[str, object]:
     except (TypeError, ValueError) as error:
         raise AppError("batch_tryon.workspace_config_invalid", "批次工作台配置包含无法保存的数据。", 422) from error
     if len(encoded) > MAX_WORKSPACE_CONFIG_BYTES:
-        raise AppError("batch_tryon.workspace_config_too_large", "批次工作台配置不能超过 1MB。", 422)
+        logger.warning(
+            "batch_tryon.workspace_config_too_large size_bytes=%d limit_bytes=%d",
+            len(encoded), MAX_WORKSPACE_CONFIG_BYTES,
+        )
+        raise AppError(
+            "batch_tryon.workspace_config_too_large",
+            f"当前批次草稿为 {len(encoded) / 1_000_000:.2f}MB，超过 10MB 保存上限。请减少预处理笔画或拆分工作批次，已提交的图片任务不受影响。",
+            422,
+            {"size_bytes": len(encoded), "limit_bytes": MAX_WORKSPACE_CONFIG_BYTES},
+        )
     return config
 
 
@@ -61,7 +75,7 @@ async def create_workspace(
         status="draft",
         batch_kind=WORKSPACE_KIND,
         workspace_hidden=False,
-        workspace_config_json=_validate_config(config),
+        workspace_config_json=_validate_config({key: value for key, value in config.items() if key != "queue_retention"}),
         concurrency=max(1, min(12, int(config.get("concurrency") or 12))),
         total_jobs=0,
         created_by=user_id,
@@ -131,7 +145,11 @@ async def update_workspace(
             raise AppError("batch_tryon.workspace_status_invalid", "批次工作台状态无效。", 422)
         batch.status = status
     if config is not None:
-        batch.workspace_config_json = _validate_config(config)
+        clean = {key: value for key, value in config.items() if key != "queue_retention"}
+        server_marker = (batch.workspace_config_json or {}).get("queue_retention")
+        if server_marker:
+            clean["queue_retention"] = server_marker
+        batch.workspace_config_json = _validate_config(clean)
         batch.concurrency = max(1, min(12, int(config.get("concurrency") or batch.concurrency or 12)))
     batch.updated_by = user_id
     await session.flush()

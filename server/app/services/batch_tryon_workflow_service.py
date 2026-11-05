@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from app.prompts.batch_tryon_structured import STRUCTURED_FORMAT, structured_analysis_prompt
+from app.prompts.batch_tryon_direct import DIRECT_REPLACEMENT_PRESET_ID
+from app.services.batch_tryon_structured_service import input_manifest
+
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
@@ -40,7 +44,7 @@ from app.services.batch_tryon_prompt_service import (
 from app.services.batch_tryon_prompt_template_service import (
     effective_prompt_text,
     prompt_analysis_preset_only,
-    resolve_prompt_preset,
+    resolve_optional_template_preset,
     template_prompt_response,
     validate_generated_final_prompt,
 )
@@ -218,9 +222,11 @@ async def _validate_inputs(
             JobBatch.project_id == payload.project_id,
             JobBatch.batch_kind == "workspace",
             JobBatch.created_by == user_id,
-        ))
+        ).with_for_update())
         if workspace is None:
             raise AppError("batch_tryon.workspace_not_found", "批次工作台不存在或不属于当前项目。", 404)
+        if ((workspace.workspace_config_json or {}).get("queue_retention") or {}).get("archived_at"):
+            raise AppError("queue.workspace_archived", "该批次已自动归档，请在全员队列勾选已归档批次并恢复后再生成。", 409)
     asset_ids = {item.asset_id for item in payload.templates} | {item.asset_id for item in payload.garments}
     asset_ids.update(item.font_reference_asset_id for item in payload.garments if item.font_reference_asset_id)
     for item in payload.garments:
@@ -271,6 +277,10 @@ async def create_batch_tryon_workflow(
     await _validate_inputs(
         session, organization_id=organization_id, user_id=user_id, payload=payload,
     )
+    if any(t.prompt_strategy == "luna_structured" for t in payload.templates) and payload.prompt_mode != "ai_detailed":
+        raise AppError("batch_tryon.structured_mode_invalid", "结构化逐图模式必须使用Luna逐图分析链路。", 422)
+    if any(t.prompt_preset_id == DIRECT_REPLACEMENT_PRESET_ID for t in payload.templates) and payload.prompt_mode != "direct":
+        raise AppError("batch_tryon.direct_preset_requires_direct", "当前是直接输出预设，请选择“直接使用预设”，无需调用Luna。", 422)
     # The workflow anchor is completed locally. It is never dispatched to
     # Celery or a Provider, and its temporary quota reservation is released.
     first = sorted(payload.garments, key=lambda item: (item.order, item.garment_id))[0]
@@ -311,24 +321,24 @@ async def create_batch_tryon_workflow(
             garment_id = str(combination.garment_id if hasattr(combination, "garment_id") else combination["garment_id"])
             template = templates_by_id[template_id]
             garment = garments_by_id[garment_id]
-            font_reference_asset_id = combination.font_reference_asset_id or garment.font_reference_asset_id
+            font_reference_asset_id = (combination.font_reference_asset_id if hasattr(combination, "font_reference_asset_id") else combination.get("font_reference_asset_id")) or garment.font_reference_asset_id
             reference_asset_ids, reference_metadata = _job_reference_snapshot(
                 template=template, garment=garment, font_reference_asset_id=font_reference_asset_id,
             )
             reference_metadata.update(await _effective_reference_filename_metadata(session, reference_metadata))
             preset = preset_cache.get(template_id)
             if preset is None:
-                preset = await resolve_prompt_preset(
+                preset = await resolve_optional_template_preset(
                     session,
                     organization_id=organization_id,
                     user_id=user_id,
-                    preset_id=template.prompt_preset_id,
-                    template_type=template.template_type,
+                    template=template,
                 )
                 preset_cache[template_id] = preset
             # Luna detailed analysis must execute the selected/edited preset verbatim.
             # Do not prepend or append language, role, image-order, or analysis instructions.
-            analysis_prompt = (template.analysis_prompt or preset.analysis_prompt_template).strip()
+            structured = template.prompt_strategy == "luna_structured"
+            analysis_prompt = (template.analysis_prompt or (structured_analysis_prompt(template.template_type) if structured else preset.analysis_prompt_template if preset else "")).strip()
             metadata: dict[str, object] = {
                 "workflow": WORKFLOW_NAME,
                 "workflow_role": "detailed_prompt_analysis" if index == 0 else "detailed_prompt_analysis_child",
@@ -336,13 +346,14 @@ async def create_batch_tryon_workflow(
                 "garment_id": garment_id,
                 "client_item_id": client_item_id,
                 "template_type": template.template_type,
-                "prompt_preset_id": preset.id,
+                "prompt_preset_id": preset.id if preset else None,
                 "template_asset_id": template.asset_id,
                 "garment_asset_id": garment.asset_id,
                 "template_name": template.name,
                 "garment_filename": garment.filename,
                 "font_reference_asset_id": font_reference_asset_id,
                 "prompt_mode": "ai_detailed",
+                "analysis_format": STRUCTURED_FORMAT if structured else "final_prompt_text",
                 **reference_metadata,
             }
             if index == 0:
@@ -368,7 +379,13 @@ async def create_batch_tryon_workflow(
                     client_item_id=f"prompt-detail:{client_item_id}",
                     input={
                         "system_prompt": analysis_prompt,
-                        "user_prompt": "",
+                        "user_prompt": input_manifest(
+                            garment_id=garment_id, template_type=template.template_type,
+                            references=reference_asset_ids,
+                            garment_references=reference_metadata["effective_garment_reference_asset_ids"],
+                            font_reference=font_reference_asset_id,
+                            extra_requirements=payload.extra_requirements,
+                        ) if structured else "",
                         "response_format": "text",
                         "reference_asset_ids": reference_asset_ids,
                         "metadata": metadata,
@@ -388,7 +405,7 @@ async def create_batch_tryon_workflow(
                     garment_id=garment_id,
                     client_item_id=client_item_id,
                     template_type=template.template_type,
-                    preset_id=preset.id,
+                    preset_id=preset.id if preset else None,
                     template_asset_id=template.asset_id,
                     first_garment_asset_id=str(reference_metadata["effective_garment_reference_asset_ids"][0]),
                     font_reference_asset_id=font_reference_asset_id,
@@ -418,12 +435,11 @@ async def create_batch_tryon_workflow(
         analysis_root_created = False
         garments_by_id = {item.garment_id: item for item in payload.garments}
         for index, template in enumerate(ordered_templates):
-            preset = await resolve_prompt_preset(
+            preset = await resolve_optional_template_preset(
                 session,
                 organization_id=organization_id,
                 user_id=user_id,
-                preset_id=template.prompt_preset_id,
-                template_type=template.template_type,
+                template=template,
             )
             first_combination = next((item for item in (payload.combinations or []) if (
                 item.template_id == template.template_id
@@ -439,13 +455,13 @@ async def create_batch_tryon_workflow(
             )
             reference_metadata.update(await _effective_reference_filename_metadata(session, reference_metadata))
             # The selected/edited preset is the complete and only text instruction.
-            analysis_prompt = (template.analysis_prompt or preset.analysis_prompt_template).strip()
+            analysis_prompt = (template.analysis_prompt or (preset.analysis_prompt_template if preset else "")).strip()
             metadata: dict[str, object] = {
                 "workflow": WORKFLOW_NAME,
                 "workflow_role": "prompt_analysis" if index == 0 else "prompt_analysis_child",
                 "template_id": template.template_id,
                 "template_type": template.template_type,
-                "prompt_preset_id": preset.id,
+                "prompt_preset_id": preset.id if preset else None,
                 "template_asset_id": template.asset_id,
                 "first_garment_asset_id": analysis_garment.asset_id,
                 "template_name": template.name,
@@ -497,7 +513,7 @@ async def create_batch_tryon_workflow(
                     garment_id=analysis_garment.garment_id,
                     client_item_id=f"template:{template.template_id}",
                     template_type=template.template_type,
-                    preset_id=preset.id,
+                    preset_id=preset.id if preset else None,
                     template_asset_id=template.asset_id,
                     first_garment_asset_id=str(reference_metadata["effective_garment_reference_asset_ids"][0]),
                     font_reference_asset_id=font_reference_asset_id,
@@ -585,15 +601,14 @@ async def create_batch_tryon_workflow(
     root_created = True
 
     for template in ordered_templates:
-        preset = await resolve_prompt_preset(
+        preset = await resolve_optional_template_preset(
             session,
             organization_id=organization_id,
             user_id=user_id,
-            preset_id=template.prompt_preset_id,
-            template_type=template.template_type,
+            template=template,
         )
         direct_prompt = validate_generated_final_prompt(
-            (template.analysis_prompt or preset.analysis_prompt_template).strip()
+            (template.analysis_prompt or (preset.analysis_prompt_template if preset else "")).strip()
         )
         session.add(BatchTryOnTemplatePrompt(
             organization_id=organization_id,
@@ -602,7 +617,7 @@ async def create_batch_tryon_workflow(
             garment_id=first.garment_id,
             client_item_id=f"template:{template.template_id}",
             template_type=template.template_type,
-            preset_id=preset.id,
+            preset_id=preset.id if preset else None,
             template_asset_id=template.asset_id,
             first_garment_asset_id=first.asset_id,
             font_reference_asset_id=first.font_reference_asset_id,
@@ -1100,10 +1115,13 @@ async def _activate_ready_detailed_image_jobs(
             extra_requirements=str(request.get("extra_requirements") or ""),
             has_font_reference=bool(font_reference_asset_id),
             garment_reference_count=len(reference_metadata["effective_garment_reference_asset_ids"]),
+            structured_analysis=template.get("prompt_strategy") == "luna_structured",
         )
         next_metadata = {
             **metadata,
             "awaiting_luna": False,
+            "analysis_format": STRUCTURED_FORMAT if template.get("prompt_strategy") == "luna_structured" else "final_prompt_text",
+            "structured_analysis_job_id": record.analysis_job_id,
             "effective_prompt_snapshot": reusable_prompt,
             "prompt_version": record.prompt_version,
             "analysis_prompt_snapshot": record.analysis_prompt_used,
@@ -1186,7 +1204,7 @@ async def _continue_prompt_analysis_workflow(
                 if record.generated_final_prompt != generated:
                     record.generated_final_prompt = generated
                     record.edited_final_prompt = None
-                record.prompt_status = "effective" if detailed else "ready"
+                record.prompt_status = "effective" if detailed and not _result_metadata(job).get("requires_manual_review") else "ready"
                 record.error_code = None
                 record.error_message = None
         elif job.status in {JobStatus.FAILED.value, JobStatus.CANCELLED.value}:
@@ -1285,10 +1303,16 @@ async def continue_batch_tryon_workflow(
                 BatchTryOnTemplatePrompt.organization_id == root.organization_id,
                 BatchTryOnTemplatePrompt.workflow_job_id == root.id,
             ).with_for_update())).all())
+            needs_confirmation = False
+            for record in records:
+                if record.prompt_status == "ready" and record.analysis_job_id:
+                    analysis_job = await session.get(Job, record.analysis_job_id)
+                    if analysis_job and _result_metadata(analysis_job).get("requires_manual_review"):
+                        needs_confirmation = True
             if records and all(
                 record.prompt_status in {"ready", "effective"} and effective_prompt_text(record)
                 for record in records
-            ):
+            ) and not needs_confirmation:
                 for record in records:
                     if record.prompt_status == "ready":
                         record.prompt_status = "effective"
@@ -1339,6 +1363,7 @@ async def get_template_prompt(
 async def save_template_prompt(
     session: AsyncSession, *, organization_id: str, user_id: str,
     workflow_job_id: str, template_id: str, edited_final_prompt: str | None,
+    manual_confirmation: bool = False,
 ) -> BatchTryOnTemplatePrompt:
     owned_root = await session.scalar(select(Job.id).where(
         Job.id == workflow_job_id,
@@ -1357,6 +1382,9 @@ async def save_template_prompt(
             "AI 提示词尚未分析完成，暂时不能确认。",
             409,
         )
+    analysis_job = await session.get(Job, record.analysis_job_id) if record.analysis_job_id else None
+    if record.prompt_status == "ready" and analysis_job and _result_metadata(analysis_job).get("requires_manual_review") and not manual_confirmation:
+        raise AppError("batch_tryon.manual_confirmation_required", "该分析包含不确定信息，请核对后明确点击人工确认，不能自动提交生图。", 409)
     edited = str(edited_final_prompt or "").strip()
     if edited:
         edited = validate_generated_final_prompt(edited)
@@ -1415,6 +1443,7 @@ async def reanalyze_template_prompt(
     detailed = root_role == "detailed_prompt_analysis"
     operation_code = "batch_tryon.prompt_analyze_detailed" if detailed else "batch_tryon.prompt_analyze"
     previous_analysis = await session.get(Job, record.analysis_job_id) if record.analysis_job_id else None
+    previous_metadata = _record(previous_analysis.input_json.get("metadata")) if previous_analysis else {}
     previous_references = list(previous_analysis.input_json.get("reference_asset_ids", []) or []) if previous_analysis else []
     reference_asset_ids = previous_references or [record.template_asset_id, record.first_garment_asset_id]
     if record.font_reference_asset_id and record.font_reference_asset_id not in reference_asset_ids:
@@ -1435,13 +1464,14 @@ async def reanalyze_template_prompt(
             client_item_id=f"prompt:{record.client_item_id or record.template_id}:v{next_version}",
             input={
                 "system_prompt": prompt,
-                "user_prompt": "",
+                "user_prompt": str(previous_analysis.input_json.get("user_prompt") or "") if previous_analysis else "",
                 "response_format": "text",
                 "reference_asset_ids": reference_asset_ids,
                 "metadata": {
                     "workflow": WORKFLOW_NAME,
                     "workflow_role": "detailed_prompt_analysis_child" if detailed else "prompt_analysis_child",
                     "workflow_root_job_id": root.id,
+                    "analysis_format": previous_metadata.get("analysis_format", "final_prompt_text"),
                     "template_id": record.template_id,
                     "garment_id": record.garment_id,
                     "client_item_id": record.client_item_id,
@@ -1573,6 +1603,10 @@ async def submit_confirmed_batch_tryon_workflow(
             extra_requirements=str(request.get("extra_requirements") or ""),
             has_font_reference=bool(font_reference_asset_id),
             garment_reference_count=len(reference_metadata["effective_garment_reference_asset_ids"]),
+            structured_analysis=template.get("prompt_strategy") == "luna_structured",
+            direct_output=prompt_record.preset_id == DIRECT_REPLACEMENT_PRESET_ID or (
+                request.get("prompt_mode") == "direct" and prompt_record.preset_id is None
+            ),
         )
         items.append(BatchJobItemRequest(
             client_item_id=str(combination["client_item_id"]),
@@ -1590,6 +1624,8 @@ async def submit_confirmed_batch_tryon_workflow(
                 "workflow_root_job_id": root.id,
                 "generation_mode": str(request.get("generation_mode") or "normal_tryon"),
                 "template_prompt_id": prompt_record.id,
+                "analysis_format": STRUCTURED_FORMAT if template.get("prompt_strategy") == "luna_structured" else "final_prompt_text",
+                "structured_analysis_job_id": prompt_record.analysis_job_id,
                 "prompt_preset_id": prompt_record.preset_id,
                 "prompt_version": prompt_record.prompt_version,
                 "analysis_prompt_snapshot": prompt_record.analysis_prompt_used,
@@ -1758,7 +1794,7 @@ def workflow_response(
         combinations=list(request.get("combinations") or []),
         garment_profile=garment_profile,
         template_profiles=template_profiles,
-        template_prompts=[template_prompt_response(item) for item in (prompt_records or [])],
+        template_prompts=[template_prompt_response(item, next((job for job in template_jobs if job.id == item.analysis_job_id), None)) for item in (prompt_records or [])],
         batch_id=batch.id if batch else state.get("batch_id"),
         error_code=str(state.get("error_code") or root.error_code or "") or None,
         error_message=str(state.get("error_message") or root.error_message or "") or None,

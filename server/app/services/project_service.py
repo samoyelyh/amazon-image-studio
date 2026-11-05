@@ -17,6 +17,7 @@ from app.schemas.content import (
     ProjectVersionResponse,
 )
 from app.services.asset_service import asset_content_url
+from app.services.agent_access_service import agent_project_exists
 
 
 UTC = timezone.utc
@@ -99,8 +100,8 @@ async def get_project(
     project = await session.scalar(statement)
     if project is None or (
         owner_user_id
-        and project.project_type == "batch_tryon"
         and project.created_by != owner_user_id
+        and (project.project_type == "batch_tryon" or await session.scalar(select(agent_project_exists(project.id))))
     ):
         raise AppError("project.not_found", "Project was not found", 404)
     return project
@@ -120,7 +121,7 @@ async def list_projects(
     filters = [Project.organization_id == organization_id, Project.deleted_at.is_(None)]
     if owner_user_id:
         filters.append(or_(
-            Project.project_type != "batch_tryon",
+            (Project.project_type != "batch_tryon") & ~agent_project_exists(Project.id),
             Project.created_by == owner_user_id,
         ))
     if project_type:

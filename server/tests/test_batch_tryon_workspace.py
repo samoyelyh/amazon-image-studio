@@ -1,6 +1,28 @@
 import pytest
 
 from app.models.tasks import JobBatch
+from app.core.errors import AppError
+from app.services.batch_tryon_workspace_service import MAX_WORKSPACE_CONFIG_BYTES, _validate_config
+
+
+def test_workspace_config_accepts_preprocessing_metadata_over_one_megabyte() -> None:
+    config = {"batch": {"preprocessing_metadata": "x" * 1_100_000}}
+    assert _validate_config(config) is config
+
+
+def test_workspace_config_limit_counts_utf8_bytes_and_reports_size() -> None:
+    config = {"batch": {"prompt": "衣" * (MAX_WORKSPACE_CONFIG_BYTES // 3 + 1)}}
+    with pytest.raises(AppError) as caught:
+        _validate_config(config)
+    assert caught.value.code == "batch_tryon.workspace_config_too_large"
+    assert caught.value.details["size_bytes"] > MAX_WORKSPACE_CONFIG_BYTES
+    assert caught.value.details["limit_bytes"] == MAX_WORKSPACE_CONFIG_BYTES
+
+
+def test_workspace_config_rejects_non_json_values() -> None:
+    with pytest.raises(AppError) as caught:
+        _validate_config({"invalid": object()})
+    assert caught.value.code == "batch_tryon.workspace_config_invalid"
 
 
 async def auth_headers(
@@ -52,6 +74,25 @@ async def test_workspace_tabs_are_persistent_and_hide_is_not_delete(identity_tes
     assert updated.status_code == 200, updated.text
     assert updated.json()["name"] == "礼品图-已配置"
     assert updated.json()["status"] == "ready"
+
+    large_config = {"concurrency": 12, "batch": {"preprocessing_metadata": "x" * 1_100_000}}
+    large_saved = await client.patch(
+        f"/api/v1/batch-tryon/workspaces/{workspace['id']}", headers=headers,
+        json={"config": large_config},
+    )
+    assert large_saved.status_code == 200, large_saved.text[:200]
+    assert large_saved.json()["config"] == large_config
+    too_large = await client.patch(
+        f"/api/v1/batch-tryon/workspaces/{workspace['id']}", headers=headers,
+        json={"config": {"batch": {"text": "x" * MAX_WORKSPACE_CONFIG_BYTES}}},
+    )
+    assert too_large.status_code == 422
+    assert too_large.json()["error"]["code"] == "batch_tryon.workspace_config_too_large"
+    # A rejected autosave must not overwrite the last valid draft.
+    still_saved = await client.get(
+        f"/api/v1/batch-tryon/workspaces?project_id={project['id']}", headers=headers,
+    )
+    assert still_saved.json()["items"][0]["config"] == large_config
 
     visible = await client.get(
         f"/api/v1/batch-tryon/workspaces?project_id={project['id']}", headers=headers,

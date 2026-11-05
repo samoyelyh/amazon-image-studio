@@ -5,6 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
+from app.prompts.batch_tryon_structured import STRUCTURED_FORMAT, structured_analysis_prompt
+from app.schemas.batch_tryon_workflow import TemplateType
 from app.db.session import get_db_session
 from app.models.tasks import BatchTryOnPromptPreset
 from app.schemas.batch_tryon_workflow import (
@@ -21,6 +23,15 @@ from app.services.batch_tryon_prompt_template_service import (
 
 
 router = APIRouter(prefix="/batch-tryon/prompt-presets", tags=["batch-tryon-prompt-presets"])
+
+
+@router.get("/structured-default")
+async def structured_default(
+    template_type: TemplateType = "pure_white",
+    principal: Principal = Depends(require_permissions("jobs.read")),
+) -> dict[str, str]:
+    _organization_id(principal)
+    return {"analysis_format": STRUCTURED_FORMAT, "analysis_prompt": structured_analysis_prompt(template_type)}
 
 
 def _organization_id(principal: Principal) -> str:

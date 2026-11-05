@@ -195,6 +195,7 @@ async def validate_operation_binding(
 async def resolve_operation_model_code(
     session: AsyncSession, *, organization_id: str, operation_code: str,
     capability: str, additional_capabilities: set[str] | None = None,
+    preferred_model_code: str | None = None,
 ) -> str:
     """Resolve an enabled, keyed model from the same bindings used at execution time."""
     rows = (await session.execute(
@@ -223,6 +224,8 @@ async def resolve_operation_model_code(
     )).scalars().unique().all()
     required = {capability, *(additional_capabilities or set())}
     for model in rows:
+        if preferred_model_code is not None and model.code != preferred_model_code:
+            continue  # An explicit pin fails closed; never silently use another model.
         capabilities = set((await session.scalars(select(ModelCapability.capability).where(
             ModelCapability.model_id == model.id,
         ))).all())
@@ -232,7 +235,8 @@ async def resolve_operation_model_code(
         "resource_pool.operation_not_bound",
         "当前功能没有绑定具备所需能力且含可用密钥的模型资源池，请联系管理员。",
         422,
-        {"operation_code": operation_code, "capability": capability, "required": sorted(required)},
+        {"operation_code": operation_code, "capability": capability, "required": sorted(required),
+         "preferred_model_code": preferred_model_code},
     )
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from time import perf_counter
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import PurePosixPath
@@ -26,6 +27,12 @@ class OpenAICompatibleProvider(BaseImageProvider):
             return await self._execute_text(
                 base_url=base_url, api_key=api_key, upstream_model=upstream_model,
                 payload=payload, config=config,
+            )
+        if config.get("image_api_mode") == "responses":
+            from app.providers.openai_responses import OpenAIResponsesImageProvider
+            return await OpenAIResponsesImageProvider(self.settings).execute(
+                base_url=base_url, api_key=api_key, upstream_model=upstream_model,
+                capability=capability, payload=payload, config=config,
             )
         supported = {"image_generation", "image_edit", "multi_image_reference", "mask_edit"}
         if capability not in supported:
@@ -138,7 +145,7 @@ class OpenAICompatibleProvider(BaseImageProvider):
                 {"role": "system", "content": str(payload.get("system_prompt") or "")},
                 {"role": "user", "content": user_content},
             ],
-            "stream": False,
+            "stream": payload.get('stream') is True,
         }
         response_format = payload.get("response_format", "json_object")
         if response_format == "json_object":
@@ -147,22 +154,47 @@ class OpenAICompatibleProvider(BaseImageProvider):
             request_body["response_format"] = response_format
         if payload.get("temperature") is not None:
             request_body["temperature"] = payload["temperature"]
+        if payload.get('reasoning_effort') is not None:
+            effort=payload['reasoning_effort']
+            if effort not in {'low','medium','high'}:
+                raise ProviderError('provider.invalid_request','Unsupported text reasoning budget',http_status=422)
+            request_body['reasoning_effort']=effort
+        started=perf_counter()
+        stream_metrics={}
+        body=None
         try:
             async with httpx.AsyncClient(timeout=_provider_timeout(self.settings), follow_redirects=False) as client:
-                response = await client.post(url, headers={"Authorization": f"Bearer {api_key}"}, json=request_body)
+                if request_body['stream']:
+                    async with client.stream('POST',url,headers={'Authorization':f'Bearer {api_key}'},json=request_body) as response:
+                        stream_metrics['headers_seconds']=round(perf_counter()-started,3)
+                        if response.status_code<400 and 'text/event-stream' in response.headers.get('content-type',''):
+                            stream_metrics['response_streamed']=True
+                            body,stream_metrics=await _collect_text_stream(response,started,stream_metrics)
+                        else:
+                            # Some compatible gateways ignore stream and return JSON.
+                            # Do not make a fallback second request.
+                            stream_metrics['response_streamed']=False
+                            await response.aread()
+                else:
+                    response = await client.post(url, headers={"Authorization": f"Bearer {api_key}"}, json=request_body)
         except httpx.TimeoutException as error:
             raise ProviderError("provider.timeout", "Upstream provider timed out", retryable=True) from error
         except httpx.HTTPError as error:
             raise ProviderError("provider.network_error", "Unable to reach upstream provider", retryable=True) from error
+        except ProviderError as error:
+            error.diagnostics={**_text_response_diagnostics(response,perf_counter()-started,request_body['stream']),**stream_metrics}
+            raise
         if response.status_code >= 400:
             retryable = response.status_code in {408, 409, 429} or response.status_code >= 500
-            raise ProviderError(
+            error=ProviderError(
                 "provider.rate_limited" if response.status_code == 429 else "provider.upstream_error",
                 _error_message(response), http_status=response.status_code, retryable=retryable,
                 retry_after_seconds=_retry_after_seconds(response),
             )
+            error.diagnostics=_text_response_diagnostics(response,perf_counter()-started,request_body['stream'])
+            raise error
         try:
-            body = response.json()
+            body = body if body is not None else response.json()
             content = body["choices"][0]["message"]["content"]
             if isinstance(content, list):
                 content = "\n".join(str(item.get("text", "")) for item in content if isinstance(item, dict))
@@ -171,7 +203,18 @@ class OpenAICompatibleProvider(BaseImageProvider):
             raise ProviderError("provider.invalid_response", "Upstream provider returned an invalid text response") from error
         if not text:
             raise ProviderError("provider.empty_result", "Upstream provider returned empty text")
-        return ProviderResult([], response.headers.get("x-request-id"), {"text": text, "created": body.get("created")})
+        usage = body.get("usage")
+        usage = {key: value for key, value in usage.items()
+            if isinstance(value, (int, float)) and not isinstance(value, bool)} if isinstance(usage, dict) else None
+        raw_usage=body.get('usage')
+        details=raw_usage.get('completion_tokens_details') if isinstance(raw_usage,dict) else None
+        if isinstance(details,dict) and isinstance(details.get('reasoning_tokens'),int) and not isinstance(details['reasoning_tokens'],bool):
+            usage={**(usage or {}),'reasoning_tokens':details['reasoning_tokens']}
+        return ProviderResult([], response.headers.get("x-request-id"), {
+            "text": text, "created": body.get("created"), "usage": usage,
+            'finish_reason':body['choices'][0].get('finish_reason'),
+            'transport':{**_text_response_diagnostics(response,perf_counter()-started,request_body['stream']),**stream_metrics},
+        })
 
     async def _download_image(self, url: str, index: int) -> ProviderOutput:
         parsed = urlparse(url)
@@ -195,6 +238,53 @@ class OpenAICompatibleProvider(BaseImageProvider):
 
 class NewAPIProvider(OpenAICompatibleProvider):
     """NewAPI uses the OpenAI Images wire protocol with a configurable base URL."""
+
+
+def _text_response_diagnostics(response,seconds,stream=False):
+    # Explicit allowlist: never retain Authorization, Cookie, raw body or request.
+    return {'http_status':response.status_code,'seconds':round(seconds,3),
+        'server':response.headers.get('server','')[:80],
+        'content_type':response.headers.get('content-type','')[:100],
+        'edge_request_id':response.headers.get('cf-ray','')[:100],
+        'upstream_request_id':response.headers.get('x-request-id','')[:100],
+        'stream':stream,'response_streamed':False}
+
+
+async def _collect_text_stream(response,started,metrics):
+    """Collect one chat completion, never retry a truncated/unknown stream."""
+    import json
+    pieces=[];characters=0;usage=None;created=None;finish=None;done=False;events=0
+    async for line in response.aiter_lines():
+        if line and 'first_event_seconds' not in metrics:
+            metrics['first_event_seconds']=round(perf_counter()-started,3)
+        if not line.startswith('data:'):continue
+        raw=line[5:].strip()
+        if not raw:continue
+        if raw=='[DONE]':done=True;break
+        try:item=json.loads(raw)
+        except ValueError:
+            raise ProviderError('provider.network_error','Upstream text stream was incomplete or malformed; outcome unknown',retryable=True) from None
+        if not isinstance(item,dict) or item.get('error'):
+            raise ProviderError('provider.network_error','Upstream text stream failed; outcome unknown',retryable=True)
+        events+=1
+        if item.get('usage') is not None:usage=item['usage']
+        if item.get('created') is not None:created=item['created']
+        for choice in item.get('choices') or []:
+            if choice.get('index',0)!=0:continue
+            if choice.get('finish_reason') is not None:finish=choice['finish_reason']
+            content=(choice.get('delta') or {}).get('content')
+            if isinstance(content,list):content=''.join(str(p.get('text','')) for p in content if isinstance(p,dict))
+            if not isinstance(content,str) or not content:continue
+            if 'first_text_seconds' not in metrics:metrics['first_text_seconds']=round(perf_counter()-started,3)
+            characters+=len(content)
+            if characters>100000:
+                raise ProviderError('provider.network_error','Upstream text stream exceeded planning boundary; outcome unknown',retryable=True)
+            pieces.append(content)
+    if not done and finish is None:
+        raise ProviderError('provider.network_error','Upstream text stream ended before completion; outcome unknown',retryable=True)
+    metrics['events']=events
+    return {'choices':[{'message':{'content':''.join(pieces)},'finish_reason':finish}],
+        'usage':usage,'created':created},metrics
 
 
 class CustomImageProvider(OpenAICompatibleProvider):

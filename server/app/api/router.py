@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from app.api.agent_control import router as agent_control_router
 
 from app.api.health import router as health_router
 from app.api.audit import router as audit_router
@@ -33,6 +34,9 @@ from app.api.material_extract import router as material_extract_router
 from app.api.batch_tryon_workflow import router as batch_tryon_workflow_router
 from app.api.batch_tryon_workspace import router as batch_tryon_workspace_router
 from app.api.batch_tryon_prompts import router as batch_tryon_prompts_router
+from app.api.batch_tryon_exports import router as batch_tryon_exports_router
+from app.api.batch_tryon_queue import router as batch_tryon_queue_router
+from app.api.batch_tryon_retention import router as batch_tryon_retention_router
 from app.api.print_design import router as print_design_router
 from app.api.attachment_planning import router as attachment_planning_router
 from app.api.hermes_agent import router as hermes_agent_router
@@ -71,9 +75,13 @@ api_router.include_router(material_extract_router)
 api_router.include_router(batch_tryon_workflow_router)
 api_router.include_router(batch_tryon_workspace_router)
 api_router.include_router(batch_tryon_prompts_router)
+api_router.include_router(batch_tryon_exports_router)
+api_router.include_router(batch_tryon_queue_router)
+api_router.include_router(batch_tryon_retention_router)
 api_router.include_router(print_design_router)
 api_router.include_router(attachment_planning_router)
 api_router.include_router(hermes_agent_router)
+api_router.include_router(agent_control_router)
 api_router.include_router(attachment_reference_library_router)
 api_router.include_router(attachment_reference_library_admin_router)
 api_router.include_router(attachment_materials_router)

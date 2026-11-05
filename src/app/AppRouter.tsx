@@ -25,6 +25,8 @@ import PrintDesignPage from '../pages/PrintDesignPage'
 import AttachmentImageWorkbenchPage from '../pages/AttachmentImageWorkbenchPage'
 import AttachmentMaterialLibraryPage from '../pages/AttachmentMaterialLibraryPage'
 import { useAuth } from './AuthContext'
+import AgentControlWorkspace from '../components/agent-control/AgentControlWorkspace'
+import { AIToolsPage, CreativeSkillsPage, DesignBriefPage, InspirationPage } from '../pages/CreativeDiscoveryPages'
 
 function ProtectedRoutes() {
   const auth = useAuth()
@@ -53,6 +55,11 @@ function AppRoutes() {
         <Route element={<AppShell />}>
           <Route index element={<Navigate to={appRoutes.attachmentImages} replace />} />
           <Route path={appRoutes.dashboard} element={<DashboardPage />} />
+          <Route path={appRoutes.skills} element={<CreativeSkillsPage />} />
+          <Route path={appRoutes.tools} element={<AIToolsPage />} />
+          <Route path={appRoutes.inspiration} element={<InspirationPage />} />
+          <Route path={appRoutes.designBrief} element={<DesignBriefPage />} />
+          <Route path={appRoutes.agentControl} element={<AgentControlWorkspace />} />
           <Route path={appRoutes.listing} element={<Navigate to={appRoutes.attachmentImages} replace />} />
           <Route path={appRoutes.attachmentImages} element={<AttachmentImageWorkbenchPage />} />
           <Route path={appRoutes.attachmentImageWorkbench} element={<AttachmentImageWorkbenchPage />} />

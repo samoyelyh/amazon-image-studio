@@ -12,6 +12,8 @@ interface Props {
   combinationMode?: 'cartesian' | 'one_to_one'
   promptPresets: BatchTryOnPromptPreset[]
   promptPresetIds: Record<string, string | undefined>
+  promptValues?: Record<string, string>
+  onPromptChange?: (templateId: string, value: string) => void
   generateAllCount?: number
   generateAllDisabledReason?: string
   referenceWarnings?: Record<string, string | undefined>
@@ -31,7 +33,7 @@ interface Props {
 }
 
 export default function BatchTryOnTemplateManager({
-  templates, maxItems, disabled, promptPresets, promptPresetIds, generateAllCount = 0, generateAllDisabledReason,
+  templates, maxItems, disabled, promptPresets, promptPresetIds, promptValues = {}, onPromptChange, generateAllCount = 0, generateAllDisabledReason,
   referenceWarnings = {},
   onUpload, onRemove, onPromptPresetChange, onGenerateAllValidations, onSetDefault,
   onToggle, onToggleAll, onView, detailMode, combinationMode = 'cartesian', onDetailChange, onGarmentViewChange,
@@ -106,7 +108,7 @@ export default function BatchTryOnTemplateManager({
               <div className="mt-2 truncate text-xs font-semibold text-gray-800 dark:text-gray-100" title={template.displayName}>{template.displayName}</div>
               <div className="mt-1 truncate text-[11px] text-gray-400" title={template.fileName}>{template.fileName}</div>
               <label className="mt-2 block">
-                <span className="mb-1 block text-[11px] font-medium text-gray-500">提示词预设</span>
+                <span className="mb-1 block text-[11px] font-medium text-gray-500">提示词预设（可选）</span>
                 <select
                   value={promptPresetIds[template.id] || ''}
                   disabled={disabled || template.validationStatus === 'generating'}
@@ -115,7 +117,7 @@ export default function BatchTryOnTemplateManager({
                   aria-label={`${template.displayName} 提示词预设`}
                   title={template.validationStatus === 'generating' ? '当前样图已使用提交时的提示词快照；其他模板仍可继续配置。' : '选择该模板生成样图和正式批量时使用的提示词预设'}
                 >
-                  <option value="" disabled>请选择提示词预设</option>
+                  <option value="">不使用预设 · 自定义提示词</option>
                   {Object.entries(TEMPLATE_TYPE_LABELS).map(([templateType, label]) => {
                     const options = promptPresets.filter((preset) => preset.enabled && preset.template_type === templateType)
                     return options.length ? <optgroup key={templateType} label={label}>
@@ -125,15 +127,18 @@ export default function BatchTryOnTemplateManager({
                     </optgroup> : null
                   })}
                 </select>
+                {!promptPresetIds[template.id] && <textarea aria-label={`${template.displayName} 自定义提示词`} value={promptValues[template.id] || ''} disabled={disabled || template.validationStatus === 'generating'} onChange={(event) => onPromptChange?.(template.id, event.target.value)} maxLength={30000} rows={4} className="mt-2 w-full resize-y rounded-lg border border-gray-200 bg-white p-2 text-xs leading-5 dark:border-white/10 dark:bg-gray-950" placeholder="直接填写当前模板的换衣要求，无需选择预设。" />}
                 {template.validationStatus === 'generating' && <span className="mt-1 block text-[10px] text-blue-600 dark:text-blue-300">当前样图使用已提交快照</span>}
               </label>
               <label className="mt-2 block">
                 <span className="mb-1 block text-[11px] font-medium text-gray-500">生成模型选择</span>
                 <select value={template.promptStrategy || 'luna_per_image'} disabled={disabled} onChange={(event) => onPromptStrategyChange?.(template.id, event.target.value as NonNullable<BatchTryOnTemplate['promptStrategy']>)} className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs font-semibold dark:border-white/[0.1] dark:bg-gray-950">
                   <option value="luna_per_image">Luna 精细逐图 · 默认</option>
+                  <option value="luna_structured">Luna 结构化逐图 · V1.1</option>
                   <option value="ai_optimize">AI 分析优化</option>
-                  <option value="preset">直接使用预设 · 最快</option>
+                  <option value="preset">直接使用当前提示词 · 不经Luna</option>
                 </select>
+                {template.promptStrategy === 'luna_structured' && <span className="mt-1 block text-[10px] leading-4 text-blue-600">场景类型沿用所选预设，分析使用独立V1.1中文协议；可在提示词与高级调整中查看、修改，不覆盖系统预设。</span>}
               </label>
               <select value={template.garmentView || 'auto'} disabled={disabled} onChange={(event) => onGarmentViewChange?.(template.id, event.target.value as NonNullable<BatchTryOnTemplate['garmentView']>)} className="mt-2 h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/[0.1] dark:bg-gray-950" aria-label={`${template.displayName} 服装参考视图`}>
                 <option value="auto">参考视图：自动（原图）</option><option value="front">正面参考</option><option value="back">背面参考</option><option value="front_back">正面 + 背面</option><option value="detail">细节参考</option>

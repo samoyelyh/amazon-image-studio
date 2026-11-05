@@ -70,6 +70,9 @@ class BatchTryOnReviewDetailResponse(BaseModel):
     template_prompt_id: str | None = None
     prompt_version: int | None = None
     effective_prompt_snapshot: str | None = None
+    prompt_execution_mode: str = "standard"
+    latest_analysis_job_id: str | None = None
+    structured_analysis: dict[str, object] | None = None
     garment_asset: ReviewAssetResponse
     model_asset: ReviewAssetResponse
     image_c_asset: ReviewAssetResponse | None = None
@@ -138,6 +141,7 @@ class BatchTryOnSelectVersionRequest(BaseModel):
 class BatchTryOnDetailedReviewAnalysisRequest(BaseModel):
     source_version_id: str = Field(min_length=1, max_length=36)
     focus_notes: str | None = Field(default=None, max_length=3000)
+    analysis_format: Literal["final_prompt_text", "garment_analysis_v1_1"] = "final_prompt_text"
     template_type: ReviewTemplateType | None = None
     prompt_preset_id: str | None = Field(default=None, max_length=36)
     template_prompt_override: str | None = Field(default=None, min_length=20, max_length=30000)
@@ -164,6 +168,7 @@ class BatchTryOnBatchDetailedAnalysisItem(BaseModel):
 class BatchTryOnBatchDetailedAnalysisRequest(BaseModel):
     items: list[BatchTryOnBatchDetailedAnalysisItem] = Field(min_length=1, max_length=200)
     focus_notes: str | None = Field(default=None, max_length=3000)
+    analysis_format: Literal["final_prompt_text", "garment_analysis_v1_1"] = "final_prompt_text"
     template_type: ReviewTemplateType | None = None
     prompt_preset_id: str | None = Field(default=None, max_length=36)
     template_prompt_override: str | None = Field(default=None, min_length=20, max_length=30000)
@@ -238,6 +243,7 @@ class BatchTryOnBatchRegenerateRequest(BaseModel):
 class BatchTryOnTemplateExportRequest(BaseModel):
     item_ids: list[str] = Field(min_length=1, max_length=500)
     scope: Literal["approved", "all_succeeded"] = "approved"
+    allow_partial: bool = False
 
     @model_validator(mode="after")
     def validate_items(self) -> "BatchTryOnTemplateExportRequest":

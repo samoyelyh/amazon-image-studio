@@ -22,6 +22,42 @@ from app.workers.runtime import run_worker_coroutine
 logger = logging.getLogger(__name__)
 
 
+@celery_app.task(name="system.batch_queue_retention", ignore_result=False)
+def batch_queue_retention(organization_id=None, expected_revision=None, preview_token=None):
+    return run_worker_coroutine(lambda: _batch_queue_retention(organization_id, expected_revision, preview_token))
+
+
+async def _batch_queue_retention(organization_id=None, expected_revision=None, preview_token=None):
+    from app.models.batch_tryon_queue_policy import BatchTryOnQueuePolicy
+    from app.services.batch_tryon_retention_service import execute_retention, retry_pending_storage
+    from app.services.storage_service import get_storage_service
+    session_factory = async_sessionmaker(get_engine(), expire_on_commit=False, class_=AsyncSession)
+    done, errors = 0, 0
+    async with session_factory() as session:
+        org_ids = [organization_id] if organization_id else list((await session.scalars(select(BatchTryOnQueuePolicy.organization_id))).all())
+        for org_id in org_ids:
+            try:
+                policy = await session.get(BatchTryOnQueuePolicy, org_id)
+                if policy is None:
+                    continue
+                if policy.enabled:
+                    await execute_retention(session, get_storage_service(), org_id,
+                        expected_revision=expected_revision, preview_token=preview_token)
+                    done += 1
+                elif policy.pending_storage_keys:
+                    await retry_pending_storage(session, policy, get_storage_service())
+            except Exception as error:
+                await session.rollback()
+                logger.warning("queue_retention_failed org_id=%s error_type=%s", org_id, type(error).__name__)
+                policy = await session.get(BatchTryOnQueuePolicy, org_id)
+                if policy:
+                    policy.last_run_at = datetime.now(timezone.utc)
+                    policy.last_run_summary = {"errors": 1}
+                    await session.commit()
+                errors += 1
+    return {"organizations": done, "errors": errors}
+
+
 @celery_app.task(name="system.heartbeat", ignore_result=False)
 def heartbeat() -> dict[str, str]:
     return run_worker_coroutine(_heartbeat)

@@ -162,6 +162,8 @@ def build_template_prompt_composed_prompt(
     has_font_reference: bool = False,
     garment_reference_count: int = 1,
     technical_delivery_contract: str = "",
+    structured_analysis: bool = False,
+    direct_output: bool = False,
 ) -> BatchTryOnPromptBundle:
     """Compose one image job prompt from a confirmed reusable template prompt.
 
@@ -169,6 +171,17 @@ def build_template_prompt_composed_prompt(
     it cannot leak into an image-generation request.  Each template type owns a
     distinct composer branch; unsupported future types fail closed.
     """
+    if structured_analysis or direct_output:
+        # This is already the complete per-garment Chinese command. Never wrap
+        # it in the legacy reusable-first-garment/person template instructions.
+        business = str(reusable_final_prompt or "").strip()
+        if not business:
+            raise ValueError("structured final prompt is empty")
+        if direct_output and garment_reference_count > 1:
+            back_index = 4 if has_font_reference else 3
+            business += f"\n\n参考图顺序说明：图B为当前服装正面参考，第{back_index}张图为当前服装背面参考；分别用于对应可见面，不得交换或混用。"
+        technical = technical_delivery_contract.strip()
+        return BatchTryOnPromptBundle(business, technical, f"{business}\n\n{technical}" if technical else business)
     composer = TEMPLATE_TYPE_COMPOSERS.get(template_type)
     if composer is None:
         raise ValueError(f"unsupported batch try-on template type: {template_type}")

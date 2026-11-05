@@ -1,0 +1,69 @@
+/* Shared light creative UI. Legacy workspaces migrate to these tokens incrementally. */
+:root {
+  color-scheme: light;
+  --background: 60 11% 97%;
+  --foreground: 60 3% 16%;
+  --muted: 60 9% 94%;
+  --muted-foreground: 60 4% 37%;
+  --border: 60 8% 84%;
+  --input: 60 8% 84%;
+  --sidebar: 60 9% 94%;
+  --sidebar-foreground: 60 3% 16%;
+  --studio-canvas: #f7f7f5;
+  --studio-surface: #ffffff;
+  --studio-raised: #f0f0ed;
+  --studio-ink: #292927;
+  --studio-muted: #62625b;
+  --studio-border: #d9d9d2;
+  --studio-accent: #292927;
+  --studio-accent-hover: #42423d;
+  --studio-on-accent: #ffffff;
+  --studio-danger: #b42318;
+  --studio-danger-bg: #fff1f0;
+  --studio-success: #166534;
+  --studio-success-bg: #ecfdf3;
+  --studio-warning: #854d0e;
+  --studio-warning-bg: #fff7df;
+  --studio-radius: 16px;
+  --studio-control-radius: 10px;
+  --studio-shadow: 0 6px 24px rgb(25 25 20 / 5%);
+}
+.lovart-shell {
+  color-scheme: light;
+  --lovart-surface: var(--studio-surface);
+  --lovart-surface-raised: var(--studio-raised);
+  --lovart-border: var(--studio-border);
+}
+.studio-page { min-width: 0; color: var(--studio-ink); padding-block: 24px 40px; }
+.studio-card { min-width: 0; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface); box-shadow: var(--studio-shadow); }
+.studio-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 8px 16px; border: 1px solid var(--studio-border); border-radius: var(--studio-control-radius); background: var(--studio-surface); color: var(--studio-ink); font-size: 14px; font-weight: 500; transition: background .15s, border-color .15s; }
+.studio-button:hover:not(:disabled) { background: var(--studio-raised); border-color: var(--studio-muted); }
+.studio-button[data-variant="primary"] { background: var(--studio-accent); border-color: var(--studio-accent); color: var(--studio-on-accent); }
+.studio-button[data-variant="primary"]:hover:not(:disabled) { background: var(--studio-accent-hover); border-color: var(--studio-accent-hover); color: var(--studio-on-accent); }
+.studio-button[data-variant="danger"] { background: var(--studio-danger-bg); border-color: var(--studio-danger); color: var(--studio-danger); }
+.studio-button:disabled { cursor: not-allowed; background: var(--studio-raised); border-color: var(--studio-border); color: var(--studio-muted); }
+.studio-button:focus-visible,.studio-input:focus-visible,.studio-filter:focus-visible,.studio-tools>summary:focus-visible { outline: 2px solid var(--studio-accent); outline-offset: 3px; }
+.studio-input { width: 100%; min-width: 0; min-height: 42px; padding: 10px 12px; border: 1px solid var(--studio-border); border-radius: var(--studio-control-radius); background: var(--studio-surface); color: var(--studio-ink); font-size: 14px; }
+.studio-input::placeholder { color: var(--studio-muted); }
+.studio-filter { border: 1px solid transparent; border-radius: 999px; padding: 8px 14px; font-size: 13px; color: var(--studio-muted); }
+.studio-filter[aria-pressed="true"],.studio-filter[aria-selected="true"] { background: var(--studio-accent); color: var(--studio-on-accent); }
+.studio-empty { border: 1px dashed var(--studio-border); border-radius: var(--studio-radius); padding: 48px 20px; color: var(--studio-muted); text-align: center; font-size: 14px; }
+.studio-dialog-overlay { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px; background: rgb(20 20 17 / 60%); }
+.studio-dialog { width: 100%; max-width: 1100px; max-height: 92dvh; overflow: auto; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface); color: var(--studio-ink); box-shadow: var(--studio-shadow); }
+.studio-tools { min-width: 0; align-self: start; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface); }
+.studio-tools>summary { cursor: pointer; padding: 14px 16px; font-size: 14px; font-weight: 600; }
+.studio-tools-content { min-width: 0; padding: 0 16px 16px; }
+.studio-tools-content>*+* { margin-top: 16px; }
+.studio-workbench-grid { display: grid; gap: 16px; min-width: 0; grid-template-columns: minmax(0,1fr); }
+.studio-workbench-grid>* { min-width: 0; }
+.studio-canvas { min-width: 0; order: -1; }
+@media(min-width:1280px) {
+  .studio-workbench-grid { grid-template-columns: 280px minmax(0,1fr) 300px; }
+  .studio-canvas { order: 0; }
+}
+@media(max-width:639px) {
+  .studio-dialog-overlay { padding: 8px; }
+  .studio-dialog { max-height: 96dvh; }
+  .studio-button { min-height: 44px; }
+}
+@media(prefers-reduced-motion:reduce) { .studio-button { transition: none; } }

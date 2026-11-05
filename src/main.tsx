@@ -4,9 +4,11 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import 'streamdown/styles.css'
 import './index.css'
+import './styles/design-system.css'
 import { installMobileViewportGuards } from './lib/viewport'
 
 installMobileViewportGuards()
+document.documentElement.classList.remove('dark')
 
 if ('serviceWorker' in navigator) {
   if (import.meta.env.PROD) {

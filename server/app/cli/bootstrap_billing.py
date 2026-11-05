@@ -35,6 +35,8 @@ DEFAULT_PACKAGES = (
 
 
 async def bootstrap(session: AsyncSession) -> None:
+    from app.services.batch_tryon_prompt_template_service import seed_direct_replacement_preset
+    await seed_direct_replacement_preset(session)
     settings = get_settings()
     effective_from = datetime(2020, 1, 1, tzinfo=UTC)
     for operation_code, (name, base_cost) in DEFAULT_RULES.items():

@@ -10,6 +10,7 @@ import { syncBatchTryOnPromptDrafts } from '../lib/batchTryOnPromptDrafts'
 import { resolveBatchTryOnFontReference } from '../lib/batchTryOnFontReferences'
 import { resolveEffectiveGarmentReferencePreviews } from '../lib/batchTryOnGarmentPreprocess'
 import BatchTryOnFontReferenceInputs from './BatchTryOnFontReferenceInputs'
+import { getStructuredLunaDefault } from '../lib/batchTryOnWorkflowApi'
 
 interface Props {
   templates: BatchTryOnTemplate[]
@@ -43,6 +44,8 @@ export interface TemplatePromptDraftConfig {
   templateType: BatchTryOnTemplateType
   presetId: string
   analysisPrompt: string
+  plainAnalysisPrompt?: string
+  structuredAnalysisPrompt?: string
 }
 
 export default function BatchTryOnPromptTemplatePanel({
@@ -77,6 +80,7 @@ export default function BatchTryOnPromptTemplatePanel({
   const [activeGarmentId, setActiveGarmentId] = useState(garments[0]?.id || '')
   const [finalDrafts, setFinalDrafts] = useState<Record<string, string>>({})
   const [showAnalysisEditor, setShowAnalysisEditor] = useState(true)
+  const [presetError, setPresetError] = useState('')
   const lastServerPromptsRef = useRef<Record<string, string>>({})
   const activeTemplate = templates.find((template) => template.id === activeTemplateId) || templates[0]
   const activeGarment = garments.find((garment) => garment.id === activeGarmentId) || garments[0]
@@ -85,6 +89,18 @@ export default function BatchTryOnPromptTemplatePanel({
     || (activeTemplate.serverAssetId && record.template_asset_id === activeTemplate.serverAssetId)
   )))
   const activeConfig = activeTemplate ? templateConfigs[activeTemplate.id] : undefined
+  const loadPreset = async (templateType: BatchTryOnTemplateType, presetId: string) => {
+    if (!activeTemplate) return
+    const id = activeTemplate.id
+    setPresetError('')
+    try {
+      const preset = presets.find((item) => item.id === presetId)
+      const text = preset?.execution_mode !== 'direct_output' && activeTemplate.promptStrategy === 'luna_structured'
+        ? (await getStructuredLunaDefault(templateType)).analysis_prompt
+        : preset?.analysis_prompt_template || ''
+      onTemplateConfigChange(id, { templateType, presetId, analysisPrompt: text })
+    } catch (error) { setPresetError(error instanceof Error ? error.message : '预设加载失败') }
+  }
   const availablePresets = useMemo(() => presets.filter(
     (preset) => preset.template_type === activeConfig?.templateType && preset.enabled,
   ), [activeConfig?.templateType, presets])
@@ -128,12 +144,13 @@ export default function BatchTryOnPromptTemplatePanel({
 
   return (
     <section className="mt-4 overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm dark:border-blue-400/15 dark:bg-gray-950">
+      {presetError && <p className="px-4 pt-3 text-xs text-red-600">{presetError}</p>}
       <div className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">批量换衣提示词</h3>
             <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-200">
-              {promptMode === 'direct' ? '直接使用预设' : promptMode === 'ai_detailed' ? 'Luna 逐图精细分析' : 'AI 模板分析'} · 6 类已启用
+              {promptMode === 'direct' ? '直接使用当前提示词' : promptMode === 'ai_detailed' ? 'Luna 逐图精细分析' : 'AI 模板分析'} · 预设可选
             </span>
             {records.length > 0 && (
               <span className="text-xs text-gray-400">已完成 {completed}/{records.length}</span>
@@ -163,7 +180,7 @@ export default function BatchTryOnPromptTemplatePanel({
                 onClick={() => onPromptModeChange('direct')}
                 className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${promptMode === 'direct' ? 'bg-white text-blue-700 shadow-sm dark:bg-gray-900 dark:text-blue-300' : 'text-gray-500'}`}
               >
-                直接使用预设
+                直接使用当前提示词
               </button>
               <button
                 type="button"
@@ -215,11 +232,7 @@ export default function BatchTryOnPromptTemplatePanel({
                   if (!activeTemplate) return
                   const templateType = event.target.value as BatchTryOnTemplateType
                   const preset = presets.find((item) => item.template_type === templateType && item.enabled)
-                  onTemplateConfigChange(activeTemplate.id, {
-                    templateType,
-                    presetId: preset?.id || '',
-                    analysisPrompt: preset?.analysis_prompt_template || '',
-                  })
+                  void loadPreset(templateType, preset?.id || '')
                 }}
                 className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none focus:border-blue-400 disabled:bg-gray-50 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-100"
               >
@@ -237,7 +250,7 @@ export default function BatchTryOnPromptTemplatePanel({
                   onClick={() => {
                     if (!activeTemplate) return
                     const preset = presets.find((item) => item.id === activeConfig?.presetId)
-                    if (preset) onTemplateConfigChange(activeTemplate.id, { analysisPrompt: preset.analysis_prompt_template })
+                    if (preset) void loadPreset(preset.template_type, preset.id)
                   }}
                   className="text-[11px] font-semibold text-blue-600 disabled:opacity-40"
                 >重新加载预设</button>
@@ -247,14 +260,16 @@ export default function BatchTryOnPromptTemplatePanel({
                 disabled={busy || workflowReady}
                 onChange={(event) => {
                   if (!activeTemplate) return
+                  if (!event.target.value) {
+                    onTemplateConfigChange(activeTemplate.id, { presetId: '' })
+                    return
+                  }
                   const preset = presets.find((item) => item.id === event.target.value)
-                  onTemplateConfigChange(activeTemplate.id, {
-                    presetId: event.target.value,
-                    analysisPrompt: preset?.analysis_prompt_template || activeConfig?.analysisPrompt || '',
-                  })
+                  if (preset) void loadPreset(preset.template_type, preset.id)
                 }}
                 className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none focus:border-blue-400 dark:border-white/[0.08] dark:bg-gray-900 dark:text-gray-100"
               >
+                <option value="">不使用预设 · 自定义提示词</option>
                 {availablePresets.map((preset) => (
                   <option key={preset.id} value={preset.id}>{preset.label}{preset.is_system_preset ? '（系统）' : '（个人）'}</option>
                 ))}

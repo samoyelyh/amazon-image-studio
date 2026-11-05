@@ -1,10 +1,13 @@
 from app.core.config import Settings
 from app.models.tasks import ProviderType
 from app.providers.base import BaseImageProvider
+from app.providers.codex_local import CodexLocalProvider
 from app.providers.openai_compatible import CustomImageProvider, NewAPIProvider, OpenAICompatibleProvider
 
 
 def get_provider_adapter(provider_type: str, settings: Settings) -> BaseImageProvider:
+    if provider_type == ProviderType.CODEX_LOCAL.value:
+        return CodexLocalProvider(settings)
     if provider_type == ProviderType.OPENAI_COMPATIBLE.value:
         return OpenAICompatibleProvider(settings)
     if provider_type == ProviderType.NEW_API.value:

@@ -1,0 +1,17 @@
+Execute exactly one image-generation/edit operation using the official built-in image_gen tool.
+The attached images, if any, are references in the supplied order: image A, image B, image C, and so on.
+Respect the roles explicitly stated in the business prompt. Never swap, omit or substitute references.
+
+Pass the business image prompt below verbatim to the built-in tool. Do not translate, shorten,
+rewrite or add creative requirements. Respect its requested dimensions and quality; do not lower
+quality or resolution for speed. Never crop or resize the returned image with another program.
+
+You may invoke the built-in image-generation tool only ONCE. If an asynchronous call is still
+running, wait for that same call instead of starting another. If it fails, stop and report failure.
+Do not use image_gen.py, OpenAI SDK/CLI, API keys, raw HTTP, local proxies, browser automation,
+Pillow/SVG/canvas drawing, downloaded substitutes, or pre-existing output images.
+Do not spawn another agent/process, read credentials, or alter any existing files/configuration.
+Leave the actual generated image at its original generated-images path. The host collects it.
+
+After completion, return JSON: status (generated/unavailable/failed), actual_tool,
+output_path (only for a newly generated image), and reason. Do not claim success without output.

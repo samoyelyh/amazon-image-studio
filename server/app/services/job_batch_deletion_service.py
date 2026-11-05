@@ -104,7 +104,12 @@ async def _asset_has_remaining_reference(
             found = await session.scalar(select(column).select_from(table).where(condition).limit(1))
             if found is not None:
                 return True
-    return False
+    # Task references are JSON, not foreign keys. A result reused as another
+    # job's input/mask must survive cleanup of its original batch too.
+    return await session.scalar(select(Job.id).where(or_(
+        Job.input_json["reference_asset_ids"].contains(asset_id),
+        Job.input_json["mask_asset_id"].as_string() == asset_id,
+    )).limit(1)) is not None
 
 
 def _clean_parent_workspace_config(

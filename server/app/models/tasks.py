@@ -13,6 +13,7 @@ class ProviderType(str, Enum):
     OPENAI_COMPATIBLE = "openai_compatible"
     NEW_API = "new_api"
     CUSTOM = "custom"
+    CODEX_LOCAL = "codex_local"
 
 
 class ApiKeyStatus(str, Enum):

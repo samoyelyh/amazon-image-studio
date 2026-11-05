@@ -30,8 +30,8 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="space-y-5"><section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-white/[0.08] dark:bg-gray-900">
+    <div className="studio-page grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-5"><section className="studio-card p-6">
         <h1 className="text-xl font-bold text-gray-950 dark:text-white">个人中心</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">账号身份由服务端统一管理。</p>
         <form onSubmit={save} className="mt-6 max-w-lg space-y-4">

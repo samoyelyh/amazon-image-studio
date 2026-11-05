@@ -9,6 +9,8 @@ from app.models.identity import (
     RolePermission,
     User,
 )
+from app.models.batch_tryon_queue_policy import BatchTryOnQueuePolicy
+from app.models.agent_control import AgentRun, AgentEvent, AgentJobLink
 from app.models.content import Asset, GeneratedOutput, ListingOutputTransfer, Project, ProjectAsset, ProjectVersion
 from app.models.quota import QuotaAccount, QuotaPackage, QuotaReservation, QuotaRule, QuotaTransaction
 from app.models.listing_workflow import (
@@ -105,4 +107,5 @@ __all__ = [
     "AIModelPreset", "AIModelIdentityVersion", "AIModelPresetReference",
     "AttachmentPlanModelSelection",
     "HermesConversation", "HermesMessage", "HermesProposal", "HermesToolAudit",
+    "AgentRun", "AgentEvent", "AgentJobLink",
 ]

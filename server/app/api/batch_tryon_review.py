@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
+from starlette.background import BackgroundTask
 
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError
@@ -169,6 +170,9 @@ def template_archive_response(
     template_id: str,
     scope: str,
 ) -> StreamingResponse:
+    archive.seek(0, 2)
+    content_length = archive.tell()
+    archive.seek(0)
     def stream_archive():
         try:
             while chunk := archive.read(1024 * 1024):
@@ -178,10 +182,12 @@ def template_archive_response(
 
     return StreamingResponse(
         stream_archive(),
+        background=BackgroundTask(archive.close),
         media_type="application/zip",
         headers={
             "Content-Disposition": content_disposition_header(filename),
             "Cache-Control": "private, no-store",
+            "Content-Length": str(content_length),
             "X-Batch-Try-On-Exported": str(success_count),
             "X-Batch-Try-On-Skipped": str(skipped_count),
             "X-Batch-Try-On-Template": template_id,
@@ -277,7 +283,9 @@ async def batch_regenerate_review_items(
 async def download_batch_try_on_template_results(
     batch_id: str,
     template_id: str,
+    request: Request,
     scope: Literal["approved", "all_succeeded"] = Query(default="approved"),
+    allow_partial: bool = False,
     session: AsyncSession = Depends(get_db_session),
     storage: StorageService = Depends(get_storage_service),
     principal: Principal = Depends(
@@ -296,6 +304,7 @@ async def download_batch_try_on_template_results(
             batch=batch,
             template_id=template_id,
             scope=scope,
+            allow_partial=allow_partial, request_id=getattr(request.state, "request_id", None),
         )
     )
     await session.commit()
@@ -314,6 +323,7 @@ async def download_batch_try_on_template_results(
 async def download_selected_batch_try_on_template_results(
     template_id: str,
     payload: BatchTryOnTemplateExportRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
     storage: StorageService = Depends(get_storage_service),
     principal: Principal = Depends(
@@ -329,6 +339,7 @@ async def download_selected_batch_try_on_template_results(
             template_id=template_id,
             item_ids=payload.item_ids,
             scope=payload.scope,
+            allow_partial=payload.allow_partial, request_id=getattr(request.state, "request_id", None),
         )
     )
     await session.commit()
@@ -459,6 +470,11 @@ async def region_replace_review_item(
 ) -> BatchTryOnRegionReplaceResponse:
     org_id = organization_id(principal)
     await _require_owned_review_item(session, principal, item_id)
+    from app.services.batch_tryon_access_service import require_batch_asset_access
+    await require_batch_asset_access(session, organization_id=org_id, user_id=principal.user.id, asset_ids=[value for value in [
+        payload.target_mask_asset_id, payload.image_c_asset_id,
+        payload.source_reference_mask_asset_id, payload.reference_patch_asset_id,
+    ] if value])
     item, version, job, created = await submit_region_replace(
         session,
         settings,

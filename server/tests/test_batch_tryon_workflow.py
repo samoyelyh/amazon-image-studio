@@ -27,12 +27,194 @@ from app.services.batch_tryon_analysis_service import (
     validate_garment_profile,
 )
 from app.services.resource_pool_service import create_api_key
+from app.providers.base import ProviderResult
+from app.services.batch_tryon_structured_service import normalize_structured_result
+from tests.test_batch_tryon_structured import document as structured_document
+from app.prompts.batch_tryon_direct import DIRECT_REPLACEMENT_PRESET_ID, DIRECT_REPLACEMENT_PROMPT
+from app.services.batch_tryon_prompt_template_service import seed_direct_replacement_preset
 
 
 PNG = bytes.fromhex(
     "89504e470d0a1a0a0000000d4948445200000001000000010804000000b51c0c02"
     "0000000b4944415478da6364f80f00010501012718e3660000000049454e44ae426082"
 )
+
+
+@pytest.mark.parametrize("submission_kind", ["production", "validation"])
+async def test_structured_luna_streams_independently_and_manual_confirmation_resumes(identity_test_context, monkeypatch, submission_kind):
+    client = identity_test_context["client"]
+    monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
+    await seed_workflow_resources(identity_test_context)
+    headers = await auth_headers(client)
+    project = (await client.post("/api/v1/projects", headers=headers, json={"project_type": "batch_tryon", "name": "结构化验收", "draft": {}})).json()
+    template = await upload(client, headers, "model_template", "model.png")
+    garment = await upload(client, headers, "garment", "06.png")
+    payload = {"project_id": project["id"], "name": "结构化验收", "idempotency_key": "structured-test-001", "prompt_mode": "ai_detailed",
+        "templates": [{"template_id": "t1", "asset_id": template["id"], "name": "场景", "order": 0, "prompt_strategy": "luna_structured", "template_type": "casual_scene"}],
+        "garments": [{"garment_id": "garment-a", "asset_id": garment["id"], "filename": "06.png", "order": 0},
+                     {"garment_id": "garment-b", "asset_id": garment["id"], "filename": "07.png", "order": 1}],
+        "combinations": [{"client_item_id": "a", "template_id": "t1", "garment_id": "garment-a", "order": 0},
+                         {"client_item_id": "b", "template_id": "t1", "garment_id": "garment-b", "order": 1}]}
+    payload["submission_kind"] = submission_kind
+    if submission_kind == "validation":
+        payload["garments"] = payload["garments"][:1]
+        payload["combinations"] = payload["combinations"][:1]
+    response = await client.post("/api/v1/batch-tryon/workflows", headers=headers, json=payload)
+    assert response.status_code == 202, response.text
+    body = response.json()
+    assert len(body["analysis_jobs"]) == (2 if submission_kind == "production" else 1)
+    replay = await client.post("/api/v1/batch-tryon/workflows", headers=headers, json=payload)
+    assert replay.status_code == 200 and replay.json()["workflow_job_id"] == body["workflow_job_id"]
+    async with identity_test_context["session_factory"]() as session:
+        jobs = (await session.scalars(select(Job).where(Job.id.in_([r["analysis_job_id"] for r in body["template_prompts"]])))).all()
+        by_garment = {j.input_json["metadata"]["garment_id"]: j for j in jobs}
+        for garment_id, job in by_garment.items():
+            assert json.loads(job.input_json["user_prompt"])["input_manifest"]["garment_id"] == garment_id
+        first = by_garment["garment-a"]
+        doc = structured_document(); doc["jobs"][0]["risk_level"] = "HIGH"
+        result = normalize_structured_result(ProviderResult([], metadata={"text": json.dumps(doc, ensure_ascii=False)}), first.input_json["metadata"])
+        first.status = "succeeded"; first.result_json = {"metadata": result.metadata}; first.finished_at = datetime.now(timezone.utc)
+        await session.flush()
+        batch = await continue_batch_tryon_workflow(session, Settings(_env_file=None), planning_job=first)
+        if submission_kind == "production":
+            images = (await session.scalars(select(Job).where(Job.batch_id == batch.id))).all()
+            assert all(j.input_json["metadata"]["awaiting_luna"] for j in images)
+        else:
+            assert batch is None
+        await session.commit()
+    restored = (await client.get(f"/api/v1/batch-tryon/workflows/{body['workflow_job_id']}", headers=headers)).json()
+    record = next(r for r in restored["template_prompts"] if r["garment_id"] == "garment-a")
+    assert record["requires_manual_review"] and record["structured_analysis"]["jobs"][0]["garment_id"] == "garment-a"
+    automatic = await client.patch(f"/api/v1/batch-tryon/workflows/{body['workflow_job_id']}/template-prompts/{record['id']}", headers=headers, json={"edited_final_prompt": record["generated_final_prompt"]})
+    assert automatic.status_code == 409
+    assert automatic.json()["error"]["code"] == "batch_tryon.manual_confirmation_required"
+    confirmed = await client.patch(f"/api/v1/batch-tryon/workflows/{body['workflow_job_id']}/template-prompts/{record['id']}", headers=headers, json={"edited_final_prompt": record["generated_final_prompt"], "manual_confirmation": True})
+    assert confirmed.status_code == 200, confirmed.text
+    resumed = (await client.get(f"/api/v1/batch-tryon/workflows/{body['workflow_job_id']}", headers=headers)).json()
+    async with identity_test_context["session_factory"]() as session:
+        images = (await session.scalars(select(Job).where(Job.batch_id == resumed["batch_id"]))).all()
+        by_item = {j.client_item_id: j for j in images}
+        assert not by_item["a"].input_json["metadata"].get("awaiting_luna")
+        assert by_item["a"].input_json["prompt"] == record["generated_final_prompt"]
+        if submission_kind == "production":
+            assert by_item["b"].input_json["metadata"]["awaiting_luna"] is True
+
+
+async def test_builtin_direct_output_skips_luna_and_does_not_append_legacy_prompt(identity_test_context, monkeypatch):
+    client = identity_test_context["client"]
+    monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
+    await seed_workflow_resources(identity_test_context)
+    async with identity_test_context["session_factory"]() as session:
+        await seed_direct_replacement_preset(session)
+        await session.commit()
+    headers = await auth_headers(client)
+    project = (await client.post("/api/v1/projects", headers=headers, json={"project_type": "batch_tryon", "name": "直接换衣", "draft": {}})).json()
+    template = await upload(client, headers, "model_template", "model.png")
+    garment = await upload(client, headers, "garment", "06.png")
+    payload = {"project_id": project["id"], "name": "直接换衣", "idempotency_key": "direct-output-001", "prompt_mode": "direct",
+        "templates": [{"template_id": "t", "asset_id": template["id"], "name": "模板", "order": 0,
+            "template_type": "casual_scene", "prompt_preset_id": DIRECT_REPLACEMENT_PRESET_ID}],
+        "garments": [{"garment_id": "g", "asset_id": garment["id"], "filename": "06.png", "order": 0}]}
+    presets = (await client.get("/api/v1/batch-tryon/prompt-presets", headers=headers)).json()
+    assert next(p for p in presets if p["id"] == DIRECT_REPLACEMENT_PRESET_ID)["execution_mode"] == "direct_output"
+    created = await client.post("/api/v1/batch-tryon/workflows", headers=headers, json=payload)
+    assert created.status_code == 200, created.text
+    body = created.json()
+    assert body["analysis_call_target"] == 0 and not body["analysis_jobs"]
+    assert body["template_prompts"][0]["generated_final_prompt"] == DIRECT_REPLACEMENT_PROMPT
+    submitted = await client.post(f"/api/v1/batch-tryon/workflows/{body['workflow_job_id']}/submit", headers=headers, json={"idempotency_key": "direct-output-submit-001"})
+    assert submitted.status_code == 202, submitted.text
+    async with identity_test_context["session_factory"]() as session:
+        jobs = (await session.scalars(select(Job).where(Job.batch_id == submitted.json()["batch_id"]))).all()
+        assert len(jobs) == 1
+        assert jobs[0].input_json["prompt"] == DIRECT_REPLACEMENT_PROMPT
+        assert jobs[0].input_json["reference_asset_ids"] == [template["id"], garment["id"]]
+        root = await session.get(Job, body["workflow_job_id"])
+        assert root.celery_task_id is None
+    payload["idempotency_key"] = "direct-output-no-luna-002"
+    payload["prompt_mode"] = "ai_detailed"
+    blocked = await client.post("/api/v1/batch-tryon/workflows", headers=headers, json=payload)
+    assert blocked.status_code == 422
+    assert blocked.json()["error"]["code"] == "batch_tryon.direct_preset_requires_direct"
+
+
+@pytest.mark.parametrize("prompt_mode,explicit_source", [
+    ("direct", True), ("direct", False), ("ai_analysis", True), ("ai_detailed", True),
+])
+async def test_custom_prompt_works_without_preset(identity_test_context, monkeypatch, prompt_mode, explicit_source):
+    client = identity_test_context["client"]
+    monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
+    await seed_workflow_resources(identity_test_context)
+    headers = await auth_headers(client)
+    project = (await client.post("/api/v1/projects", headers=headers, json={
+        "project_type": "batch_tryon", "name": "自由提示词", "draft": {},
+    })).json()
+    template = await upload(client, headers, "model_template", "model.png")
+    garment = await upload(client, headers, "garment", "06.png")
+    custom_prompt = "图A是模板，图B是服装。仅替换服装，保留人物与背景。"
+    template_input = {"template_id": "t", "asset_id": template["id"], "name": "模板", "order": 0,
+        "template_type": "casual_scene", "analysis_prompt": custom_prompt}
+    if explicit_source:
+        template_input["prompt_source"] = "custom"
+    response = await client.post("/api/v1/batch-tryon/workflows", headers=headers, json={
+        "project_id": project["id"], "name": "自由提示词", "idempotency_key": "optional-preset-001",
+        "prompt_mode": prompt_mode, "templates": [template_input],
+        "garments": [{"garment_id": "g", "asset_id": garment["id"], "filename": "06.png", "order": 0}],
+    })
+    assert response.status_code == (200 if prompt_mode == "direct" else 202), response.text
+    body = response.json()
+    record = body["template_prompts"][0]
+    assert record["preset_id"] is None
+    assert record["analysis_prompt_used"] == custom_prompt
+    if prompt_mode == "direct":
+        assert body["analysis_call_target"] == 0 and not body["analysis_jobs"]
+        submitted = await client.post(f"/api/v1/batch-tryon/workflows/{body['workflow_job_id']}/submit",
+            headers=headers, json={"idempotency_key": "optional-preset-submit-001"})
+        assert submitted.status_code == 202, submitted.text
+        async with identity_test_context["session_factory"]() as session:
+            jobs = (await session.scalars(select(Job).where(Job.batch_id == submitted.json()["batch_id"]))).all()
+            assert len(jobs) == 1
+            assert jobs[0].input_json["prompt"] == custom_prompt
+            assert jobs[0].input_json["reference_asset_ids"] == [template["id"], garment["id"]]
+    else:
+        async with identity_test_context["session_factory"]() as session:
+            analysis_job = await session.get(Job, record["analysis_job_id"])
+            assert analysis_job.input_json["system_prompt"] == custom_prompt
+            assert analysis_job.input_json["metadata"]["prompt_preset_id"] is None
+
+
+@pytest.mark.parametrize("prompt_mode", ["direct", "ai_analysis", "ai_detailed"])
+async def test_empty_custom_prompt_does_not_fall_back_to_system_preset(identity_test_context, monkeypatch, prompt_mode):
+    client = identity_test_context["client"]
+    monkeypatch.setattr("app.workers.celery_app.celery_app.send_task", lambda *args, **kwargs: None)
+    await seed_workflow_resources(identity_test_context)
+    headers = await auth_headers(client)
+    project = (await client.post("/api/v1/projects", headers=headers, json={
+        "project_type": "batch_tryon", "name": "空提示词检查", "draft": {},
+    })).json()
+    template = await upload(client, headers, "model_template", "model.png")
+    garment = await upload(client, headers, "garment", "06.png")
+    response = await client.post("/api/v1/batch-tryon/workflows", headers=headers, json={
+        "project_id": project["id"], "name": "空提示词检查", "idempotency_key": "empty-custom-preset-001",
+        "prompt_mode": prompt_mode,
+        "templates": [{"template_id": "t", "asset_id": template["id"], "name": "模板", "order": 0,
+            "template_type": "casual_scene", "prompt_source": "custom", "analysis_prompt": "   "}],
+        "garments": [{"garment_id": "g", "asset_id": garment["id"], "filename": "06.png", "order": 0}],
+    })
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "batch_tryon.prompt_empty"
+
+
+async def test_direct_preset_seed_preserves_admin_edits_and_disabled_state(identity_test_context):
+    async with identity_test_context["session_factory"]() as session:
+        await seed_direct_replacement_preset(session)
+        preset = await session.get(BatchTryOnPromptPreset, DIRECT_REPLACEMENT_PRESET_ID)
+        preset.analysis_prompt_template = "管理员编辑后的自定义直接换衣提示词"
+        preset.enabled = False
+        await session.flush()
+        await seed_direct_replacement_preset(session)
+        assert preset.analysis_prompt_template == "管理员编辑后的自定义直接换衣提示词"
+        assert preset.enabled is False
 
 
 def test_short_generated_final_prompt_is_allowed() -> None:

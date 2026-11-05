@@ -78,6 +78,7 @@ async def _conversation(
         HermesConversation.organization_id == _org(principal),
         HermesConversation.user_id == principal.user.id,
         HermesConversation.listing_image_project_id == project_id,
+        HermesConversation.controller_type == "hermes",
     ))
     if row is None:
         raise AppError("hermes.conversation_not_found", "对话不存在或无权访问", 404)
@@ -114,6 +115,7 @@ async def list_conversations(
         HermesConversation.organization_id == _org(principal),
         HermesConversation.user_id == principal.user.id,
         HermesConversation.listing_image_project_id == project_id,
+        HermesConversation.controller_type == "hermes",
     ).order_by(HermesConversation.updated_at.desc()).limit(20))).all())
     return [await _conversation_response(db, item) for item in rows]
 

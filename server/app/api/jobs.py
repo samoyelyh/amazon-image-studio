@@ -284,28 +284,26 @@ async def get_job_batch_diagnostics(
 @batch_router.get("/{batch_id}/batch-tryon-results.zip")
 async def download_batch_try_on_results(
     batch_id: str,
+    request: Request,
+    allow_partial: bool = False,
     session: AsyncSession = Depends(get_db_session),
     storage: StorageService = Depends(get_storage_service),
     principal: Principal = Depends(require_permissions("jobs.read", "assets.read")),
 ) -> Response:
-    from app.services.batch_tryon_export_service import build_batch_try_on_results_zip
+    from app.services.batch_tryon_export_service import build_batch_try_on_results_archive
+    from app.api.batch_tryon_review import template_archive_response
 
     batch = await get_batch(
         session, organization_id(principal), batch_id, owner_user_id=principal.user.id,
     )
-    content, success_count, skipped_count = await build_batch_try_on_results_zip(
-        session, storage, batch=batch,
+    archive, filename, success_count, skipped_count = await build_batch_try_on_results_archive(
+        session, storage, batch=batch, allow_partial=allow_partial,
+        request_id=getattr(request.state, "request_id", None),
     )
     await session.commit()
-    return Response(
-        content=content,
-        media_type="application/zip",
-        headers={
-            "Content-Disposition": content_disposition_header("batch-tryon-results.zip"),
-            "Cache-Control": "private, no-store",
-            "X-Batch-Try-On-Exported": str(success_count),
-            "X-Batch-Try-On-Skipped": str(skipped_count),
-        },
+    return template_archive_response(
+        archive, filename=filename, success_count=success_count, skipped_count=skipped_count,
+        template_id="", scope="all_succeeded",
     )
 
 

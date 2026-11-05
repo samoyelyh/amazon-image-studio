@@ -59,5 +59,6 @@ describe('content API', () => {
     const init = fetchMock.mock.calls[1][1] as RequestInit
     expect(init.credentials).toBe('include')
     expect(new Headers(init.headers).get('Authorization')).toBe('Bearer test-access-token')
+    expect(init.cache).toBe('no-store')
   })
 })

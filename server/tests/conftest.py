@@ -22,12 +22,25 @@ from app.infrastructure.redis import get_redis_client
 class FakeRedis:
     def __init__(self) -> None:
         self.values: dict[str, int | str] = {}
+        self.expirations: dict[str, int] = {}
 
     async def get(self, key):
         return self.values.get(key)
 
     async def set(self, key, value, ex=None):
         self.values[key] = value
+        if ex is not None:
+            self.expirations[key] = ex
+        return True
+
+    async def exists(self, key):
+        return int(key in self.values)
+
+    async def expire(self, key, seconds):
+        # This fake records renewal only; real TTL behaviour is integration-tested.
+        if key not in self.values:
+            return False
+        self.expirations[key] = seconds
         return True
 
     async def eval(self, script, numkeys, *args):
@@ -37,6 +50,7 @@ class FakeRedis:
             active = int(self.values.get(keys[0], 0))
             if active <= 1:
                 self.values.pop(keys[0], None)
+                self.expirations.pop(keys[0], None)
                 return 0
             self.values[keys[0]] = active - 1
             return active - 1
@@ -87,8 +101,21 @@ class FakeStorageService(StorageService):
 
 
 @pytest_asyncio.fixture
-async def identity_test_context() -> AsyncIterator[dict[str, object]]:
-    engine = create_async_engine(
+async def identity_test_context(request,tmp_path) -> AsyncIterator[dict[str, object]]:
+    import os
+    from urllib.parse import urlsplit
+    company_url=os.environ.get('AGENT_COMPANY_TEST_DATABASE_URL') if request.node.get_closest_marker('companydb') else None
+    if company_url:
+        parsed=urlsplit(company_url)
+        if parsed.hostname!='127.0.0.1' or parsed.port==3306 or not parsed.path.lstrip('/').startswith('agent_company_test_'):
+            raise RuntimeError('Only a separately bound local company test database is allowed')
+        engine=create_async_engine(company_url,pool_size=30,max_overflow=10,pool_pre_ping=True)
+    elif request.node.name in {'test_isolated_browser_batch','test_progress_partial_refresh_failure_retry_mobile','test_professional_aplus_browser'}:
+        # Real browser streaming must not hold an ASGI-wide lock around a shared
+        # in-memory SQLite connection. A private file DB supports independent requests.
+        engine=create_async_engine('sqlite+aiosqlite:///'+str(tmp_path/'browser-business.sqlite'),connect_args={'timeout':20})
+    else:
+        engine = create_async_engine(
         "sqlite+aiosqlite://",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
@@ -203,5 +230,5 @@ async def identity_test_context() -> AsyncIterator[dict[str, object]]:
     app.dependency_overrides[get_storage_service] = lambda: storage
     app.dependency_overrides[get_redis_client] = lambda: redis
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield {"client": client, "app": app, "session_factory": session_factory, "engine": engine, "storage": storage, "redis": redis, **ids}
+        yield {"client": client, "app": app, "session_factory": session_factory, "engine": engine, "storage": storage, "redis": redis, "company_database_url":company_url, **ids}
     await engine.dispose()

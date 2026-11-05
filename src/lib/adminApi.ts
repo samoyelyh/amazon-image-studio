@@ -61,7 +61,7 @@ export interface AdminProvider {
   id: string
   code: string
   name: string
-  provider_type: 'openai_compatible' | 'new_api' | 'custom'
+  provider_type: 'openai_compatible' | 'new_api' | 'custom' | 'codex_local'
   base_url: string
   enabled: boolean
   model_count: number

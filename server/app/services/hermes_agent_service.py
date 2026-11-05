@@ -34,6 +34,7 @@ from app.services.creative_preset_service import (
     visible_model_presets,
 )
 from app.services.task_service import dispatch_jobs, due_jobs
+from app.services.proposal_confirmation_service import state_fingerprint, proposal_state_matches, require_proposal_owner
 
 
 UTC = timezone.utc
@@ -71,7 +72,7 @@ def project_state_signature(context: HermesWorkbenchContext) -> str:
             "references": item.reference_state_version,
         } for item in sorted(context.modules, key=lambda row: row.module_key)],
     }
-    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    return state_fingerprint(payload, ascii_json=True)
 
 
 async def build_compact_workbench_context(db: AsyncSession, context: HermesWorkbenchContext) -> dict[str, object]:
@@ -270,6 +271,7 @@ async def get_or_create_conversation(
         HermesConversation.user_id == user_id,
         HermesConversation.listing_image_project_id == project_id,
         HermesConversation.status == "active",
+        HermesConversation.controller_type == "hermes",
     ).order_by(HermesConversation.updated_at.desc()).limit(1))
     if row is None:
         now = datetime.now(UTC)
@@ -295,7 +297,7 @@ async def send_hermes_message(
     db: AsyncSession, settings: Settings, *, conversation: HermesConversation,
     organization_id: str, user_id: str, project_id: str, content: str,
 ) -> tuple[HermesMessage, HermesProposal | None]:
-    if conversation.organization_id != organization_id or conversation.user_id != user_id or conversation.listing_image_project_id != project_id:
+    if conversation.controller_type != "hermes" or conversation.organization_id != organization_id or conversation.user_id != user_id or conversation.listing_image_project_id != project_id:
         raise AppError("hermes.conversation_not_found", "对话不存在或无权访问", 404)
     context = await load_hermes_workbench_context(db, organization_id=organization_id, project_id=project_id, user_id=user_id)
     compact_context = await build_compact_workbench_context(db, context)
@@ -339,15 +341,17 @@ async def apply_hermes_proposal(
     db: AsyncSession, settings: Settings, *, proposal: HermesProposal,
     organization_id: str, user_id: str, permissions: frozenset[str],
 ) -> tuple[list[dict[str, object]], str]:
-    if proposal.organization_id != organization_id or proposal.user_id != user_id:
-        raise AppError("hermes.proposal_not_found", "提案不存在或无权访问", 404)
+    controller = await db.get(HermesConversation, proposal.conversation_id)
+    if controller is None or controller.controller_type != "hermes":
+        raise AppError("hermes.wrong_controller", "该会话不由 Hermes 控制。", 409)
+    require_proposal_owner(proposal, organization_id, user_id)
     if proposal.status != "pending":
         raise AppError("hermes.proposal_not_pending", "该提案已处理，不能重复应用", 409)
     context = await load_hermes_workbench_context(
         db, organization_id=organization_id, project_id=proposal.listing_image_project_id, user_id=user_id,
     )
     current_signature = project_state_signature(context)
-    if current_signature != proposal.expected_state_signature:
+    if not proposal_state_matches(proposal, current_signature):
         proposal.status = "stale"
         proposal.error_message = "工作台已发生变化，请让 Hermes 基于最新状态重新给出建议。"
         await db.commit()

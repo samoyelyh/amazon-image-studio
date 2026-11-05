@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../app/AuthContext'
 import { appRoutes } from '../app/routes'
 import { AuthApiError } from '../lib/authApi'
+import { SparklesIcon } from '../components/agent-control/AgentControlIcons'
 
 export default function LoginPage() {
   const auth = useAuth()
@@ -12,9 +13,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-
   useEffect(() => { document.title = '登录 · Amazon Image Studio' }, [])
-
   if (auth.status === 'authenticated') return <Navigate to={appRoutes.dashboard} replace />
 
   const submit = async (event: FormEvent) => {
@@ -27,32 +26,29 @@ export default function LoginPage() {
       navigate(target, { replace: true })
     } catch (requestError) {
       setError(requestError instanceof AuthApiError ? requestError.message : '无法连接到登录服务')
-    } finally {
-      setSubmitting(false)
-    }
+    } finally { setSubmitting(false) }
   }
 
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-10 dark:bg-gray-950">
-      <section className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-7 shadow-xl shadow-gray-200/40 dark:border-white/[0.08] dark:bg-gray-900 dark:shadow-none">
-        <div className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">多人协作平台</div>
-        <h1 className="mt-5 text-2xl font-bold tracking-tight text-gray-950 dark:text-white">登录 Amazon Image Studio</h1>
-        <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">使用平台账号进入团队工作区。登录状态通过安全的刷新令牌恢复。</p>
-        <form className="mt-7 space-y-4" onSubmit={submit}>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
-            账号
-            <input type="text" autoComplete="username" minLength={3} maxLength={32} pattern="[A-Za-z0-9_-]+" required value={account} onChange={(event) => setAccount(event.target.value)} placeholder="请输入账号" className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-gray-950 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/[0.1] dark:bg-gray-950 dark:text-white" />
-          </label>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
-            密码
-            <input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-gray-950 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-white/[0.1] dark:bg-gray-950 dark:text-white" />
-          </label>
-          {error && <div role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">{error}</div>}
-          <button type="submit" disabled={submitting} className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60">
-            {submitting ? '正在登录…' : '登录'}
-          </button>
+  return <main className="lovart-shell flex min-h-screen bg-[#f7f7f5] text-gray-900 lg:grid lg:grid-cols-[1.1fr_1fr]">
+    <section className="login-visual relative hidden overflow-hidden text-white lg:block">
+      <img src={`${import.meta.env.BASE_URL}creative-assets/scene-creative.png`} alt="AI 创意视觉" className="absolute inset-0 h-full w-full object-cover opacity-70" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-black/20" />
+      <div className="absolute inset-x-0 bottom-0 p-12 xl:p-16"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-gray-950"><SparklesIcon className="h-6 w-6" /></div><h2 className="mt-6 max-w-lg text-4xl font-semibold tracking-[-0.04em]">让团队的每个创意，<br />都成为专业图片。</h2><p className="mt-4 max-w-md text-sm leading-6 text-white/65">电商图片策划、生成、编辑与团队协作，在一个创作空间完成。</p></div>
+    </section>
+    <section className="flex flex-1 items-center justify-center px-5 py-10 sm:px-10">
+      <div className="w-full max-w-md">
+        <div className="mb-10 flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-gray-950"><SparklesIcon className="h-5 w-5" /></span><div><p className="text-sm font-semibold">Amazon Image Studio</p><p className="mt-0.5 text-[11px] text-gray-500">AI 图片创作平台</p></div></div>
+        <div className="inline-flex rounded-full border border-white/10 px-3 py-1 text-xs text-gray-400">团队协作空间</div>
+        <h1 className="mt-5 text-3xl font-semibold tracking-[-0.035em]">欢迎回来</h1>
+        <p className="mt-2 text-sm leading-6 text-gray-500">登录后继续你的图片创作与团队项目。</p>
+        <form className="mt-8 space-y-5" onSubmit={submit}>
+          <label className="block text-xs font-medium text-gray-400">账号<input type="text" autoComplete="username" minLength={3} maxLength={32} pattern="[A-Za-z0-9_-]+" required value={account} onChange={(event) => setAccount(event.target.value)} placeholder="请输入账号" className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#1b1b1b] px-4 text-sm text-white outline-none transition focus:border-white/25" /></label>
+          <label className="block text-xs font-medium text-gray-400">密码<input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="请输入密码" className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#1b1b1b] px-4 text-sm text-white outline-none transition focus:border-white/25" /></label>
+          {error && <div role="alert" className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</div>}
+          <button type="submit" disabled={submitting} className="h-12 w-full rounded-full bg-white text-sm font-semibold text-gray-950 transition hover:bg-gray-200 disabled:cursor-wait disabled:opacity-50">{submitting ? '正在登录…' : '登录'}</button>
         </form>
-      </section>
-    </main>
-  )
+        <p className="mt-8 text-center text-[11px] leading-5 text-gray-600">登录状态通过安全刷新令牌恢复，团队数据按权限隔离。</p>
+      </div>
+    </section>
+  </main>
 }

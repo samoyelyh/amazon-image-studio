@@ -26,9 +26,10 @@ class BatchTryOnWorkflowTemplate(BaseModel):
     visible_regions: list[str] = Field(default_factory=list, max_length=20)
     template_type: TemplateType = "pure_white"
     prompt_preset_id: str | None = Field(default=None, max_length=36)
-    analysis_prompt: str | None = Field(default=None, min_length=20, max_length=30000)
+    prompt_source: Literal["preset", "custom"] = "preset"
+    analysis_prompt: str | None = Field(default=None, max_length=30000)
     garment_view: GarmentView = "auto"
-    prompt_strategy: Literal["preset", "ai_optimize", "luna_per_image"] | None = None
+    prompt_strategy: Literal["preset", "ai_optimize", "luna_per_image", "luna_structured"] | None = None
 
 
 class BatchTryOnWorkflowGarment(BaseModel):
@@ -145,6 +146,7 @@ class BatchTryOnPromptPresetResponse(BaseModel):
     enabled: bool
     sort_order: int
     is_system_preset: bool
+    execution_mode: Literal["standard", "direct_output"] = "standard"
 
 
 class BatchTryOnPromptPresetCreateRequest(BaseModel):
@@ -180,10 +182,13 @@ class BatchTryOnTemplatePromptResponse(BaseModel):
     prompt_version: int
     error_code: str | None
     error_message: str | None
+    structured_analysis: dict[str, object] | None = None
+    requires_manual_review: bool = False
 
 
 class BatchTryOnTemplatePromptSaveRequest(BaseModel):
     edited_final_prompt: str | None = Field(default=None, max_length=30000)
+    manual_confirmation: bool = Field(default=False, strict=True)
 
 
 class BatchTryOnTemplatePromptAnalyzeRequest(BaseModel):

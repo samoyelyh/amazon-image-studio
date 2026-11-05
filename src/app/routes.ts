@@ -3,6 +3,11 @@ export const appRoutes = {
   login: '/login',
   changePassword: '/change-password',
   dashboard: '/dashboard',
+  skills: '/skills',
+  tools: '/tools',
+  inspiration: '/inspiration',
+  designBrief: '/design-brief',
+  agentControl: '/workspaces/agent-control',
   listing: '/workspaces/listing',
   attachmentImages: '/workspaces/attachment-images',
   attachmentImageWorkbench: '/attachment-image-workbench/:sessionId',
@@ -54,6 +59,9 @@ export const navigationSections: NavigationSection[] = [
   {
     label: '图片工作台',
     items: [
+      { label: 'AI 总控', path: appRoutes.agentControl, multiuserOnly: true },
+      { label: '智能工具', path: appRoutes.tools },
+      { label: '技能中心', path: appRoutes.skills },
       { label: '附图生成工作台', shortLabel: '附图生成', path: appRoutes.attachmentImages },
       { label: '自由图片裂变', path: appRoutes.smartImageVariationHub },
       { label: '批量套图', path: appRoutes.batchTryOn },
@@ -66,6 +74,8 @@ export const navigationSections: NavigationSection[] = [
     label: '公共中心',
     items: [
       { label: '任务中心', path: appRoutes.tasks },
+      { label: '灵感采集', path: appRoutes.inspiration },
+      { label: '设计委托', path: appRoutes.designBrief },
       { label: '素材中心', path: appRoutes.assets },
       { label: '个人素材库', path: appRoutes.attachmentMaterials },
       { label: '项目系统', path: appRoutes.projects, multiuserOnly: true },

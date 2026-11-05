@@ -30,6 +30,7 @@ celery_app.conf.update(
     result_expires=3600,
     task_default_queue="default",
     task_routes={
+        "system.batch_queue_retention": {"queue": "queue_retention"},
         "system.*": {"queue": "maintenance"},
     },
     beat_schedule={
@@ -51,5 +52,6 @@ celery_app.conf.update(
         },
         "recover-stale-jobs": {"task": "system.recover_stale_jobs", "schedule": 60.0},
         "release-expired-reservations": {"task": "system.release_expired_reservations", "schedule": 300.0},
+        "batch-queue-retention": {"task": "system.batch_queue_retention", "schedule": 300.0},
     },
 )

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query, Request, Response, status
+from app.services.batch_tryon_access_service import require_batch_asset_access
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
@@ -46,6 +47,12 @@ async def create_workflow(
     principal: Principal = Depends(require_permissions("jobs.submit")),
 ) -> BatchTryOnWorkflowResponse:
     organization_id = _organization_id(principal)
+    await require_batch_asset_access(session, organization_id=organization_id, user_id=principal.user.id, asset_ids=[
+        *[template.asset_id for template in payload.templates],
+        *[value for garment in payload.garments for value in [garment.asset_id, garment.front_reference_asset_id,
+            garment.back_reference_asset_id, garment.detail_reference_asset_id, garment.font_reference_asset_id]],
+        *[item.font_reference_asset_id for item in payload.combinations or []],
+    ])
     root, created_jobs, created = await create_batch_tryon_workflow(
         session,
         settings,
@@ -111,6 +118,7 @@ async def confirm_template_prompt(
         workflow_job_id=workflow_job_id,
         template_id=template_id,
         edited_final_prompt=payload.edited_final_prompt,
+        manual_confirmation=payload.manual_confirmation,
     )
     add_audit_log(
         session, request=request, actor_user_id=principal.user.id, organization_id=organization_id,

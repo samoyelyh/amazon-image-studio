@@ -7,7 +7,7 @@ import logging
 import socket
 from time import monotonic
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import get_settings
@@ -16,10 +16,11 @@ from app.db.session import get_engine
 from app.infrastructure.redis import get_redis_client
 from app.models.content import Asset, GeneratedOutput
 from app.models.quota import QuotaReservation, QuotaReservationStatus
-from app.models.tasks import ApiKeyUsageStat, Job, JobAttempt, JobStatus
+from app.models.tasks import ApiKey, ApiKeyUsageStat, Job, JobAttempt, JobStatus
 from app.providers.base import ProviderError
 from app.providers.registry import get_provider_adapter
 from app.services.asset_service import create_asset, get_asset
+from app.services.batch_tryon_structured_service import normalize_structured_result
 from app.services.billing_service import settle_reservation
 from app.services.batch_tryon_review_service import (
     continue_detailed_review_auto_regeneration,
@@ -131,6 +132,19 @@ async def _execute_job(
                 adapter = get_provider_adapter(lease.provider_type, settings)
                 input_started = monotonic()
                 provider_payload = await _provider_payload(session, storage=get_storage_service(), job=job)
+                if lease.provider_type == "codex_local":
+                    # Never trust a client-supplied execution identity. Bridge retries
+                    # must refer to this existing business job, not a new CLI turn.
+                    provider_payload["job_id"] = job.id
+
+                    async def native_cancel_requested() -> bool:
+                        async with session_factory() as check_session:
+                            row = (await check_session.execute(
+                                select(Job.status, Job.cancel_requested_at).where(Job.id == current_job_id)
+                            )).first()
+                            return row is None or row.status == JobStatus.CANCELLED.value or row.cancel_requested_at is not None
+
+                    provider_payload["_cancel_requested"] = native_cancel_requested
                 if job.capability in {"image_generation", "image_edit", "multi_image_reference", "mask_edit"}:
                     business_prompt = str(job.input_json.get("business_prompt") or job.input_json.get("prompt") or "").strip()
                     technical_contract = delivery_prompt_contract(job.input_json)
@@ -164,6 +178,20 @@ async def _execute_job(
                     config={**lease.provider_config, **lease.model_config},
                 )
                 attempt.provider_responded_at = datetime.now(UTC)
+                if (job.input_json.get('metadata') or {}).get('workflow') in {
+                    'agent_chat','agent_chat_tryon','agent_asset_understanding','agent_control',
+                }:
+                    # Acquire the key write lock before result/FK writes take shared
+                    # locks. Otherwise concurrent Agent completions can both hold S
+                    # and deadlock while mark_key_success upgrades to X in MySQL.
+                    # This is after Provider I/O, never a lock around generation.
+                    with session.no_autoflush:
+                        await session.scalar(select(ApiKey.id).where(ApiKey.id==lease.key_id).with_for_update())
+                if job.capability == "text_generation" and job.operation_code == "batch_tryon.prompt_analyze_detailed":
+                    # Keep the raw response durable even if strict parsing fails.
+                    if (job.input_json.get("metadata") or {}).get("analysis_format") == "garment_analysis_v1_1":
+                        job.result_json = {"metadata": {"raw_text": str((result.metadata or {}).get("text") or "")[:150000]}}
+                    result = normalize_structured_result(result, job.input_json.get("metadata") or {})
                 attempt.phase_timings_json = {
                     **(attempt.phase_timings_json or {}),
                     "provider_ms": max(0, int((monotonic() - provider_started) * 1000)),
@@ -204,7 +232,8 @@ async def _execute_job(
                                 storage.download(mask_asset.storage_key),
                                 output,
                             )
-                    output = await run_in_threadpool(render_delivery_output, output, job.input_json)
+                    if lease.provider_type != "codex_local":
+                        output = await run_in_threadpool(render_delivery_output, output, job.input_json)
                     metadata = job.input_json.get("metadata") if isinstance(job.input_json.get("metadata"), dict) else {}
                     if job.operation_code == "asset.extract":
                         output = await run_in_threadpool(
@@ -327,7 +356,7 @@ async def _execute_job(
                             "resolved_provider_size": job.input_json.get("provider_size") or job.input_json.get("size"),
                             "provider_actual_width": provider_dimensions[0][0] if provider_dimensions else None,
                             "provider_actual_height": provider_dimensions[0][1] if provider_dimensions else None,
-                            "delivery_transform": delivery_transform(
+                            "delivery_transform": "original" if lease.provider_type == "codex_local" else delivery_transform(
                                 provider_dimensions[0][0], provider_dimensions[0][1],
                                 int(requested_width), int(requested_height),
                             ) if provider_dimensions and requested_width and requested_height else "none",

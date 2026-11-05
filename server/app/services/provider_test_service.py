@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from uuid import uuid4
 
 import httpx
 
@@ -29,7 +30,7 @@ async def probe_provider_models(
     url = provider_url(base_url, "/models")
     try:
         async with httpx.AsyncClient(
-            timeout=httpx.Timeout(timeout_seconds), follow_redirects=False, transport=transport,
+            timeout=httpx.Timeout(timeout_seconds), follow_redirects=False, trust_env=False, transport=transport,
         ) as client:
             response = await client.get(url, headers={"Authorization": f"Bearer {api_key}"})
     except httpx.TimeoutException:
@@ -77,6 +78,8 @@ async def probe_provider_operation(
             "prompt": "Keep the image composition unchanged and make the blue color slightly lighter.",
             "n": 1, "size": "1024x1024", "reference_images": reference_images,
         }
+    if provider_type == "codex_local":
+        payload["job_id"] = str(uuid4())
     try:
         result = await adapter.execute(
             base_url=base_url, api_key=api_key, upstream_model=upstream_model,

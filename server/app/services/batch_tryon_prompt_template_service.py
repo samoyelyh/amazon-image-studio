@@ -6,13 +6,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import AppError
 from app.models.tasks import BatchTryOnPromptPreset, BatchTryOnTemplatePrompt
 from app.prompts.batch_tryon_prompt_templates import SUPPORTED_TEMPLATE_TYPES
+from app.prompts.batch_tryon_direct import DIRECT_REPLACEMENT_PRESET_ID, DIRECT_REPLACEMENT_LABEL, DIRECT_REPLACEMENT_PROMPT
 from app.schemas.batch_tryon_workflow import (
     BatchTryOnPromptPresetResponse,
     BatchTryOnTemplatePromptResponse,
+    BatchTryOnWorkflowTemplate,
 )
 
 
 PROMPT_STATUSES = {"draft", "analyzing", "ready", "effective", "stale", "failed"}
+
+
+async def seed_direct_replacement_preset(session: AsyncSession) -> None:
+    # Insert only. Admin edits and disabled presets must survive restarts.
+    if await session.get(BatchTryOnPromptPreset, DIRECT_REPLACEMENT_PRESET_ID) is None:
+        session.add(BatchTryOnPromptPreset(id=DIRECT_REPLACEMENT_PRESET_ID,
+            scope="system", template_type="casual_scene", label=DIRECT_REPLACEMENT_LABEL,
+            analysis_prompt_template=DIRECT_REPLACEMENT_PROMPT, enabled=True, sort_order=51,
+            is_system_preset=True))
+        await session.flush()
 
 
 def prompt_preset_response(value: BatchTryOnPromptPreset) -> BatchTryOnPromptPresetResponse:
@@ -27,10 +39,12 @@ def prompt_preset_response(value: BatchTryOnPromptPreset) -> BatchTryOnPromptPre
         enabled=value.enabled,
         sort_order=value.sort_order,
         is_system_preset=value.is_system_preset,
+        execution_mode="direct_output" if value.id == DIRECT_REPLACEMENT_PRESET_ID else "standard",
     )
 
 
-def template_prompt_response(value: BatchTryOnTemplatePrompt) -> BatchTryOnTemplatePromptResponse:
+def template_prompt_response(value: BatchTryOnTemplatePrompt, analysis_job=None) -> BatchTryOnTemplatePromptResponse:
+    metadata = (analysis_job.result_json or {}).get("metadata", {}) if analysis_job else {}
     return BatchTryOnTemplatePromptResponse(
         id=value.id,
         workflow_job_id=value.workflow_job_id,
@@ -50,6 +64,8 @@ def template_prompt_response(value: BatchTryOnTemplatePrompt) -> BatchTryOnTempl
         prompt_version=value.prompt_version,
         error_code=value.error_code,
         error_message=value.error_message,
+        structured_analysis=metadata.get("structured_analysis"),
+        requires_manual_review=bool(metadata.get("requires_manual_review")) and value.prompt_status != "effective",
     )
 
 
@@ -94,6 +110,20 @@ async def resolve_prompt_preset(
     if preset.template_type != template_type:
         raise AppError("batch_tryon.prompt_preset_type_mismatch", "提示词预设与模板类型不匹配。", 422)
     return preset
+
+
+async def resolve_optional_template_preset(session: AsyncSession, *, organization_id: str,
+                                           user_id: str, template: BatchTryOnWorkflowTemplate) -> BatchTryOnPromptPreset | None:
+    custom = template.prompt_source == "custom" or (not template.prompt_preset_id and bool(template.analysis_prompt))
+    if custom:
+        if template.prompt_preset_id:
+            raise AppError("batch_tryon.prompt_source_conflict", "自定义提示词模式不应同时绑定预设。", 422)
+        if not str(template.analysis_prompt or "").strip():
+            raise AppError("batch_tryon.prompt_empty", "请填写当前模板的提示词，预设可以不选。", 422)
+        return None
+    # Legacy requests which omit both fields retain their existing defaults.
+    return await resolve_prompt_preset(session, organization_id=organization_id,
+        user_id=user_id, preset_id=template.prompt_preset_id, template_type=template.template_type)
 
 
 def validate_generated_final_prompt(value: str) -> str:

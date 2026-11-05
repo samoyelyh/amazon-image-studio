@@ -58,6 +58,9 @@ export interface BatchTryOnReviewDetail {
   template_prompt_id: string | null
   prompt_version: number | null
   effective_prompt_snapshot: string | null
+  prompt_execution_mode?: 'standard' | 'direct_output'
+  latest_analysis_job_id?: string | null
+  structured_analysis?: import('./batchTryOnStructured').StructuredLunaAnalysis | null
   garment_asset: BatchTryOnReviewAsset
   model_asset: BatchTryOnReviewAsset
   image_c_asset: BatchTryOnReviewAsset | null
@@ -160,6 +163,7 @@ export function regenerateBatchTryOnVersion(itemId: string, input: {
 }
 
 export function analyzeBatchTryOnReviewVersion(itemId: string, input: {
+  analysis_format?: import('./batchTryOnStructured').LunaAnalysisFormat
   source_version_id: string
   focus_notes: string | null
   template_type: string | null
@@ -174,6 +178,7 @@ export function analyzeBatchTryOnReviewVersion(itemId: string, input: {
 }
 
 export function batchAnalyzeAndRegenerateBatchTryOnVersions(input: {
+  analysis_format?: import('./batchTryOnStructured').LunaAnalysisFormat
   items: Array<{ item_id: string; version_id: string }>
   focus_notes: string | null
   template_type: string | null

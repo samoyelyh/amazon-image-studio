@@ -15,8 +15,11 @@ import {
   type BatchTryOnRetryMode,
 } from '../lib/batchTryOnReviewApi'
 import { getServerJob } from '../lib/jobsApi'
+import BatchTryOnStructuredAnalysis from './BatchTryOnStructuredAnalysis'
+import type { StructuredLunaAnalysis, LunaAnalysisFormat } from '../lib/batchTryOnStructured'
 import {
   listBatchTryOnPromptPresets,
+  getStructuredLunaDefault,
   type BatchTryOnTemplateType,
 } from '../lib/batchTryOnWorkflowApi'
 import { randomUuid } from '../lib/randomUuid'
@@ -73,6 +76,7 @@ export default function BatchTryOnReviewDialog({
   const [analysisPresetId, setAnalysisPresetId] = useState('__current__')
   const [analysisTemplateType, setAnalysisTemplateType] = useState<BatchTryOnTemplateType>('pure_white')
   const [analysisBasePrompt, setAnalysisBasePrompt] = useState('')
+  const [analysisFormat, setAnalysisFormat] = useState<LunaAnalysisFormat>('final_prompt_text')
   const [analysisJobId, setAnalysisJobId] = useState<string | null>(null)
   const [analysisPrompt, setAnalysisPrompt] = useState('')
   const [manualErrorCodes, setManualErrorCodes] = useState<BatchTryOnManualErrorCode[]>([])
@@ -106,6 +110,9 @@ export default function BatchTryOnReviewDialog({
       return status && ['succeeded', 'failed', 'cancelled'].includes(status) ? false : 2_000
     },
   })
+  const directAnalysisPreset = analysisPresetId === '__current__'
+    ? detail?.prompt_execution_mode === 'direct_output'
+    : promptPresetsQuery.data?.find((p) => p.id === analysisPresetId)?.execution_mode === 'direct_output'
   const orderedReviewItems = useMemo(() => getReviewableQueueItems(items), [items])
   const localIndex = orderedReviewItems.findIndex((item) => item.serverReviewItemId === itemId)
 
@@ -119,6 +126,7 @@ export default function BatchTryOnReviewDialog({
     setAnalysisTemplateType('pure_white')
     setAnalysisBasePrompt('')
     setAnalysisJobId(null)
+    setAnalysisFormat('final_prompt_text')
     setAnalysisPrompt('')
     setManualErrorCodes([])
     setMessage('')
@@ -134,6 +142,10 @@ export default function BatchTryOnReviewDialog({
     analysisPresetInitializedRef.current = true
     setAnalysisTemplateType(normalizeTemplateType(detail.template_type))
     setAnalysisBasePrompt(detail.effective_prompt_snapshot || '')
+    if (detail.latest_analysis_job_id) {
+      setAnalysisJobId(detail.latest_analysis_job_id)
+      setShowDetailedAnalysis(true)
+    }
   }, [detail])
 
   useEffect(() => {
@@ -325,6 +337,10 @@ export default function BatchTryOnReviewDialog({
   }
 
   const runDetailedAnalysis = async () => {
+    if (directAnalysisPreset) {
+      setMessage('当前预设不调用Luna，请点击“直接使用此提示词重新生成”。')
+      return
+    }
     if (!currentVersion || !regeneratable || busy) return
     setBusy(true)
     setMessage('')
@@ -332,6 +348,7 @@ export default function BatchTryOnReviewDialog({
     appliedAnalysisJobRef.current = null
     try {
       const job = await analyzeBatchTryOnReviewVersion(itemId, {
+        analysis_format: analysisFormat,
         source_version_id: currentVersion.id,
         focus_notes: null,
         template_type: analysisTemplateType,
@@ -348,18 +365,25 @@ export default function BatchTryOnReviewDialog({
     }
   }
 
-  const selectAnalysisPreset = (presetId: string) => {
+  const selectAnalysisPreset = async (presetId: string) => {
     analysisPresetInitializedRef.current = true
     setAnalysisPresetId(presetId)
     if (presetId === '__current__') {
-      setAnalysisTemplateType(normalizeTemplateType(detail?.template_type))
-      setAnalysisBasePrompt(detail?.effective_prompt_snapshot || '')
+      const type = normalizeTemplateType(detail?.template_type)
+      setAnalysisTemplateType(type)
+      if (analysisFormat === 'garment_analysis_v1_1') {
+        try { setAnalysisBasePrompt((await getStructuredLunaDefault(type)).analysis_prompt) }
+        catch (error) { setMessage(String(error)) }
+      } else setAnalysisBasePrompt(detail?.effective_prompt_snapshot || '')
       return
     }
     const preset = promptPresetsQuery.data?.find((item) => item.id === presetId)
     if (!preset) return
     setAnalysisTemplateType(preset.template_type)
-    setAnalysisBasePrompt(preset.analysis_prompt_template)
+    if (analysisFormat === 'garment_analysis_v1_1' && preset.execution_mode !== 'direct_output') {
+      try { setAnalysisBasePrompt((await getStructuredLunaDefault(preset.template_type)).analysis_prompt) }
+      catch (error) { setMessage(String(error)) }
+    } else setAnalysisBasePrompt(preset.analysis_prompt_template)
   }
 
   const useAnalysisAsReviewNotes = () => {
@@ -485,6 +509,15 @@ export default function BatchTryOnReviewDialog({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-bold text-gray-900 dark:text-white">Luna 精细逐图分析</h3>
+                  <select aria-label="审核Luna分析方式" value={analysisFormat} disabled={busy || analysisQuery.isFetching} onChange={(event) => {
+                    const value = event.target.value as LunaAnalysisFormat
+                    if (value === 'garment_analysis_v1_1') {
+                      setBusy(true)
+                      void getStructuredLunaDefault(analysisTemplateType).then((data) => {
+                        setAnalysisBasePrompt(data.analysis_prompt); setAnalysisFormat(value)
+                      }).catch((error) => setMessage(String(error))).finally(() => setBusy(false))
+                    } else { setAnalysisFormat(value); setAnalysisBasePrompt(detail?.effective_prompt_snapshot || '') }
+                  }} className="mt-2 rounded-lg border p-2 text-xs text-gray-900"><option value="final_prompt_text">原有精细逐图</option><option value="garment_analysis_v1_1">Luna 结构化逐图 V1.1</option></select>
                   <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-gray-300">Luna 只执行下方当前选中或编辑后的模板预设，不会追加通用分析规则、语言要求或审核包装文案。</p>
                 </div>
                 <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-200">gpt-5.6-luna</span>
@@ -510,10 +543,12 @@ export default function BatchTryOnReviewDialog({
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-3">
+                {directAnalysisPreset && <button type="button" disabled={busy || !regeneratable || !analysisBasePrompt.trim()} onClick={() => void regenerate(true, false, analysisBasePrompt, 'with_detailed_prompt')} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">直接使用此提示词重新生成（不经Luna）</button>}
                 <button type="button" disabled={busy || analysisQuery.isFetching || !regeneratable || analysisBasePrompt.trim().length < 20} onClick={() => void runDetailedAnalysis()} className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{analysisQuery.isFetching ? 'Luna 分析中…' : analysisPrompt ? '重新精细分析' : '开始精细分析'}</button>
                 {analysisQuery.data && <span className="text-xs text-gray-500 dark:text-gray-400">任务状态：{formatAnalysisStatus(analysisQuery.data.status)}</span>}
               </div>
               {analysisQuery.data?.status === 'failed' && <div className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-500/10 dark:text-red-200">{analysisQuery.data.error_message || 'Luna 精细分析失败，请重试。'}</div>}
+              <BatchTryOnStructuredAnalysis analysis={((analysisQuery.data?.result_json?.metadata as Record<string, unknown> | undefined)?.structured_analysis as StructuredLunaAnalysis | undefined) || detail.structured_analysis} />
               {analysisPrompt && <>
                 <label className="mt-4 block text-xs font-semibold text-gray-700 dark:text-gray-200">精细分析生成的完整换衣提示词（可编辑）</label>
                 <textarea value={analysisPrompt} onChange={(event) => setAnalysisPrompt(event.target.value)} className="mt-2 min-h-40 w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-violet-400 dark:border-violet-500/30 dark:bg-gray-950 dark:text-white" />

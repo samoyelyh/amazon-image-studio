@@ -74,10 +74,11 @@ export function getAsset(assetId: string) {
   return authenticatedFetch<Asset>(`/assets/${assetId}`)
 }
 
-export function uploadAsset(file: File, category: UploadAssetCategory) {
+export function uploadAsset(file: File, category: UploadAssetCategory, privateScope?: 'agent_chat') {
   const body = new FormData()
   body.append('file', file)
   body.append('category', category)
+  if (privateScope) body.append('private_scope', privateScope)
   return authenticatedFetch<Asset>('/assets', { method: 'POST', body })
 }
 
@@ -136,7 +137,8 @@ export function removeAsset(assetId: string) {
 }
 
 export async function fetchAssetBlob(url: string): Promise<Blob> {
-  return (await authenticatedFetchResponse(url)).blob()
+  // Do not reuse an image cached under a previous account's login session.
+  return (await authenticatedFetchResponse(url, { cache: 'no-store' })).blob()
 }
 
 export function listProjects(projectType?: ProjectType, search?: string) {

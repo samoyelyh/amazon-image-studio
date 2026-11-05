@@ -1,0 +1,1132 @@
+{
+  "schema_version": 1,
+  "skills": [],
+  "mcp_servers": [
+    {
+      "id": "ss_mcp",
+      "version": "20261105-v2-schema",
+      "enabled": true,
+      "approved_by": "local-admin-request-20261105",
+      "organizations": [
+        "5e437282-8efe-4bc2-b751-79d57085f14e"
+      ],
+      "users": [],
+      "url": "https://mcp.sellersprite.com/v2/mcp",
+      "credential_env": "AGENT_MCP_SS_MCP_SECRET",
+      "credential_header": "secret-key",
+      "profile": "sellersprite",
+      "daily_unit_limit": 100,
+      "calls_per_minute": 3,
+      "max_calls_per_run": 3,
+      "timeout_seconds": 30,
+      "tools": [
+        {
+          "name": "asin.list",
+          "description": "商品和竞品列表查询",
+          "input_schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "description": "查询 ASIN 商品列表，支持关键词、ASIN 集合、类目与各类筛选条件。品牌过滤仅支持 brandInclude / brandExclude；keyword/asins/categoryId/brandInclude 至少提供一个查询锚点。 optional 字段未指定时省略，由服务端承担默认值。",
+            "required": [
+              "marketplace"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "marketplace": {
+                "type": "string",
+                "description": "站点代码。",
+                "enum": [
+                  "AE",
+                  "AU",
+                  "BR",
+                  "CA",
+                  "DE",
+                  "ES",
+                  "FR",
+                  "IN",
+                  "IT",
+                  "JP",
+                  "MX",
+                  "SA",
+                  "UK",
+                  "US"
+                ]
+              },
+              "keyword": {
+                "type": "string",
+                "description": "商品标题关键词。"
+              },
+              "asins": {
+                "type": "array",
+                "description": "按 ASIN 集合过滤；最多 40 个。",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true,
+                "maxItems": 40
+              },
+              "categoryId": {
+                "type": "string",
+                "description": "类目节点 ID。"
+              },
+              "categoryIdExact": {
+                "type": "boolean",
+                "description": "true 表示只查当前类目；缺省包含子类目。"
+              },
+              "dataMonth": {
+                "type": "string",
+                "description": "数据归档月份，格式 yyyyMM。不传时使用近 30 天数据；显式传入时必须是可用历史月份，不可用或晚于最新归档月会直接报错，不会回退近 30 天。响应中的 dataMode / dataMonth 表示实际数据口径。",
+                "pattern": "^\\d{6}$"
+              },
+              "brandInclude": {
+                "type": "array",
+                "description": "按品牌包含过滤。",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true,
+                "maxItems": 20
+              },
+              "brandExclude": {
+                "type": "array",
+                "description": "按品牌排除过滤。",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true,
+                "maxItems": 20
+              },
+              "sellerInclude": {
+                "type": "array",
+                "description": "按卖家包含过滤。",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true,
+                "maxItems": 20
+              },
+              "sellerExclude": {
+                "type": "array",
+                "description": "按卖家排除过滤。",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true,
+                "maxItems": 20
+              },
+              "excludeKeywords": {
+                "type": "array",
+                "description": "排除标题关键词过滤。",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true,
+                "maxItems": 20
+              },
+              "excludeAsins": {
+                "type": "array",
+                "description": "排除 ASIN 过滤。",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true,
+                "maxItems": 20
+              },
+              "searchType": {
+                "enum": [
+                  "ASIN",
+                  "TITLE",
+                  "BRAND",
+                  "SELLER"
+                ],
+                "type": "string",
+                "description": "关键词匹配字段，缺省 TITLE。"
+              },
+              "price": {
+                "type": "object",
+                "description": "价格区间。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "sales": {
+                "type": "object",
+                "description": "月销量区间（父体/月度表口径，非 Amazon 公布子体销量）；仅用于过滤，输出字段为 monthlySales。",
+                "properties": {
+                  "min": {
+                    "type": "integer",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "integer",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "revenue": {
+                "type": "object",
+                "description": "月销售额区间；仅用于过滤，输出字段为 monthlyRevenue。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "rating": {
+                "type": "object",
+                "description": "评分区间。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "monthlyReviewCount": {
+                "type": "object",
+                "description": "月度表同步评论数区间；过滤 monthlyReviewCount，不影响 childReviewCount。",
+                "properties": {
+                  "min": {
+                    "type": "integer",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "integer",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "bsr": {
+                "type": "object",
+                "description": "BSR 排名区间。",
+                "properties": {
+                  "min": {
+                    "type": "integer",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "integer",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "sellers": {
+                "type": "object",
+                "description": "跟卖卖家数区间；仅用于过滤，不表示输出字段。",
+                "properties": {
+                  "min": {
+                    "type": "integer",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "integer",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "reviewGrowth": {
+                "type": "object",
+                "description": "评论增长量区间；仅用于过滤，不表示输出字段。",
+                "properties": {
+                  "min": {
+                    "type": "integer",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "integer",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "amazonSales": {
+                "type": "object",
+                "description": "Amazon 公布的子体近30天销量区间；仅用于过滤，不表示输出字段。",
+                "properties": {
+                  "min": {
+                    "type": "integer",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "integer",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "ratingShare": {
+                "type": "object",
+                "description": "评分商品占比区间；仅用于过滤，不表示输出字段。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "rankingChange": {
+                "type": "object",
+                "description": "BSR 变动区间；仅用于过滤，不表示输出字段。",
+                "properties": {
+                  "min": {
+                    "type": "integer",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "integer",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "conversionRate": {
+                "type": "object",
+                "description": "转化率区间；仅用于过滤，不表示输出字段。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "crt": {
+                "type": "object",
+                "description": "点击转化率区间；仅用于过滤，不表示输出字段。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "revenueGrowth": {
+                "type": "object",
+                "description": "销售额环比增长区间；仅用于过滤，不表示输出字段。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "salesGrowth": {
+                "type": "object",
+                "description": "销量环比增长区间；仅用于过滤，不表示输出字段。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "salesGrowthYoy": {
+                "type": "object",
+                "description": "销量同比增长区间；仅用于过滤，不表示输出字段。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "salesGrowthYoy3": {
+                "type": "object",
+                "description": "销量同比连续 3 月增长区间；仅用于过滤，不表示输出字段。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "salesGrowthYoy6": {
+                "type": "object",
+                "description": "销量同比连续 6 月增长区间；仅用于过滤，不表示输出字段。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "questions": {
+                "type": "object",
+                "description": "Question 数量区间。",
+                "properties": {
+                  "min": {
+                    "type": "integer",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "integer",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "weight": {
+                "type": "object",
+                "description": "重量区间；仅用于过滤，不表示输出字段。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "fbaFee": {
+                "type": "object",
+                "description": "FBA 费用区间；仅用于过滤，输出字段为 fba。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "variations": {
+                "type": "object",
+                "description": "变体数区间。",
+                "properties": {
+                  "min": {
+                    "type": "integer",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "integer",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "profit": {
+                "type": "object",
+                "description": "预估利润区间。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "lqs": {
+                "type": "object",
+                "description": "Listing 质量分区间。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "deliveryPrice": {
+                "type": "object",
+                "description": "配送费区间；仅用于过滤，不表示输出字段。",
+                "properties": {
+                  "min": {
+                    "type": "number",
+                    "description": "最小值。"
+                  },
+                  "max": {
+                    "type": "number",
+                    "description": "最大值。"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "launchDateFrom": {
+                "type": "string",
+                "description": "上架开始日期，格式 yyyy-MM-dd；仅用于过滤，不表示输出字段。"
+              },
+              "launchDateTo": {
+                "type": "string",
+                "description": "上架结束日期，格式 yyyy-MM-dd；仅用于过滤，不表示输出字段。"
+              },
+              "firstReviewDateFrom": {
+                "type": "string",
+                "description": "首评开始日期，格式 yyyy-MM-dd；仅用于过滤，不表示输出字段。"
+              },
+              "firstReviewDateTo": {
+                "type": "string",
+                "description": "首评结束日期，格式 yyyy-MM-dd；仅用于过滤，不表示输出字段。"
+              },
+              "productTags": {
+                "type": "array",
+                "description": "商品标签过滤；仅用于过滤，不表示输出字段。",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              },
+              "mainImage": {
+                "type": "boolean",
+                "description": "是否有主图视频/主图标记过滤；仅用于过滤，不表示输出字段。"
+              },
+              "bestSellingVariant": {
+                "type": "boolean",
+                "description": "畅销变体筛选：true 只返回每个父体下的畅销代表变体（销量最大的变体）；false 排除代表变体；不传时查询全部行（旧行为）。传入 asins 时忽略此参数，保证集合内所有 ASIN 都返回。"
+              },
+              "fulfillment": {
+                "description": "履约方式过滤。",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "FBA",
+                    "FBM"
+                  ]
+                },
+                "type": "array"
+              },
+              "sellerNation": {
+                "type": "array",
+                "description": "按卖家所属地过滤（国家/地区编码）。",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              },
+              "sellerType": {
+                "description": "卖家类型过滤；仅用于过滤，输出字段为 fulfillment。",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "AMAZON",
+                    "THIRD_PARTY"
+                  ]
+                },
+                "type": "array"
+              },
+              "page": {
+                "properties": {
+                  "cursor": {
+                    "type": "integer",
+                    "description": "offset 起点，默认 0。最大 2000，与下游 startIndex 上限一致；超过表示结果被截断，不代表名单已经取完。",
+                    "minimum": 0,
+                    "maximum": 2000
+                  },
+                  "size": {
+                    "type": "integer",
+                    "description": "每页条数，默认 100。",
+                    "minimum": 1,
+                    "maximum": 100
+                  }
+                },
+                "description": "分页窗口；每次调用只返回当前页。返回的 hasMore/nextCursor 仅表示可继续分页；仅当用户明确要求继续翻页、获取全量、导出数据，或用户明确指定的条数超过当前页时才继续调用。",
+                "additionalProperties": false,
+                "type": "object"
+              },
+              "orderField": {
+                "enum": [
+                  "total_amount",
+                  "total_units",
+                  "impression",
+                  "conversion_rate"
+                ],
+                "type": "string",
+                "description": "排序字段。支持: total_amount(销售额), total_units(销量), impression(曝光), conversion_rate(转化率)。默认 total_amount 降序。"
+              },
+              "desc": {
+                "type": "boolean",
+                "description": "是否降序。默认 true。"
+              },
+              "includeFields": {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "asin",
+                    "title",
+                    "brand",
+                    "price",
+                    "currency",
+                    "bsr",
+                    "rating",
+                    "monthlyReviewCount",
+                    "childReviewCount",
+                    "monthlySales",
+                    "monthlySalesScope",
+                    "monthlyRevenue",
+                    "fulfillment",
+                    "sellerName",
+                    "sellerNation",
+                    "badges",
+                    "amzUnit",
+                    "variations",
+                    "lqs",
+                    "profit",
+                    "fba",
+                    "questions",
+                    "coupon",
+                    "parent",
+                    "bestSellingVariant",
+                    "availableDate"
+                  ]
+                },
+                "maxItems": 26,
+                "description": "仅控制输出字段，不能传过滤字段。asin 始终返回，用于对应结果行。不传或为空时默认返回 asin/title/brand/price/currency/bsr/rating/monthlyReviewCount/monthlySales/monthlyRevenue/fulfillment/sellerName/sellerNation/badges/parent/bestSellingVariant/availableDate；childReviewCount 与 amzUnit/variations/lqs/profit/fba/questions/coupon 需显式传入。完整可选值以 items.enum 为准。",
+                "type": "array",
+                "uniqueItems": true
+              }
+            }
+          },
+          "permissions": [
+            "jobs.read"
+          ],
+          "risk": "read_only",
+          "may_charge": true,
+          "max_charge_units": 1,
+          "keywords": [
+            "ASIN",
+            "竞品",
+            "商品",
+            "市场"
+          ]
+        },
+        {
+          "name": "asin.detail",
+          "description": "商品详情查询",
+          "input_schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "description": "按 ASIN 集合查询基础详情，支持批量（最多 20 个）。 optional 字段未指定时省略，由服务端承担默认值。",
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "marketplace",
+              "asins"
+            ],
+            "properties": {
+              "asins": {
+                "minItems": 1,
+                "maxItems": 20,
+                "uniqueItems": true,
+                "description": "待查询的 ASIN 列表，1～20 个。",
+                "type": "array",
+                "items": {
+                  "pattern": "^B[0-9A-Z]{9}$",
+                  "type": "string"
+                }
+              },
+              "marketplace": {
+                "description": "站点代码。",
+                "type": "string",
+                "enum": [
+                  "DE",
+                  "AE",
+                  "IN",
+                  "JP",
+                  "IT",
+                  "MX",
+                  "FR",
+                  "ES",
+                  "SA",
+                  "BR",
+                  "AU",
+                  "UK",
+                  "US",
+                  "CA"
+                ]
+              },
+              "includeFields": {
+                "maxItems": 20,
+                "uniqueItems": true,
+                "description": "同成本输出字段裁剪；不传或为空时返回默认字段集。",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "asin",
+                    "marketplace",
+                    "title",
+                    "brand",
+                    "categoryId",
+                    "categoryPath",
+                    "price",
+                    "currency",
+                    "rating",
+                    "reviewCount",
+                    "totalReview",
+                    "bsr",
+                    "seller",
+                    "fulfillment",
+                    "parentAsin",
+                    "dimensions",
+                    "weight",
+                    "availableDate",
+                    "recordUpdatedAt",
+                    "variationList"
+                  ]
+                }
+              }
+            }
+          },
+          "permissions": [
+            "jobs.read"
+          ],
+          "risk": "read_only",
+          "may_charge": true,
+          "max_charge_units": 1,
+          "keywords": [
+            "ASIN",
+            "详情",
+            "商品",
+            "竞品"
+          ]
+        },
+        {
+          "name": "asin.content.list",
+          "description": "商品图片与内容素材查询",
+          "input_schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "description": "查询 ASIN 的内容资产：五点描述与商品主图，一次调用一并返回。 optional 字段未指定时省略，由服务端承担默认值。",
+            "required": [
+              "marketplace",
+              "asin"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "marketplace": {
+                "type": "string",
+                "description": "站点代码。",
+                "enum": [
+                  "AE",
+                  "AU",
+                  "BR",
+                  "CA",
+                  "DE",
+                  "ES",
+                  "FR",
+                  "IN",
+                  "IT",
+                  "JP",
+                  "MX",
+                  "SA",
+                  "UK",
+                  "US"
+                ]
+              },
+              "asin": {
+                "type": "string",
+                "description": "ASIN。",
+                "pattern": "^B[0-9A-Z]{9}$"
+              }
+            }
+          },
+          "permissions": [
+            "jobs.read"
+          ],
+          "risk": "read_only",
+          "may_charge": true,
+          "max_charge_units": 1,
+          "keywords": [
+            "ASIN",
+            "视觉",
+            "图片",
+            "A+",
+            "素材"
+          ]
+        },
+        {
+          "name": "keyword.asin.list",
+          "description": "ASIN关键词和搜索意图查询",
+          "input_schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "description": "品找词：根据 1～10 个 ASIN 查询流量关键词列表，并返回整组 ASIN 的分析状态和类型统计。用户要近30天/最新数据时使用默认 dataRange=LAST_30_DAYS，不要传 month；查历史归档月时传 dataRange=MONTH，可选传 month。排序开关是 orderDesc，不是 desc；类型过滤参数名固定为 trafficWordType，值是字符串数组，不要传 trafficWordTypes。 optional 字段未指定时省略，由服务端承担默认值。",
+            "required": [
+              "marketplace",
+              "asins"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "marketplace": {
+                "type": "string",
+                "description": "站点代码。",
+                "enum": [
+                  "AE",
+                  "AU",
+                  "BR",
+                  "CA",
+                  "DE",
+                  "ES",
+                  "FR",
+                  "IN",
+                  "IT",
+                  "JP",
+                  "MX",
+                  "SA",
+                  "UK",
+                  "US"
+                ]
+              },
+              "asins": {
+                "type": "array",
+                "description": "ASIN 集合，1～10 个；服务端去重。",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "maxItems": 10
+              },
+              "dataRange": {
+                "type": "string",
+                "description": "时间范围。LAST_30_DAYS=滚动近30天（默认）；MONTH=归档自然月快照。LAST_30_DAYS 禁止传 month；MONTH 可不传 month（返回最新归档月），或传 yyyyMM 指定归档月。不要用 month 表达近30天。",
+                "enum": [
+                  "LAST_30_DAYS",
+                  "MONTH"
+                ],
+                "default": "LAST_30_DAYS"
+              },
+              "month": {
+                "type": "string",
+                "description": "dataRange=MONTH 时使用的归档月份，格式 yyyyMM。dataRange=MONTH 且不传 month 时返回最新归档月；dataRange=LAST_30_DAYS 时禁止传。不要根据当前日期主动推断 month。",
+                "pattern": "^\\d{6}$"
+              },
+              "trafficWordType": {
+                "type": "array",
+                "description": "流量词类型过滤。参数名固定为 trafficWordType（单数是历史命名），值必须是字符串数组，例如 [\"ORGANIC\",\"ADS\"]；数组内多值 OR。不传表示不过滤；只影响 items，不影响 summary.typeStats。不要传 trafficWordTypes。",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "ORGANIC",
+                    "ADS",
+                    "AMAZON_CHOICE",
+                    "EDITORIAL_RECOMMENDATION",
+                    "FOUR_STAR",
+                    "HIGHLY_RATED",
+                    "SPONSOR_BRAND",
+                    "SPONSOR_VIDEO",
+                    "PRIMARY",
+                    "PRECISE",
+                    "PRECISE_LONG_TAIL",
+                    "EFFECTIVE",
+                    "CONVERSION_EXCELLENT",
+                    "CONVERSION_STABLE",
+                    "CONVERSION_LOST",
+                    "INVALID"
+                  ]
+                },
+                "minItems": 1,
+                "maxItems": 16,
+                "uniqueItems": true
+              },
+              "orderField": {
+                "enum": [
+                  "searches",
+                  "trafficShare"
+                ],
+                "type": "string",
+                "description": "items 排序字段：searches=月搜索量估算；trafficShare=关键词在整组 ASIN 流量中的占比。不传时按下游预估周搜索量排序，注意默认排序与 searches 的月度口径不同。"
+              },
+              "orderDesc": {
+                "type": "boolean",
+                "description": "是否降序；入参是 orderDesc，不是 desc。不传时 true。"
+              },
+              "page": {
+                "type": "object",
+                "description": "分页窗口；每次调用只返回当前页。返回的 hasMore/nextCursor 仅表示可继续分页；仅当用户明确要求继续翻页、获取全量、导出数据，或用户明确指定的条数超过当前页时才继续调用。",
+                "properties": {
+                  "cursor": {
+                    "type": "integer",
+                    "description": "offset 起点，默认 0；cursor + size 不能超过 3000。",
+                    "minimum": 0,
+                    "maximum": 3000
+                  },
+                  "size": {
+                    "type": "integer",
+                    "description": "每页条数，默认 100。",
+                    "minimum": 1,
+                    "maximum": 100
+                  }
+                },
+                "additionalProperties": false
+              },
+              "includeFields": {
+                "type": "array",
+                "description": "items 输出字段裁剪。不传或为空时返回默认字段集；只影响 items，不影响 summary 和 page。只传调用方需要的字段。",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "keyword",
+                    "searchVolume",
+                    "searchesRank",
+                    "trafficShare",
+                    "trafficWordTypes",
+                    "purchases",
+                    "purchaseRate",
+                    "clicks",
+                    "impressions",
+                    "products",
+                    "supplyDemandRatio",
+                    "bid",
+                    "ppc",
+                    "avgPrice",
+                    "avgRating",
+                    "avgReviews",
+                    "titleDensity",
+                    "spr",
+                    "monopolyClickRate",
+                    "adProducts",
+                    "updatedTime",
+                    "bestRank",
+                    "bestAdRank",
+                    "matchedAsins",
+                    "clickShareRate",
+                    "conversionShareRate"
+                  ]
+                },
+                "minItems": 1,
+                "maxItems": 26,
+                "uniqueItems": true
+              }
+            }
+          },
+          "permissions": [
+            "jobs.read"
+          ],
+          "risk": "read_only",
+          "may_charge": true,
+          "max_charge_units": 1,
+          "keywords": [
+            "ASIN",
+            "关键词",
+            "搜索",
+            "流量"
+          ]
+        },
+        {
+          "name": "asin.review.list",
+          "description": "买家评论查询；最多100条，每20条一个计费单位，未知回执不显示免费",
+          "input_schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "description": "标准版 ASIN 评论查询，默认返回最多 100 条；支持星级、媒体评论过滤、排序和 limit 指定返回条数。 optional 字段未指定时省略，由服务端承担默认值。",
+            "required": [
+              "marketplace",
+              "asin"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "marketplace": {
+                "type": "string",
+                "description": "站点代码。",
+                "enum": [
+                  "AE",
+                  "AU",
+                  "BR",
+                  "CA",
+                  "DE",
+                  "ES",
+                  "FR",
+                  "IN",
+                  "IT",
+                  "JP",
+                  "MX",
+                  "SA",
+                  "UK",
+                  "US"
+                ]
+              },
+              "asin": {
+                "type": "string",
+                "description": "父体或子体 ASIN；服务端归一到父体，评论数据仅支持父体维度，不返回指定子体的独立评论。"
+              },
+              "star": {
+                "type": "array",
+                "description": "精确星级过滤，可多选；不传不过滤。",
+                "items": {
+                  "type": "integer",
+                  "enum": [
+                    1,
+                    2,
+                    3,
+                    4,
+                    5
+                  ]
+                },
+                "minItems": 1,
+                "maxItems": 5,
+                "uniqueItems": true
+              },
+              "hasMedia": {
+                "type": "boolean",
+                "description": "true=有图片或视频；false=无图片且无视频；不传不过滤。"
+              },
+              "sort": {
+                "enum": [
+                  "DATE_DESC",
+                  "DATE_ASC",
+                  "STAR_DESC",
+                  "STAR_ASC",
+                  "HELPFUL_DESC",
+                  "HELPFUL_ASC"
+                ],
+                "type": "string",
+                "description": "排序方式，默认 DATE_DESC。"
+              },
+              "sku": {
+                "type": "string",
+                "description": "款式/SKU 关键词过滤；对评论的 skus 数组做大小写不敏感包含匹配，例如 Silver、Color: Silver；不传不过滤。"
+              },
+              "limit": {
+                "description": "返回条数，默认 100，最大 100；常用于批量获取 TopN 评论。",
+                "minimum": 1,
+                "maximum": 100,
+                "type": "integer"
+              }
+            }
+          },
+          "permissions": [
+            "jobs.read"
+          ],
+          "risk": "read_only",
+          "may_charge": true,
+          "max_charge_units": 5,
+          "keywords": [
+            "ASIN",
+            "评论",
+            "Review",
+            "VOC",
+            "差评"
+          ]
+        },
+        {
+          "name": "category.ai.feature.list",
+          "description": "类目特征与需求查询",
+          "input_schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "description": "查询类目 AI 属性挖掘结果；当前服务端固定使用近 30 天统计（dataMonth=210001）。 optional 字段未指定时省略，由服务端承担默认值。",
+            "required": [
+              "marketplace",
+              "categoryId"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "marketplace": {
+                "type": "string",
+                "description": "站点代码。",
+                "enum": [
+                  "AE",
+                  "AU",
+                  "BR",
+                  "CA",
+                  "DE",
+                  "ES",
+                  "FR",
+                  "IN",
+                  "IT",
+                  "JP",
+                  "MX",
+                  "SA",
+                  "UK",
+                  "US"
+                ]
+              },
+              "categoryId": {
+                "type": "string",
+                "description": "类目节点路径 nodeIdPath，格式如 123:456:789。"
+              }
+            }
+          },
+          "permissions": [
+            "jobs.read"
+          ],
+          "risk": "read_only",
+          "may_charge": true,
+          "max_charge_units": 1,
+          "keywords": [
+            "类目",
+            "需求",
+            "卖点",
+            "市场"
+          ]
+        }
+      ]
+    }
+  ]
+}

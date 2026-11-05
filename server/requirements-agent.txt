@@ -1,0 +1,7 @@
+# Optional control plane. Install in the isolated development environment first.
+-r requirements.txt
+langgraph==1.2.19
+langgraph-checkpoint-mysql[asyncmy]==3.0.0
+langchain-mcp-adapters==0.3.2
+PyYAML>=6.0.2,<7
+jsonschema>=4.23,<5
