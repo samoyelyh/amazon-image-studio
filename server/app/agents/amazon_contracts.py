@@ -3,6 +3,7 @@ from typing import Literal
 from datetime import datetime
 from pydantic import Field, model_validator
 from app.agents.contracts import StrictModel
+from app.agents.creative_strategy import CreativeStrategy,ModuleNarrative,validate_mapping
 
 
 class Evidence(StrictModel):
@@ -68,6 +69,7 @@ class APlusModule(StrictModel):
     design_principles:list[DesignPrinciple]=Field(default_factory=list,max_length=9)
     art_direction:ArtDirection|None=None
     image_slots:list[ImageSlot]=Field(default_factory=list,max_length=4)
+    narrative:ModuleNarrative|None=None
 
 
 class APlusPlan(StrictModel):
@@ -81,10 +83,12 @@ class APlusPlan(StrictModel):
     modules: list[APlusModule] = Field(min_length=1, max_length=7)
     design_version:str='legacy'
     suite_rationale:str=Field(default='',max_length=500)
+    creative_strategy:CreativeStrategy|None=None
     @model_validator(mode='after')
     def unique_ids(self):
         for values in (self.modules, self.insight.evidence):
             if len({v.id for v in values}) != len(values): raise ValueError('ids must be unique')
+        if self.creative_strategy:validate_mapping(self.creative_strategy,self.modules,[e.id for e in self.insight.evidence if e.scope=='own_product' and e.status=='fact'])
         return self
 
 

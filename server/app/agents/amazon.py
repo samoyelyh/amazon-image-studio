@@ -64,7 +64,7 @@ def findings(plan):
     for m in plan.modules:
         spec = module_spec(plan, m)
         if not spec or spec['type'] != (plan.aplus_type if plan.deliverable == 'aplus' else 'listing'): errors.append(f'{m.id}: 模块规格未审核或不匹配。')
-        if plan.deliverable == 'listing' and not m.design_direction:
+        if plan.deliverable == 'listing' and not plan.creative_strategy and not m.design_direction:
             errors.append(f'{m.id}: 请指定公司视觉设计方向。')
         for field in ('headline','body'):
             limit=(spec or {}).get(field+'_max')
@@ -86,6 +86,7 @@ def findings(plan):
 
 def module_signature(plan, module):
     data=module.model_dump(mode='json')
+    if not module.narrative:data.pop('narrative',None)
     for key in ('design_direction','requested_width','requested_height'):
         if data[key] is None:data.pop(key)
     if not module.design_principles and not module.art_direction and not module.image_slots:
@@ -94,6 +95,7 @@ def module_signature(plan, module):
         'style':plan.campaign_style_lock,'rules':plan.rules_version,'marketplace':plan.marketplace,
         'evidence':[e.model_dump(mode='json') for e in plan.insight.evidence if e.id in module.evidence_ids]}
     if plan.deliverable!='aplus':value['deliverable']=plan.deliverable
+    if plan.creative_strategy:value['creative_strategy']=plan.creative_strategy.model_dump(mode='json')
     return digest(value)
 
 
@@ -309,6 +311,8 @@ async def generate(db, settings, conv, args, key):
                 'amazon_module':{'plan_id':row.id,'module_id':m.id,'slot_id':slot['id'],'slot_snapshot':direction.model_dump(mode='json'),
                     'plan_revision':data['revision'],'module_snapshot':m.model_dump(mode='json'),'rules_version':p.rules_version,'spec_snapshot':spec,
                     'design_trace':{'skills':data.get('skill_trace',[]),'principles':m.design_principles,
+                        'creative_strategy_version':p.creative_strategy.version if p.creative_strategy else None,
+                        'narrative':m.narrative.model_dump() if m.narrative else None,
                         'art_direction':m.art_direction.model_dump() if m.art_direction else None}},
                 'agent_image':{'conversation_id':conv.id,'parent_output_id':parent['id'] if parent else None,
                     'root_output_id':parent['root_output_id'] if parent else None,'version':parent['version']+1 if parent else 1}}))

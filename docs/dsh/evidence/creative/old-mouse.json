@@ -1,0 +1,2042 @@
+{
+  "conversation": "bbc8ce48-952c-4c9b-82a7-5f626fe8e927",
+  "run": "273c1d62-1e62-461e-9d44-7766640921ca",
+  "development_runs": [],
+  "ticket": "ed74e5390c079414a5c8b4c1df0e1d85",
+  "status": "completed",
+  "planning_seconds": 68.29975639599934,
+  "recovery_count": 0,
+  "main_calls": 1,
+  "executor_calls": 1,
+  "quality": null,
+  "sessions": {
+    "main_session": "main-21d60990dafa20bcb4835939b9b562d56a68dd8d0b9a1dfd9018523918965229",
+    "vision_session": "vision-f90063b63964a999475326233f9ab2570c5d30aea507e39af383192be768d80f",
+    "executor_session": "executor-353ce00ab270ace479372aecefaea0746c42e675771647e9ea350592f0c31250"
+  },
+  "plan": {
+    "id": "420e3e93-ab04-45e6-b946-a21f57e058fd",
+    "plan": {
+      "insight": {
+        "evidence": [
+          {
+            "id": "e1",
+            "asin": null,
+            "scope": "own_product",
+            "period": "",
+            "source": "本会话已授权商品参考图",
+            "status": "fact",
+            "statement": "源图可见石墨黑色紧凑型无线鼠标，圆润对称机身，顶部带横向纹路金属滚轮",
+            "collected_at": "2026-11-06T06:53:35.786049Z",
+            "review_scope": "",
+            "review_sample_count": null
+          },
+          {
+            "id": "e2",
+            "asin": null,
+            "scope": "own_product",
+            "period": "",
+            "source": "本会话已授权商品参考图",
+            "status": "fact",
+            "statement": "滚轮后方有细长按键与绿色指示灯，正面低调“logi”字样",
+            "collected_at": "2026-11-06T06:53:35.786049Z",
+            "review_scope": "",
+            "review_sample_count": null
+          },
+          {
+            "id": "e3",
+            "asin": null,
+            "scope": "own_product",
+            "period": "",
+            "source": "本会话已授权商品参考图",
+            "status": "fact",
+            "statement": "左侧可见双键结构，前端左侧有USB-C接口",
+            "collected_at": "2026-11-06T06:53:35.786049Z",
+            "review_scope": "",
+            "review_sample_count": null
+          },
+          {
+            "id": "e4",
+            "asin": null,
+            "scope": "own_product",
+            "period": "",
+            "source": "用户确认引文：8K DPI传感器；MagSpeed滚轮有逐格和高速滚动模式；Quiet Clicks比MX Anywhere 3点击噪声更低，不能承诺无声；Easy-Switch可配对最多三台设备；USB-C充电",
+            "status": "fact",
+            "statement": "8K DPI传感器、MagSpeed逐格/高速双模式、Quiet Clicks较MX Anywhere 3更安静、Easy-Switch最多三台设备、USB-C充电（用户已核对事实）",
+            "collected_at": "2026-11-06T06:53:35.786049Z",
+            "review_scope": "",
+            "review_sample_count": null
+          }
+        ],
+        "limitations": [
+          "不声称Logi Bolt接收器随附",
+          "不制作未经验证的性能百分比",
+          "Quiet Clicks仅表述为更安静，不承诺无声",
+          "消费动机为策划假设"
+        ],
+        "buyer_concerns": [],
+        "competitor_points": [],
+        "keywords_and_intent": [],
+        "customers_and_scenes": [],
+        "visual_opportunities": [
+          "消费动机为策划假设，未做真实市场调研，不声称已研究评论或竞品。"
+        ]
+      },
+      "modules": [
+        {
+          "id": "lp1",
+          "body": "Compact wireless mouse in Graphite",
+          "title": "总览Hero",
+          "spec_id": "listing_square",
+          "headline": "MX Anywhere 3S",
+          "user_need": "Graphite 紧凑旗舰级无线鼠标总览",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "Graphite 紧凑旗舰级无线鼠标总览",
+          "prohibited": [],
+          "composition": "三-quarter俯视角度，鼠标主体居中偏左占画面约55%，浅灰渐变摄影背景，柔和主光从左上方，滚轮金属高光清晰，右下留白用于排版",
+          "image_slots": [],
+          "evidence_ids": [
+            "e1",
+            "e2"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: Graphite 紧凑旗舰级无线鼠标总览\nModel-authored scene and camera direction: 三-quarter俯视角度，鼠标主体居中偏左占画面约55%，浅灰渐变摄影背景，柔和主光从左上方，滚轮金属高光清晰，右下留白用于排版\nCopy zone: right. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": null,
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留right侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": "white",
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "campaign_consistency",
+            "commercial_lighting",
+            "visual_hierarchy"
+          ],
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ]
+        },
+        {
+          "id": "lp2",
+          "body": "Compact shape fits your workspace, wherever you are",
+          "title": "便携场景",
+          "spec_id": "listing_square",
+          "headline": "Take It Anywhere",
+          "user_need": "紧凑机身随行办公，随处可用（策划假设：移动办公人群）",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "紧凑机身随行办公，随处可用（策划假设：移动办公人群）",
+          "prohibited": [],
+          "composition": "鼠标置于简洁桌面与笔记本电脑边缘旁，俯拍45度，环境留白克制，鼠标清晰为第一焦点，午后柔光，画面下方留白排版",
+          "image_slots": [],
+          "evidence_ids": [
+            "e1",
+            "e4"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 紧凑机身随行办公，随处可用（策划假设：移动办公人群）\nModel-authored scene and camera direction: 鼠标置于简洁桌面与笔记本电脑边缘旁，俯拍45度，环境留白克制，鼠标清晰为第一焦点，午后柔光，画面下方留白排版\nCopy zone: bottom. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": null,
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留bottom侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": "casual",
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "campaign_consistency",
+            "scale_context",
+            "emotional_story"
+          ],
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ]
+        },
+        {
+          "id": "lp3",
+          "body": "Precise click-to-click and ultra-fast hyper scrolling",
+          "title": "MagSpeed滚轮",
+          "spec_id": "listing_square",
+          "headline": "MagSpeed Scrolling",
+          "user_need": "MagSpeed滚轮逐格与高速滚动双模式",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "MagSpeed滚轮逐格与高速滚动双模式",
+          "prohibited": [],
+          "composition": "微距特写滚轮与滚轮后按键，金属横向纹路与金属光泽清晰，浅景深背景虚化，左侧光勾勒滚轮轮廓，上部留白排版",
+          "image_slots": [],
+          "evidence_ids": [
+            "e1",
+            "e4"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: MagSpeed滚轮逐格与高速滚动双模式\nModel-authored scene and camera direction: 微距特写滚轮与滚轮后按键，金属横向纹路与金属光泽清晰，浅景深背景虚化，左侧光勾勒滚轮轮廓，上部留白排版\nCopy zone: top. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": null,
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留top侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": "detail",
+          "requested_height": null,
+          "design_principles": [
+            "detail_truth",
+            "commercial_lighting",
+            "visual_hierarchy",
+            "copy_separation"
+          ],
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ]
+        },
+        {
+          "id": "lp4",
+          "body": "Lower click noise than MX Anywhere 3, with precise 8K DPI tracking",
+          "title": "安静与传感器",
+          "spec_id": "listing_square",
+          "headline": "Quiet Clicks. 8K DPI Sensor.",
+          "user_need": "Quiet Clicks 更安静点击 + 8K DPI 传感器",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "Quiet Clicks 更安静点击 + 8K DPI 传感器",
+          "prohibited": [],
+          "composition": "斜侧视角鼠标主体配手指轻按左键的自然使用关系，背景极简安静暗调或浅灰统一，按键动作清晰，右侧留白排版，不出现分贝数值",
+          "image_slots": [],
+          "evidence_ids": [
+            "e2",
+            "e4"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: Quiet Clicks 更安静点击 + 8K DPI 传感器\nModel-authored scene and camera direction: 斜侧视角鼠标主体配手指轻按左键的自然使用关系，背景极简安静暗调或浅灰统一，按键动作清晰，右侧留白排版，不出现分贝数值\nCopy zone: right. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": null,
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留right侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": "detail",
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "detail_truth",
+            "visual_hierarchy",
+            "copy_separation"
+          ],
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ]
+        },
+        {
+          "id": "lp5",
+          "body": "Easy-Switch pairing with up to three devices, USB-C charging",
+          "title": "多设备切换",
+          "spec_id": "listing_square",
+          "headline": "One Mouse, Three Devices",
+          "user_need": "Easy-Switch 一键切换最多三台设备，USB-C 充电",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "Easy-Switch 一键切换最多三台设备，USB-C 充电",
+          "prohibited": [],
+          "composition": "鼠标旁安排笔记本、平板、手机三台设备为简洁轮廓场景，鼠标居中为第一焦点，俯视构图，三台设备呈扇形环绕暗示切换，左/上留白排版，不展示未确认随附配件",
+          "image_slots": [],
+          "evidence_ids": [
+            "e3",
+            "e4"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: Easy-Switch 一键切换最多三台设备，USB-C 充电\nModel-authored scene and camera direction: 鼠标旁安排笔记本、平板、手机三台设备为简洁轮廓场景，鼠标居中为第一焦点，俯视构图，三台设备呈扇形环绕暗示切换，左/上留白排版，不展示未确认随附配件\nCopy zone: top. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": null,
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留top侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": "casual",
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "campaign_consistency"
+          ],
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ]
+        }
+      ],
+      "aplus_type": "basic",
+      "deliverable": "listing",
+      "marketplace": "US",
+      "rules_version": "amazon-aplus-2026-11-05-r4",
+      "design_version": "legacy",
+      "suite_rationale": "",
+      "campaign_style_lock": "整套五图统一的极简专业科技风：干净中性浅灰背景，柔和主光+清晰边缘光，石墨黑机身与金属滚轮细节清晰；每张一个卖点，构图节奏从总览→场景→细节→细节→多设备切换递进；文字排版留出安静留白，图片内不生成小字。",
+      "product_identity_lock": "深灰/石墨黑色 Logitech MX Anywhere 3S 紧凑型无线鼠标：保留顶部“logi”Logo、金属 MagSpeed 滚轮、滚轮后细长按键、绿色指示灯、左侧双键、圆润对称机身、前端 USB-C 接口；不得改变颜色、Logo、按键结构；不声称 Logi Bolt 接收器随附，不使用未经验证的性能百分比。"
+    },
+    "revision": 1,
+    "approvals": {
+      "lp1": {
+        "at": "2026-11-06T06:53:35.842420+00:00",
+        "by": "7453c95a-00bd-47ae-a545-e71c7d2ed3cd",
+        "source": "dsh-authenticated-task",
+        "signature": "9839985df65e353913bdb11a77cbc5eae6e5ac3bd154f559e56719d59bad8361",
+        "evidence_ids": [
+          "e1",
+          "e2"
+        ],
+        "rights_confirmed": false
+      },
+      "lp2": {
+        "at": "2026-11-06T06:53:35.842546+00:00",
+        "by": "7453c95a-00bd-47ae-a545-e71c7d2ed3cd",
+        "source": "dsh-authenticated-task",
+        "signature": "56e4dc8d53db8b429ddf8e453ac4eec81e832cabd4a9f160aac2d7613887cd9f",
+        "evidence_ids": [
+          "e1",
+          "e4"
+        ],
+        "rights_confirmed": false
+      },
+      "lp3": {
+        "at": "2026-11-06T06:53:35.842643+00:00",
+        "by": "7453c95a-00bd-47ae-a545-e71c7d2ed3cd",
+        "source": "dsh-authenticated-task",
+        "signature": "8f301343378c6de2243d0c3c35e51fb6c593a6f7f68ea3cdc538edd5b14820b1",
+        "evidence_ids": [
+          "e1",
+          "e4"
+        ],
+        "rights_confirmed": false
+      },
+      "lp4": {
+        "at": "2026-11-06T06:53:35.842725+00:00",
+        "by": "7453c95a-00bd-47ae-a545-e71c7d2ed3cd",
+        "source": "dsh-authenticated-task",
+        "signature": "bf980637daa62610b71de61f1834e97e98cca85d5e2dfd6178b9efb8503e9e77",
+        "evidence_ids": [
+          "e2",
+          "e4"
+        ],
+        "rights_confirmed": false
+      },
+      "lp5": {
+        "at": "2026-11-06T06:53:35.842807+00:00",
+        "by": "7453c95a-00bd-47ae-a545-e71c7d2ed3cd",
+        "source": "dsh-authenticated-task",
+        "signature": "7d6805fd0c55000ae2ea197bbfa58832c6ab8e0bf0d1d3705b1024fe197ec183",
+        "evidence_ids": [
+          "e3",
+          "e4"
+        ],
+        "rights_confirmed": false
+      }
+    },
+    "controller": "dsh-native",
+    "project_id": "4a57114a-8560-4017-8c82-ef29e00e6cfa",
+    "request_key": "dsh-tool:72c2f51fb8de4d2bb5169415f325de54bd79484417c3f4b15289ee17179d53f1",
+    "skill_trace": [
+      {
+        "id": "amazon-aplus-planner",
+        "version": "2",
+        "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+      },
+      {
+        "id": "amazon-market-insight",
+        "version": "1",
+        "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+      },
+      {
+        "id": "image-creation",
+        "version": "1",
+        "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+      }
+    ],
+    "submissions": [
+      {
+        "job_ids": [
+          "e1f95f4b-d76a-47f7-84d1-d90eda1172b5",
+          "7a71ecd1-c079-4318-bceb-75f714958174",
+          "7de45a8b-b391-4a43-a338-143c5aff74a6",
+          "0648eeed-9c6c-4b0f-a9c7-d2907218444b",
+          "df486538-2dd7-4fa2-967f-0d740cc2f3f3"
+        ],
+        "batch_id": "05db832f-838d-4b00-aa01-947caddbe7d0",
+        "slot_ids": [
+          "main",
+          "main",
+          "main",
+          "main",
+          "main"
+        ],
+        "module_ids": [
+          "lp1",
+          "lp2",
+          "lp3",
+          "lp4",
+          "lp5"
+        ],
+        "request_key": "dsh-tool:72c2f51fb8de4d2bb5169415f325de54bd79484417c3f4b15289ee17179d53f1:images",
+        "module_signatures": {
+          "lp1::main": "slot-v1:88964faaa751e9d9f731c44b5fa2527a27ab16dcad11870ce83a31d83cd73e70",
+          "lp2::main": "slot-v1:1a693a0ad542c0cf52a37f53d392d729cab4ac142b04ab46ccbb79e1a7002016",
+          "lp3::main": "slot-v1:276180e6696f9d61da99f8c1aacbba6a59efd412e1947434af457777a59d7038",
+          "lp4::main": "slot-v1:e68572b8b04acfb1b9b8cfe2f650372d1b4615443efdd19797457fffb604cbeb",
+          "lp5::main": "slot-v1:11d28d55867502f73e94f56d882cbbea4324de4526357f1f1f5182250191c2c8"
+        }
+      }
+    ],
+    "schema_version": 1,
+    "findings": [],
+    "manual_checks": [
+      "商品颜色/图案/Logo/结构",
+      "实际卖点与事实",
+      "英文拼写和可读性",
+      "移动端完整性",
+      "素材商业使用权",
+      "球队/品牌/赛事授权",
+      "无价格/促销/竞品比较"
+    ],
+    "module_specs": {
+      "lp1": {
+        "type": "listing",
+        "width": 1600,
+        "height": 1600,
+        "label": "公司 Listing 交付目标，非所有站点通用发布保证"
+      },
+      "lp2": {
+        "type": "listing",
+        "width": 1600,
+        "height": 1600,
+        "label": "公司 Listing 交付目标，非所有站点通用发布保证"
+      },
+      "lp3": {
+        "type": "listing",
+        "width": 1600,
+        "height": 1600,
+        "label": "公司 Listing 交付目标，非所有站点通用发布保证"
+      },
+      "lp4": {
+        "type": "listing",
+        "width": 1600,
+        "height": 1600,
+        "label": "公司 Listing 交付目标，非所有站点通用发布保证"
+      },
+      "lp5": {
+        "type": "listing",
+        "width": 1600,
+        "height": 1600,
+        "label": "公司 Listing 交付目标，非所有站点通用发布保证"
+      }
+    },
+    "module_jobs": [
+      {
+        "job_id": "0648eeed-9c6c-4b0f-a9c7-d2907218444b",
+        "status": "succeeded",
+        "error_code": null,
+        "module_id": "lp4",
+        "slot_id": "main"
+      },
+      {
+        "job_id": "7a71ecd1-c079-4318-bceb-75f714958174",
+        "status": "succeeded",
+        "error_code": null,
+        "module_id": "lp2",
+        "slot_id": "main"
+      },
+      {
+        "job_id": "7de45a8b-b391-4a43-a338-143c5aff74a6",
+        "status": "succeeded",
+        "error_code": null,
+        "module_id": "lp3",
+        "slot_id": "main"
+      },
+      {
+        "job_id": "df486538-2dd7-4fa2-967f-0d740cc2f3f3",
+        "status": "succeeded",
+        "error_code": null,
+        "module_id": "lp5",
+        "slot_id": "main"
+      },
+      {
+        "job_id": "e1f95f4b-d76a-47f7-84d1-d90eda1172b5",
+        "status": "succeeded",
+        "error_code": null,
+        "module_id": "lp1",
+        "slot_id": "main"
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "id": "90f38ec6-130f-4a15-9cba-2bc9d5655cf5",
+      "asset_id": "580d6e2f-3fd9-4fc2-b43c-5292d78d3acc",
+      "job_id": "e1f95f4b-d76a-47f7-84d1-d90eda1172b5",
+      "run_id": "273c1d62-1e62-461e-9d44-7766640921ca",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "420e3e93-ab04-45e6-b946-a21f57e058fd",
+        "slot_id": "main",
+        "module_id": "lp1",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "product_identity",
+            "campaign_consistency",
+            "commercial_lighting",
+            "visual_hierarchy"
+          ],
+          "art_direction": null
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "",
+          "headline": "",
+          "composition": "三-quarter俯视角度，鼠标主体居中偏左占画面约55%，浅灰渐变摄影背景，柔和主光从左上方，滚轮金属高光清晰，右下留白用于排版",
+          "reference_asset_ids": null
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "listing",
+          "label": "公司 Listing 交付目标，非所有站点通用发布保证",
+          "width": 1600,
+          "height": 1600
+        },
+        "module_snapshot": {
+          "id": "lp1",
+          "body": "Compact wireless mouse in Graphite",
+          "title": "总览Hero",
+          "spec_id": "listing_square",
+          "headline": "MX Anywhere 3S",
+          "user_need": "Graphite 紧凑旗舰级无线鼠标总览",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "Graphite 紧凑旗舰级无线鼠标总览",
+          "prohibited": [],
+          "composition": "三-quarter俯视角度，鼠标主体居中偏左占画面约55%，浅灰渐变摄影背景，柔和主光从左上方，滚轮金属高光清晰，右下留白用于排版",
+          "image_slots": [],
+          "evidence_ids": [
+            "e1",
+            "e2"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: Graphite 紧凑旗舰级无线鼠标总览\nModel-authored scene and camera direction: 三-quarter俯视角度，鼠标主体居中偏左占画面约55%，浅灰渐变摄影背景，柔和主光从左上方，滚轮金属高光清晰，右下留白用于排版\nCopy zone: right. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": null,
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留right侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": "white",
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "campaign_consistency",
+            "commercial_lighting",
+            "visual_hierarchy"
+          ],
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ]
+        }
+      },
+      "number": 1,
+      "sequence_number": 0,
+      "filename": "generated-1-1600x1600.png",
+      "width": 1600,
+      "height": 1600,
+      "size": 2105284,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/580d6e2f-3fd9-4fc2-b43c-5292d78d3acc/content",
+      "download_url": "/api/v1/assets/580d6e2f-3fd9-4fc2-b43c-5292d78d3acc/download",
+      "parent_output_id": null,
+      "root_output_id": "90f38ec6-130f-4a15-9cba-2bc9d5655cf5",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "28e8bc01-8635-43b3-85cf-0623f61ab6e9",
+      "asset_id": "ab0b23f9-b695-4981-816f-36a7b3b5d300",
+      "job_id": "7a71ecd1-c079-4318-bceb-75f714958174",
+      "run_id": "273c1d62-1e62-461e-9d44-7766640921ca",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "420e3e93-ab04-45e6-b946-a21f57e058fd",
+        "slot_id": "main",
+        "module_id": "lp2",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "product_identity",
+            "campaign_consistency",
+            "scale_context",
+            "emotional_story"
+          ],
+          "art_direction": null
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "",
+          "headline": "",
+          "composition": "鼠标置于简洁桌面与笔记本电脑边缘旁，俯拍45度，环境留白克制，鼠标清晰为第一焦点，午后柔光，画面下方留白排版",
+          "reference_asset_ids": null
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "listing",
+          "label": "公司 Listing 交付目标，非所有站点通用发布保证",
+          "width": 1600,
+          "height": 1600
+        },
+        "module_snapshot": {
+          "id": "lp2",
+          "body": "Compact shape fits your workspace, wherever you are",
+          "title": "便携场景",
+          "spec_id": "listing_square",
+          "headline": "Take It Anywhere",
+          "user_need": "紧凑机身随行办公，随处可用（策划假设：移动办公人群）",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "紧凑机身随行办公，随处可用（策划假设：移动办公人群）",
+          "prohibited": [],
+          "composition": "鼠标置于简洁桌面与笔记本电脑边缘旁，俯拍45度，环境留白克制，鼠标清晰为第一焦点，午后柔光，画面下方留白排版",
+          "image_slots": [],
+          "evidence_ids": [
+            "e1",
+            "e4"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 紧凑机身随行办公，随处可用（策划假设：移动办公人群）\nModel-authored scene and camera direction: 鼠标置于简洁桌面与笔记本电脑边缘旁，俯拍45度，环境留白克制，鼠标清晰为第一焦点，午后柔光，画面下方留白排版\nCopy zone: bottom. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": null,
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留bottom侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": "casual",
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "campaign_consistency",
+            "scale_context",
+            "emotional_story"
+          ],
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ]
+        }
+      },
+      "number": 2,
+      "sequence_number": 0,
+      "filename": "generated-1-1600x1600.png",
+      "width": 1600,
+      "height": 1600,
+      "size": 2508479,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/ab0b23f9-b695-4981-816f-36a7b3b5d300/content",
+      "download_url": "/api/v1/assets/ab0b23f9-b695-4981-816f-36a7b3b5d300/download",
+      "parent_output_id": null,
+      "root_output_id": "28e8bc01-8635-43b3-85cf-0623f61ab6e9",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "5b24215c-f2c3-41bf-9c25-524472a47bec",
+      "asset_id": "204e9781-05fa-4b2b-8dc3-985849562327",
+      "job_id": "7de45a8b-b391-4a43-a338-143c5aff74a6",
+      "run_id": "273c1d62-1e62-461e-9d44-7766640921ca",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "420e3e93-ab04-45e6-b946-a21f57e058fd",
+        "slot_id": "main",
+        "module_id": "lp3",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "detail_truth",
+            "commercial_lighting",
+            "visual_hierarchy",
+            "copy_separation"
+          ],
+          "art_direction": null
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "",
+          "headline": "",
+          "composition": "微距特写滚轮与滚轮后按键，金属横向纹路与金属光泽清晰，浅景深背景虚化，左侧光勾勒滚轮轮廓，上部留白排版",
+          "reference_asset_ids": null
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "listing",
+          "label": "公司 Listing 交付目标，非所有站点通用发布保证",
+          "width": 1600,
+          "height": 1600
+        },
+        "module_snapshot": {
+          "id": "lp3",
+          "body": "Precise click-to-click and ultra-fast hyper scrolling",
+          "title": "MagSpeed滚轮",
+          "spec_id": "listing_square",
+          "headline": "MagSpeed Scrolling",
+          "user_need": "MagSpeed滚轮逐格与高速滚动双模式",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "MagSpeed滚轮逐格与高速滚动双模式",
+          "prohibited": [],
+          "composition": "微距特写滚轮与滚轮后按键，金属横向纹路与金属光泽清晰，浅景深背景虚化，左侧光勾勒滚轮轮廓，上部留白排版",
+          "image_slots": [],
+          "evidence_ids": [
+            "e1",
+            "e4"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: MagSpeed滚轮逐格与高速滚动双模式\nModel-authored scene and camera direction: 微距特写滚轮与滚轮后按键，金属横向纹路与金属光泽清晰，浅景深背景虚化，左侧光勾勒滚轮轮廓，上部留白排版\nCopy zone: top. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": null,
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留top侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": "detail",
+          "requested_height": null,
+          "design_principles": [
+            "detail_truth",
+            "commercial_lighting",
+            "visual_hierarchy",
+            "copy_separation"
+          ],
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ]
+        }
+      },
+      "number": 3,
+      "sequence_number": 0,
+      "filename": "generated-1-1600x1600.png",
+      "width": 1600,
+      "height": 1600,
+      "size": 2505167,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/204e9781-05fa-4b2b-8dc3-985849562327/content",
+      "download_url": "/api/v1/assets/204e9781-05fa-4b2b-8dc3-985849562327/download",
+      "parent_output_id": null,
+      "root_output_id": "5b24215c-f2c3-41bf-9c25-524472a47bec",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "5f9b9109-86d1-4fa5-9d6e-aa273a3ceda1",
+      "asset_id": "59968d29-1599-4d38-affb-278891d8b8a4",
+      "job_id": "0648eeed-9c6c-4b0f-a9c7-d2907218444b",
+      "run_id": "273c1d62-1e62-461e-9d44-7766640921ca",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "420e3e93-ab04-45e6-b946-a21f57e058fd",
+        "slot_id": "main",
+        "module_id": "lp4",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "product_identity",
+            "detail_truth",
+            "visual_hierarchy",
+            "copy_separation"
+          ],
+          "art_direction": null
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "",
+          "headline": "",
+          "composition": "斜侧视角鼠标主体配手指轻按左键的自然使用关系，背景极简安静暗调或浅灰统一，按键动作清晰，右侧留白排版，不出现分贝数值",
+          "reference_asset_ids": null
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "listing",
+          "label": "公司 Listing 交付目标，非所有站点通用发布保证",
+          "width": 1600,
+          "height": 1600
+        },
+        "module_snapshot": {
+          "id": "lp4",
+          "body": "Lower click noise than MX Anywhere 3, with precise 8K DPI tracking",
+          "title": "安静与传感器",
+          "spec_id": "listing_square",
+          "headline": "Quiet Clicks. 8K DPI Sensor.",
+          "user_need": "Quiet Clicks 更安静点击 + 8K DPI 传感器",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "Quiet Clicks 更安静点击 + 8K DPI 传感器",
+          "prohibited": [],
+          "composition": "斜侧视角鼠标主体配手指轻按左键的自然使用关系，背景极简安静暗调或浅灰统一，按键动作清晰，右侧留白排版，不出现分贝数值",
+          "image_slots": [],
+          "evidence_ids": [
+            "e2",
+            "e4"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: Quiet Clicks 更安静点击 + 8K DPI 传感器\nModel-authored scene and camera direction: 斜侧视角鼠标主体配手指轻按左键的自然使用关系，背景极简安静暗调或浅灰统一，按键动作清晰，右侧留白排版，不出现分贝数值\nCopy zone: right. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": null,
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留right侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": "detail",
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "detail_truth",
+            "visual_hierarchy",
+            "copy_separation"
+          ],
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ]
+        }
+      },
+      "number": 4,
+      "sequence_number": 0,
+      "filename": "generated-1-1600x1600.png",
+      "width": 1600,
+      "height": 1600,
+      "size": 2415724,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/59968d29-1599-4d38-affb-278891d8b8a4/content",
+      "download_url": "/api/v1/assets/59968d29-1599-4d38-affb-278891d8b8a4/download",
+      "parent_output_id": null,
+      "root_output_id": "5f9b9109-86d1-4fa5-9d6e-aa273a3ceda1",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "0f48f2fa-5f81-43a3-a35f-d21a3d57b92d",
+      "asset_id": "7911bb93-c673-432f-b378-b503d36db0f5",
+      "job_id": "df486538-2dd7-4fa2-967f-0d740cc2f3f3",
+      "run_id": "273c1d62-1e62-461e-9d44-7766640921ca",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "420e3e93-ab04-45e6-b946-a21f57e058fd",
+        "slot_id": "main",
+        "module_id": "lp5",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "product_identity",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "campaign_consistency"
+          ],
+          "art_direction": null
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "",
+          "headline": "",
+          "composition": "鼠标旁安排笔记本、平板、手机三台设备为简洁轮廓场景，鼠标居中为第一焦点，俯视构图，三台设备呈扇形环绕暗示切换，左/上留白排版，不展示未确认随附配件",
+          "reference_asset_ids": null
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "listing",
+          "label": "公司 Listing 交付目标，非所有站点通用发布保证",
+          "width": 1600,
+          "height": 1600
+        },
+        "module_snapshot": {
+          "id": "lp5",
+          "body": "Easy-Switch pairing with up to three devices, USB-C charging",
+          "title": "多设备切换",
+          "spec_id": "listing_square",
+          "headline": "One Mouse, Three Devices",
+          "user_need": "Easy-Switch 一键切换最多三台设备，USB-C 充电",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "Easy-Switch 一键切换最多三台设备，USB-C 充电",
+          "prohibited": [],
+          "composition": "鼠标旁安排笔记本、平板、手机三台设备为简洁轮廓场景，鼠标居中为第一焦点，俯视构图，三台设备呈扇形环绕暗示切换，左/上留白排版，不展示未确认随附配件",
+          "image_slots": [],
+          "evidence_ids": [
+            "e3",
+            "e4"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: Easy-Switch 一键切换最多三台设备，USB-C 充电\nModel-authored scene and camera direction: 鼠标旁安排笔记本、平板、手机三台设备为简洁轮廓场景，鼠标居中为第一焦点，俯视构图，三台设备呈扇形环绕暗示切换，左/上留白排版，不展示未确认随附配件\nCopy zone: top. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": null,
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留top侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": "casual",
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "campaign_consistency"
+          ],
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ]
+        }
+      },
+      "number": 5,
+      "sequence_number": 0,
+      "filename": "generated-1-1600x1600.png",
+      "width": 1600,
+      "height": 1600,
+      "size": 2584096,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/7911bb93-c673-432f-b378-b503d36db0f5/content",
+      "download_url": "/api/v1/assets/7911bb93-c673-432f-b378-b503d36db0f5/download",
+      "parent_output_id": null,
+      "root_output_id": "0f48f2fa-5f81-43a3-a35f-d21a3d57b92d",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    }
+  ],
+  "prompts": [
+    {
+      "id": "job-0648eeed-9c6c-4b0f-a9c7-d2907218444b",
+      "version": 0,
+      "content": "Create ONE independent Amazon Listing product image, not a collage of outputs.\nCOMPANY DESIGN DIRECTION: 放大实际可见领口/袖口/接缝/印花等细节，不虚构材质微观结构或刺绣；定制细节横版属于本类变体。\nREFERENCE AND CUSTOM VALUES: 素材角色以本次会话的明确指定为准。存在图A模板时A保护构图/人物/有效定制值，图B产品决定真实款式/配色/图案/Logo，图C只决定被指定定制字段的字体轮廓，不得覆盖有效姓名号码。没有实体模板时自主设计，不假设必须有A/B/C。 本次用户明确值优先，其次模板有效定制值；0/00/YOUR NAME仅为占位。未知定制能力、背面、肩号结构和工艺不得编造。正背对应，缺少视角但可生成时记录风险，不强制裁剪。\nPRODUCT IDENTITY LOCK: 深灰/石墨黑色 Logitech MX Anywhere 3S 紧凑型无线鼠标：保留顶部“logi”Logo、金属 MagSpeed 滚轮、滚轮后细长按键、绿色指示灯、左侧双键、圆润对称机身、前端 USB-C 接口；不得改变颜色、Logo、按键结构；不声称 Logi Bolt 接收器随附，不使用未经验证的性能百分比。\nUse the original product reference as the product source; follow any explicit scene/style reference roles in the module brief.\nThe actual product references are the visual ground truth for color placement, silhouette, seams, collar, cuffs, printed text, numbers and logos. Do not borrow a different product from scene/style references.\nCAMPAIGN STYLE LOCK: 整套五图统一的极简专业科技风：干净中性浅灰背景，柔和主光+清晰边缘光，石墨黑机身与金属滚轮细节清晰；每张一个卖点，构图节奏从总览→场景→细节→细节→多设备切换递进；文字排版留出安静留白，图片内不生成小字。\nKeep this shared palette, lighting character, contrast and material treatment consistent with the campaign; vary the composition to suit THIS module instead of repeating one poster.\nSINGLE VISUAL MESSAGE: Quiet Clicks 更安静点击 + 8K DPI 传感器\nCUSTOMER NEED: Quiet Clicks 更安静点击 + 8K DPI 传感器\nCONFIRMED PRODUCT EVIDENCE: 滚轮后方有细长按键与绿色指示灯，正面低调“logi”字样; 8K DPI传感器、MagSpeed逐格/高速双模式、Quiet Clicks较MX Anywhere 3更安静、Easy-Switch最多三台设备、USB-C充电（用户已核对事实）\nMODULE ART DIRECTION: 斜侧视角鼠标主体配手指轻按左键的自然使用关系，背景极简安静暗调或浅灰统一，按键动作清晰，右侧留白排版，不出现分贝数值\n\n\n\n\nAPPLIED DESIGN PRINCIPLES: product_identity, detail_truth, visual_hierarchy, copy_separation\nIMPLEMENTED DESIGN RULES: Preserve reference-grounded product contour, exact color placement and printed identity. Show only details visible in original references; do not invent microscopic fabric or performance. Make the intended product feature the first focal point and keep supporting information subordinate. Keep native marketing copy outside the generated artwork; preserve inherent product print.\nTHIS INDEPENDENT IMAGE SLOT: main; 斜侧视角鼠标主体配手指轻按左键的自然使用关系，背景极简安静暗调或浅灰统一，按键动作清晰，右侧留白排版，不出现分贝数值\nINDEPENDENT IMAGE PROMPT: Produce one photographic image for this module; never a grid of outputs.\nVisual objective: Quiet Clicks 更安静点击 + 8K DPI 传感器\nModel-authored scene and camera direction: 斜侧视角鼠标主体配手指轻按左键的自然使用关系，背景极简安静暗调或浅灰统一，按键动作清晰，右侧留白排版，不出现分贝数值\nCopy zone: right. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.\nOUTPUT FRAME: 1600:1600. Compose for this frame without stretching or cutting off the product.\nDESKTOP COMPOSITION / COPY SPACE: 保留right侧安静文案区；商品与关键设计不进入文字区。\nMOBILE SAFE CONTENT: 保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。\nEstablish one clear focal hierarchy: product first, supporting scene second. Use deliberate depth separation, believable key/fill light and clean edge contrast, without generic glow or fake effects.\nIntegrate the product physically: coherent scale and perspective, contact shadows, matching light direction, natural fabric folds and correct foreground occlusion. No floating cutout or pasted flat decal.\nReserve the specified quiet copy area for separate platform text; preserve inherent product print.\nDo not render NEW headlines, body copy, labels, captions or watermarks. These are typeset separately. This does NOT remove or rewrite the product's inherent printed words, numbers or logos.\nDo not invent material, size, certification, performance benefits, brand/team authorization or unprovided garment faces.\nForbidden: \nACCEPTANCE: 商品颜色/图案/Logo/结构; 实际卖点与事实; 英文拼写和可读性; 移动端完整性; 素材商业使用权; 球队/品牌/赛事授权; 无价格/促销/竞品比较\n\nDELIVERY COMPOSITION CONTRACT: The final delivery canvas is exactly 1600x1600 pixels with a 1:1 aspect ratio. The upstream working canvas uses the verified 1:1 aspect ratio. Requested rendering quality is HIGH; produce maximum fine detail, clean edges, realistic texture, and professional commercial polish. The delivery format is PNG with quality/compression value 90. Compose natively for the complete final 1:1 canvas and keep the entire product, face, garment, text-free focal details, and all critical edges visible. Nothing may be cropped out. Leave sufficient natural background around the subject. Do not add borders, letterboxing, pillarboxing, frames, or artificial blank margins. Preserve natural perspective and avoid stretching.",
+      "source": "executed",
+      "job_id": "0648eeed-9c6c-4b0f-a9c7-d2907218444b",
+      "job_status": "succeeded",
+      "replayable": false,
+      "created_at": "2026-11-06T06:53:36"
+    },
+    {
+      "id": "job-7a71ecd1-c079-4318-bceb-75f714958174",
+      "version": 0,
+      "content": "Create ONE independent Amazon Listing product image, not a collage of outputs.\nCOMPANY DESIGN DIRECTION: 自然日常穿着，场景服务于商品和真实版型，不把竞品舒适评价或功能变成我方承诺。\nREFERENCE AND CUSTOM VALUES: 素材角色以本次会话的明确指定为准。存在图A模板时A保护构图/人物/有效定制值，图B产品决定真实款式/配色/图案/Logo，图C只决定被指定定制字段的字体轮廓，不得覆盖有效姓名号码。没有实体模板时自主设计，不假设必须有A/B/C。 本次用户明确值优先，其次模板有效定制值；0/00/YOUR NAME仅为占位。未知定制能力、背面、肩号结构和工艺不得编造。正背对应，缺少视角但可生成时记录风险，不强制裁剪。\nPRODUCT IDENTITY LOCK: 深灰/石墨黑色 Logitech MX Anywhere 3S 紧凑型无线鼠标：保留顶部“logi”Logo、金属 MagSpeed 滚轮、滚轮后细长按键、绿色指示灯、左侧双键、圆润对称机身、前端 USB-C 接口；不得改变颜色、Logo、按键结构；不声称 Logi Bolt 接收器随附，不使用未经验证的性能百分比。\nUse the original product reference as the product source; follow any explicit scene/style reference roles in the module brief.\nThe actual product references are the visual ground truth for color placement, silhouette, seams, collar, cuffs, printed text, numbers and logos. Do not borrow a different product from scene/style references.\nCAMPAIGN STYLE LOCK: 整套五图统一的极简专业科技风：干净中性浅灰背景，柔和主光+清晰边缘光，石墨黑机身与金属滚轮细节清晰；每张一个卖点，构图节奏从总览→场景→细节→细节→多设备切换递进；文字排版留出安静留白，图片内不生成小字。\nKeep this shared palette, lighting character, contrast and material treatment consistent with the campaign; vary the composition to suit THIS module instead of repeating one poster.\nSINGLE VISUAL MESSAGE: 紧凑机身随行办公，随处可用（策划假设：移动办公人群）\nCUSTOMER NEED: 紧凑机身随行办公，随处可用（策划假设：移动办公人群）\nCONFIRMED PRODUCT EVIDENCE: 源图可见石墨黑色紧凑型无线鼠标，圆润对称机身，顶部带横向纹路金属滚轮; 8K DPI传感器、MagSpeed逐格/高速双模式、Quiet Clicks较MX Anywhere 3更安静、Easy-Switch最多三台设备、USB-C充电（用户已核对事实）\nMODULE ART DIRECTION: 鼠标置于简洁桌面与笔记本电脑边缘旁，俯拍45度，环境留白克制，鼠标清晰为第一焦点，午后柔光，画面下方留白排版\n\n\n\n\nAPPLIED DESIGN PRINCIPLES: product_identity, campaign_consistency, scale_context, emotional_story\nIMPLEMENTED DESIGN RULES: Preserve reference-grounded product contour, exact color placement and printed identity. Keep the campaign palette and lighting language consistent without repeating layouts. Use credible human/environment scale and camera perspective. Communicate the specified human occasion through purposeful action and environment.\nTHIS INDEPENDENT IMAGE SLOT: main; 鼠标置于简洁桌面与笔记本电脑边缘旁，俯拍45度，环境留白克制，鼠标清晰为第一焦点，午后柔光，画面下方留白排版\nINDEPENDENT IMAGE PROMPT: Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 紧凑机身随行办公，随处可用（策划假设：移动办公人群）\nModel-authored scene and camera direction: 鼠标置于简洁桌面与笔记本电脑边缘旁，俯拍45度，环境留白克制，鼠标清晰为第一焦点，午后柔光，画面下方留白排版\nCopy zone: bottom. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.\nOUTPUT FRAME: 1600:1600. Compose for this frame without stretching or cutting off the product.\nDESKTOP COMPOSITION / COPY SPACE: 保留bottom侧安静文案区；商品与关键设计不进入文字区。\nMOBILE SAFE CONTENT: 保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。\nEstablish one clear focal hierarchy: product first, supporting scene second. Use deliberate depth separation, believable key/fill light and clean edge contrast, without generic glow or fake effects.\nIntegrate the product physically: coherent scale and perspective, contact shadows, matching light direction, natural fabric folds and correct foreground occlusion. No floating cutout or pasted flat decal.\nReserve the specified quiet copy area for separate platform text; preserve inherent product print.\nDo not render NEW headlines, body copy, labels, captions or watermarks. These are typeset separately. This does NOT remove or rewrite the product's inherent printed words, numbers or logos.\nDo not invent material, size, certification, performance benefits, brand/team authorization or unprovided garment faces.\nForbidden: \nACCEPTANCE: 商品颜色/图案/Logo/结构; 实际卖点与事实; 英文拼写和可读性; 移动端完整性; 素材商业使用权; 球队/品牌/赛事授权; 无价格/促销/竞品比较\n\nDELIVERY COMPOSITION CONTRACT: The final delivery canvas is exactly 1600x1600 pixels with a 1:1 aspect ratio. The upstream working canvas uses the verified 1:1 aspect ratio. Requested rendering quality is HIGH; produce maximum fine detail, clean edges, realistic texture, and professional commercial polish. The delivery format is PNG with quality/compression value 90. Compose natively for the complete final 1:1 canvas and keep the entire product, face, garment, text-free focal details, and all critical edges visible. Nothing may be cropped out. Leave sufficient natural background around the subject. Do not add borders, letterboxing, pillarboxing, frames, or artificial blank margins. Preserve natural perspective and avoid stretching.",
+      "source": "executed",
+      "job_id": "7a71ecd1-c079-4318-bceb-75f714958174",
+      "job_status": "succeeded",
+      "replayable": false,
+      "created_at": "2026-11-06T06:53:36"
+    },
+    {
+      "id": "job-7de45a8b-b391-4a43-a338-143c5aff74a6",
+      "version": 0,
+      "content": "Create ONE independent Amazon Listing product image, not a collage of outputs.\nCOMPANY DESIGN DIRECTION: 放大实际可见领口/袖口/接缝/印花等细节，不虚构材质微观结构或刺绣；定制细节横版属于本类变体。\nREFERENCE AND CUSTOM VALUES: 素材角色以本次会话的明确指定为准。存在图A模板时A保护构图/人物/有效定制值，图B产品决定真实款式/配色/图案/Logo，图C只决定被指定定制字段的字体轮廓，不得覆盖有效姓名号码。没有实体模板时自主设计，不假设必须有A/B/C。 本次用户明确值优先，其次模板有效定制值；0/00/YOUR NAME仅为占位。未知定制能力、背面、肩号结构和工艺不得编造。正背对应，缺少视角但可生成时记录风险，不强制裁剪。\nPRODUCT IDENTITY LOCK: 深灰/石墨黑色 Logitech MX Anywhere 3S 紧凑型无线鼠标：保留顶部“logi”Logo、金属 MagSpeed 滚轮、滚轮后细长按键、绿色指示灯、左侧双键、圆润对称机身、前端 USB-C 接口；不得改变颜色、Logo、按键结构；不声称 Logi Bolt 接收器随附，不使用未经验证的性能百分比。\nUse the original product reference as the product source; follow any explicit scene/style reference roles in the module brief.\nThe actual product references are the visual ground truth for color placement, silhouette, seams, collar, cuffs, printed text, numbers and logos. Do not borrow a different product from scene/style references.\nCAMPAIGN STYLE LOCK: 整套五图统一的极简专业科技风：干净中性浅灰背景，柔和主光+清晰边缘光，石墨黑机身与金属滚轮细节清晰；每张一个卖点，构图节奏从总览→场景→细节→细节→多设备切换递进；文字排版留出安静留白，图片内不生成小字。\nKeep this shared palette, lighting character, contrast and material treatment consistent with the campaign; vary the composition to suit THIS module instead of repeating one poster.\nSINGLE VISUAL MESSAGE: MagSpeed滚轮逐格与高速滚动双模式\nCUSTOMER NEED: MagSpeed滚轮逐格与高速滚动双模式\nCONFIRMED PRODUCT EVIDENCE: 源图可见石墨黑色紧凑型无线鼠标，圆润对称机身，顶部带横向纹路金属滚轮; 8K DPI传感器、MagSpeed逐格/高速双模式、Quiet Clicks较MX Anywhere 3更安静、Easy-Switch最多三台设备、USB-C充电（用户已核对事实）\nMODULE ART DIRECTION: 微距特写滚轮与滚轮后按键，金属横向纹路与金属光泽清晰，浅景深背景虚化，左侧光勾勒滚轮轮廓，上部留白排版\n\n\n\n\nAPPLIED DESIGN PRINCIPLES: detail_truth, commercial_lighting, visual_hierarchy, copy_separation\nIMPLEMENTED DESIGN RULES: Show only details visible in original references; do not invent microscopic fabric or performance. Use deliberate key/fill separation, coherent highlights and contact shadows, not generic glow. Make the intended product feature the first focal point and keep supporting information subordinate. Keep native marketing copy outside the generated artwork; preserve inherent product print.\nTHIS INDEPENDENT IMAGE SLOT: main; 微距特写滚轮与滚轮后按键，金属横向纹路与金属光泽清晰，浅景深背景虚化，左侧光勾勒滚轮轮廓，上部留白排版\nINDEPENDENT IMAGE PROMPT: Produce one photographic image for this module; never a grid of outputs.\nVisual objective: MagSpeed滚轮逐格与高速滚动双模式\nModel-authored scene and camera direction: 微距特写滚轮与滚轮后按键，金属横向纹路与金属光泽清晰，浅景深背景虚化，左侧光勾勒滚轮轮廓，上部留白排版\nCopy zone: top. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.\nOUTPUT FRAME: 1600:1600. Compose for this frame without stretching or cutting off the product.\nDESKTOP COMPOSITION / COPY SPACE: 保留top侧安静文案区；商品与关键设计不进入文字区。\nMOBILE SAFE CONTENT: 保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。\nEstablish one clear focal hierarchy: product first, supporting scene second. Use deliberate depth separation, believable key/fill light and clean edge contrast, without generic glow or fake effects.\nIntegrate the product physically: coherent scale and perspective, contact shadows, matching light direction, natural fabric folds and correct foreground occlusion. No floating cutout or pasted flat decal.\nReserve the specified quiet copy area for separate platform text; preserve inherent product print.\nDo not render NEW headlines, body copy, labels, captions or watermarks. These are typeset separately. This does NOT remove or rewrite the product's inherent printed words, numbers or logos.\nDo not invent material, size, certification, performance benefits, brand/team authorization or unprovided garment faces.\nForbidden: \nACCEPTANCE: 商品颜色/图案/Logo/结构; 实际卖点与事实; 英文拼写和可读性; 移动端完整性; 素材商业使用权; 球队/品牌/赛事授权; 无价格/促销/竞品比较\n\nDELIVERY COMPOSITION CONTRACT: The final delivery canvas is exactly 1600x1600 pixels with a 1:1 aspect ratio. The upstream working canvas uses the verified 1:1 aspect ratio. Requested rendering quality is HIGH; produce maximum fine detail, clean edges, realistic texture, and professional commercial polish. The delivery format is PNG with quality/compression value 90. Compose natively for the complete final 1:1 canvas and keep the entire product, face, garment, text-free focal details, and all critical edges visible. Nothing may be cropped out. Leave sufficient natural background around the subject. Do not add borders, letterboxing, pillarboxing, frames, or artificial blank margins. Preserve natural perspective and avoid stretching.",
+      "source": "executed",
+      "job_id": "7de45a8b-b391-4a43-a338-143c5aff74a6",
+      "job_status": "succeeded",
+      "replayable": false,
+      "created_at": "2026-11-06T06:53:36"
+    },
+    {
+      "id": "job-df486538-2dd7-4fa2-967f-0d740cc2f3f3",
+      "version": 0,
+      "content": "Create ONE independent Amazon Listing product image, not a collage of outputs.\nCOMPANY DESIGN DIRECTION: 自然日常穿着，场景服务于商品和真实版型，不把竞品舒适评价或功能变成我方承诺。\nREFERENCE AND CUSTOM VALUES: 素材角色以本次会话的明确指定为准。存在图A模板时A保护构图/人物/有效定制值，图B产品决定真实款式/配色/图案/Logo，图C只决定被指定定制字段的字体轮廓，不得覆盖有效姓名号码。没有实体模板时自主设计，不假设必须有A/B/C。 本次用户明确值优先，其次模板有效定制值；0/00/YOUR NAME仅为占位。未知定制能力、背面、肩号结构和工艺不得编造。正背对应，缺少视角但可生成时记录风险，不强制裁剪。\nPRODUCT IDENTITY LOCK: 深灰/石墨黑色 Logitech MX Anywhere 3S 紧凑型无线鼠标：保留顶部“logi”Logo、金属 MagSpeed 滚轮、滚轮后细长按键、绿色指示灯、左侧双键、圆润对称机身、前端 USB-C 接口；不得改变颜色、Logo、按键结构；不声称 Logi Bolt 接收器随附，不使用未经验证的性能百分比。\nUse the original product reference as the product source; follow any explicit scene/style reference roles in the module brief.\nThe actual product references are the visual ground truth for color placement, silhouette, seams, collar, cuffs, printed text, numbers and logos. Do not borrow a different product from scene/style references.\nCAMPAIGN STYLE LOCK: 整套五图统一的极简专业科技风：干净中性浅灰背景，柔和主光+清晰边缘光，石墨黑机身与金属滚轮细节清晰；每张一个卖点，构图节奏从总览→场景→细节→细节→多设备切换递进；文字排版留出安静留白，图片内不生成小字。\nKeep this shared palette, lighting character, contrast and material treatment consistent with the campaign; vary the composition to suit THIS module instead of repeating one poster.\nSINGLE VISUAL MESSAGE: Easy-Switch 一键切换最多三台设备，USB-C 充电\nCUSTOMER NEED: Easy-Switch 一键切换最多三台设备，USB-C 充电\nCONFIRMED PRODUCT EVIDENCE: 左侧可见双键结构，前端左侧有USB-C接口; 8K DPI传感器、MagSpeed逐格/高速双模式、Quiet Clicks较MX Anywhere 3更安静、Easy-Switch最多三台设备、USB-C充电（用户已核对事实）\nMODULE ART DIRECTION: 鼠标旁安排笔记本、平板、手机三台设备为简洁轮廓场景，鼠标居中为第一焦点，俯视构图，三台设备呈扇形环绕暗示切换，左/上留白排版，不展示未确认随附配件\n\n\n\n\nAPPLIED DESIGN PRINCIPLES: product_identity, multi_slot_storytelling, visual_hierarchy, campaign_consistency\nIMPLEMENTED DESIGN RULES: Preserve reference-grounded product contour, exact color placement and printed identity. This is one distinct image slot; other independently generated slots complete the native module. Make the intended product feature the first focal point and keep supporting information subordinate. Keep the campaign palette and lighting language consistent without repeating layouts.\nTHIS INDEPENDENT IMAGE SLOT: main; 鼠标旁安排笔记本、平板、手机三台设备为简洁轮廓场景，鼠标居中为第一焦点，俯视构图，三台设备呈扇形环绕暗示切换，左/上留白排版，不展示未确认随附配件\nINDEPENDENT IMAGE PROMPT: Produce one photographic image for this module; never a grid of outputs.\nVisual objective: Easy-Switch 一键切换最多三台设备，USB-C 充电\nModel-authored scene and camera direction: 鼠标旁安排笔记本、平板、手机三台设备为简洁轮廓场景，鼠标居中为第一焦点，俯视构图，三台设备呈扇形环绕暗示切换，左/上留白排版，不展示未确认随附配件\nCopy zone: top. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.\nOUTPUT FRAME: 1600:1600. Compose for this frame without stretching or cutting off the product.\nDESKTOP COMPOSITION / COPY SPACE: 保留top侧安静文案区；商品与关键设计不进入文字区。\nMOBILE SAFE CONTENT: 保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。\nEstablish one clear focal hierarchy: product first, supporting scene second. Use deliberate depth separation, believable key/fill light and clean edge contrast, without generic glow or fake effects.\nIntegrate the product physically: coherent scale and perspective, contact shadows, matching light direction, natural fabric folds and correct foreground occlusion. No floating cutout or pasted flat decal.\nReserve the specified quiet copy area for separate platform text; preserve inherent product print.\nDo not render NEW headlines, body copy, labels, captions or watermarks. These are typeset separately. This does NOT remove or rewrite the product's inherent printed words, numbers or logos.\nDo not invent material, size, certification, performance benefits, brand/team authorization or unprovided garment faces.\nForbidden: \nACCEPTANCE: 商品颜色/图案/Logo/结构; 实际卖点与事实; 英文拼写和可读性; 移动端完整性; 素材商业使用权; 球队/品牌/赛事授权; 无价格/促销/竞品比较\n\nDELIVERY COMPOSITION CONTRACT: The final delivery canvas is exactly 1600x1600 pixels with a 1:1 aspect ratio. The upstream working canvas uses the verified 1:1 aspect ratio. Requested rendering quality is HIGH; produce maximum fine detail, clean edges, realistic texture, and professional commercial polish. The delivery format is PNG with quality/compression value 90. Compose natively for the complete final 1:1 canvas and keep the entire product, face, garment, text-free focal details, and all critical edges visible. Nothing may be cropped out. Leave sufficient natural background around the subject. Do not add borders, letterboxing, pillarboxing, frames, or artificial blank margins. Preserve natural perspective and avoid stretching.",
+      "source": "executed",
+      "job_id": "df486538-2dd7-4fa2-967f-0d740cc2f3f3",
+      "job_status": "succeeded",
+      "replayable": false,
+      "created_at": "2026-11-06T06:53:36"
+    },
+    {
+      "id": "job-e1f95f4b-d76a-47f7-84d1-d90eda1172b5",
+      "version": 0,
+      "content": "Create ONE independent Amazon Listing product image, not a collage of outputs.\nCOMPANY DESIGN DIRECTION: 白底完整商品轮廓，真实比例和颜色，避免场景道具；主图不新增营销文字。\nREFERENCE AND CUSTOM VALUES: 素材角色以本次会话的明确指定为准。存在图A模板时A保护构图/人物/有效定制值，图B产品决定真实款式/配色/图案/Logo，图C只决定被指定定制字段的字体轮廓，不得覆盖有效姓名号码。没有实体模板时自主设计，不假设必须有A/B/C。 本次用户明确值优先，其次模板有效定制值；0/00/YOUR NAME仅为占位。未知定制能力、背面、肩号结构和工艺不得编造。正背对应，缺少视角但可生成时记录风险，不强制裁剪。\nPRODUCT IDENTITY LOCK: 深灰/石墨黑色 Logitech MX Anywhere 3S 紧凑型无线鼠标：保留顶部“logi”Logo、金属 MagSpeed 滚轮、滚轮后细长按键、绿色指示灯、左侧双键、圆润对称机身、前端 USB-C 接口；不得改变颜色、Logo、按键结构；不声称 Logi Bolt 接收器随附，不使用未经验证的性能百分比。\nUse the original product reference as the product source; follow any explicit scene/style reference roles in the module brief.\nThe actual product references are the visual ground truth for color placement, silhouette, seams, collar, cuffs, printed text, numbers and logos. Do not borrow a different product from scene/style references.\nCAMPAIGN STYLE LOCK: 整套五图统一的极简专业科技风：干净中性浅灰背景，柔和主光+清晰边缘光，石墨黑机身与金属滚轮细节清晰；每张一个卖点，构图节奏从总览→场景→细节→细节→多设备切换递进；文字排版留出安静留白，图片内不生成小字。\nKeep this shared palette, lighting character, contrast and material treatment consistent with the campaign; vary the composition to suit THIS module instead of repeating one poster.\nSINGLE VISUAL MESSAGE: Graphite 紧凑旗舰级无线鼠标总览\nCUSTOMER NEED: Graphite 紧凑旗舰级无线鼠标总览\nCONFIRMED PRODUCT EVIDENCE: 源图可见石墨黑色紧凑型无线鼠标，圆润对称机身，顶部带横向纹路金属滚轮; 滚轮后方有细长按键与绿色指示灯，正面低调“logi”字样\nMODULE ART DIRECTION: 三-quarter俯视角度，鼠标主体居中偏左占画面约55%，浅灰渐变摄影背景，柔和主光从左上方，滚轮金属高光清晰，右下留白用于排版\n\n\n\n\nAPPLIED DESIGN PRINCIPLES: product_identity, campaign_consistency, commercial_lighting, visual_hierarchy\nIMPLEMENTED DESIGN RULES: Preserve reference-grounded product contour, exact color placement and printed identity. Keep the campaign palette and lighting language consistent without repeating layouts. Use deliberate key/fill separation, coherent highlights and contact shadows, not generic glow. Make the intended product feature the first focal point and keep supporting information subordinate.\nTHIS INDEPENDENT IMAGE SLOT: main; 三-quarter俯视角度，鼠标主体居中偏左占画面约55%，浅灰渐变摄影背景，柔和主光从左上方，滚轮金属高光清晰，右下留白用于排版\nINDEPENDENT IMAGE PROMPT: Produce one photographic image for this module; never a grid of outputs.\nVisual objective: Graphite 紧凑旗舰级无线鼠标总览\nModel-authored scene and camera direction: 三-quarter俯视角度，鼠标主体居中偏左占画面约55%，浅灰渐变摄影背景，柔和主光从左上方，滚轮金属高光清晰，右下留白用于排版\nCopy zone: right. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.\nOUTPUT FRAME: 1600:1600. Compose for this frame without stretching or cutting off the product.\nDESKTOP COMPOSITION / COPY SPACE: 保留right侧安静文案区；商品与关键设计不进入文字区。\nMOBILE SAFE CONTENT: 保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。\nEstablish one clear focal hierarchy: product first, supporting scene second. Use deliberate depth separation, believable key/fill light and clean edge contrast, without generic glow or fake effects.\nIntegrate the product physically: coherent scale and perspective, contact shadows, matching light direction, natural fabric folds and correct foreground occlusion. No floating cutout or pasted flat decal.\nReserve the specified quiet copy area for separate platform text; preserve inherent product print.\nDo not render NEW headlines, body copy, labels, captions or watermarks. These are typeset separately. This does NOT remove or rewrite the product's inherent printed words, numbers or logos.\nDo not invent material, size, certification, performance benefits, brand/team authorization or unprovided garment faces.\nForbidden: \nACCEPTANCE: 商品颜色/图案/Logo/结构; 实际卖点与事实; 英文拼写和可读性; 移动端完整性; 素材商业使用权; 球队/品牌/赛事授权; 无价格/促销/竞品比较\n\nDELIVERY COMPOSITION CONTRACT: The final delivery canvas is exactly 1600x1600 pixels with a 1:1 aspect ratio. The upstream working canvas uses the verified 1:1 aspect ratio. Requested rendering quality is HIGH; produce maximum fine detail, clean edges, realistic texture, and professional commercial polish. The delivery format is PNG with quality/compression value 90. Compose natively for the complete final 1:1 canvas and keep the entire product, face, garment, text-free focal details, and all critical edges visible. Nothing may be cropped out. Leave sufficient natural background around the subject. Do not add borders, letterboxing, pillarboxing, frames, or artificial blank margins. Preserve natural perspective and avoid stretching.",
+      "source": "executed",
+      "job_id": "e1f95f4b-d76a-47f7-84d1-d90eda1172b5",
+      "job_status": "succeeded",
+      "replayable": false,
+      "created_at": "2026-11-06T06:53:35"
+    }
+  ],
+  "calls": [
+    {
+      "job": "0648eeed-9c6c-4b0f-a9c7-d2907218444b",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "role": null,
+      "state": "succeeded",
+      "seconds": 48.975,
+      "usage": null,
+      "api_cost": null,
+      "started": 1793948017.8611887,
+      "finished": 1793948066.8365443
+    },
+    {
+      "job": "382ec80f-fd1d-48e8-a999-5909e92e576e",
+      "kind": "text",
+      "model": "kimi-for-coding",
+      "role": "executor",
+      "state": "succeeded",
+      "seconds": 34.521,
+      "usage": {
+        "prompt_tokens": 12266,
+        "completion_tokens": 1239,
+        "total_tokens": 13505,
+        "cached_tokens": 512,
+        "reasoning_tokens": 10
+      },
+      "api_cost": null,
+      "started": 1793947980.9537904,
+      "finished": 1793948015.4748354
+    },
+    {
+      "job": "7a71ecd1-c079-4318-bceb-75f714958174",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "role": null,
+      "state": "succeeded",
+      "seconds": 48.275,
+      "usage": null,
+      "api_cost": null,
+      "started": 1793948018.4004462,
+      "finished": 1793948066.675103
+    },
+    {
+      "job": "7de45a8b-b391-4a43-a338-143c5aff74a6",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "role": null,
+      "state": "succeeded",
+      "seconds": 44.467,
+      "usage": null,
+      "api_cost": null,
+      "started": 1793948018.290918,
+      "finished": 1793948062.7581575
+    },
+    {
+      "job": "c5fd45d3-d41c-447d-abd3-c6229a83a562",
+      "kind": "text",
+      "model": "kimi-for-coding",
+      "role": "main",
+      "state": "succeeded",
+      "seconds": 7.93,
+      "usage": {
+        "prompt_tokens": 1133,
+        "completion_tokens": 231,
+        "total_tokens": 1364,
+        "cached_tokens": 256,
+        "reasoning_tokens": 10
+      },
+      "api_cost": null,
+      "started": 1793947948.771162,
+      "finished": 1793947956.7014196
+    },
+    {
+      "job": "df486538-2dd7-4fa2-967f-0d740cc2f3f3",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "role": null,
+      "state": "succeeded",
+      "seconds": 53.151,
+      "usage": null,
+      "api_cost": null,
+      "started": 1793948018.3539233,
+      "finished": 1793948071.5047002
+    },
+    {
+      "job": "e1f95f4b-d76a-47f7-84d1-d90eda1172b5",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "role": null,
+      "state": "succeeded",
+      "seconds": 37.49,
+      "usage": null,
+      "api_cost": null,
+      "started": 1793948017.4713137,
+      "finished": 1793948054.9612553
+    },
+    {
+      "job": "e2221605-f3b1-4041-b47c-47a9a267085c",
+      "kind": "text",
+      "model": "kimi-for-coding",
+      "role": "vision",
+      "state": "succeeded",
+      "seconds": 21.491,
+      "usage": {
+        "prompt_tokens": 6801,
+        "completion_tokens": 534,
+        "total_tokens": 7335,
+        "reasoning_tokens": 91
+      },
+      "api_cost": null,
+      "started": 1793947958.9301014,
+      "finished": 1793947980.4213586
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-11-06T06:52:37.418Z",
+      "type": "main.decision",
+      "action": "task",
+      "executor": "listing",
+      "message": "为Logitech MX Anywhere 3S（Graphite）生成美国站Listing五张附图（不含主图、不做A+）。事实依据：8K DPI传感器、MagSpeed滚轮（逐格/高速滚动双模式）、Quiet Clicks（比MX Anywhere 3更安静但不承诺无声）、Easy-Switch最多三台设备、USB-C充电、紧凑无线鼠标。禁止声称随附Logi Bolt接收器，禁止未验证的性能百分比。参考素材为同款真实外观，保留Logo、颜色、结构。消费动机仅可标注为策划假设。自行设计方案并全部生成。",
+      "ticket": null
+    },
+    {
+      "at": "2026-11-06T06:52:38.613Z",
+      "type": "skill.bound",
+      "id": "amazon-aplus-planner",
+      "version": "2",
+      "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310",
+      "source": "SkillRegistry.session_binding"
+    },
+    {
+      "at": "2026-11-06T06:52:38.630Z",
+      "type": "skill.bound",
+      "id": "amazon-market-insight",
+      "version": "1",
+      "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d",
+      "source": "SkillRegistry.session_binding"
+    },
+    {
+      "at": "2026-11-06T06:52:38.649Z",
+      "type": "skill.bound",
+      "id": "image-creation",
+      "version": "1",
+      "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15",
+      "source": "SkillRegistry.session_binding"
+    },
+    {
+      "at": "2026-11-06T06:53:35.620Z",
+      "type": "tool.start",
+      "session": "executor-353ce00ab270ace479372aecefaea0746c42e675771647e9ea350592f0c31250",
+      "name": "produce_listing",
+      "args": {
+        "brief": {
+          "deliverable": "listing",
+          "marketplace": "US",
+          "aplus_type": "basic",
+          "product_identity_lock": "深灰/石墨黑色 Logitech MX Anywhere 3S 紧凑型无线鼠标：保留顶部“logi”Logo、金属 MagSpeed 滚轮、滚轮后细长按键、绿色指示灯、左侧双键、圆润对称机身、前端 USB-C 接口；不得改变颜色、Logo、按键结构；不声称 Logi Bolt 接收器随附，不使用未经验证的性能百分比。",
+          "campaign_style_lock": "整套五图统一的极简专业科技风：干净中性浅灰背景，柔和主光+清晰边缘光，石墨黑机身与金属滚轮细节清晰；每张一个卖点，构图节奏从总览→场景→细节→细节→多设备切换递进；文字排版留出安静留白，图片内不生成小字。",
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ],
+          "market_basis": "消费动机为策划假设，未做真实市场调研，不声称已研究评论或竞品。",
+          "evidence": [
+            {
+              "id": "e1",
+              "statement": "源图可见石墨黑色紧凑型无线鼠标，圆润对称机身，顶部带横向纹路金属滚轮",
+              "basis": "visible_reference"
+            },
+            {
+              "id": "e2",
+              "statement": "滚轮后方有细长按键与绿色指示灯，正面低调“logi”字样",
+              "basis": "visible_reference"
+            },
+            {
+              "id": "e3",
+              "statement": "左侧可见双键结构，前端左侧有USB-C接口",
+              "basis": "visible_reference"
+            },
+            {
+              "id": "e4",
+              "statement": "8K DPI传感器、MagSpeed逐格/高速双模式、Quiet Clicks较MX Anywhere 3更安静、Easy-Switch最多三台设备、USB-C充电（用户已核对事实）",
+              "basis": "user_confirmed",
+              "source_quote": "8K DPI传感器；MagSpeed滚轮有逐格和高速滚动模式；Quiet Clicks比MX Anywhere 3点击噪声更低，不能承诺无声；Easy-Switch可配对最多三台设备；USB-C充电"
+            }
+          ],
+          "risks": [
+            "不声称Logi Bolt接收器随附",
+            "不制作未经验证的性能百分比",
+            "Quiet Clicks仅表述为更安静，不承诺无声",
+            "消费动机为策划假设"
+          ],
+          "modules": [
+            {
+              "id": "lp1",
+              "title": "总览Hero",
+              "main_point": "Graphite 紧凑旗舰级无线鼠标总览",
+              "composition": "三-quarter俯视角度，鼠标主体居中偏左占画面约55%，浅灰渐变摄影背景，柔和主光从左上方，滚轮金属高光清晰，右下留白用于排版",
+              "headline": "MX Anywhere 3S",
+              "body": "Compact wireless mouse in Graphite",
+              "copy_space": "right",
+              "design_direction": "white",
+              "design_principles": [
+                "product_identity",
+                "campaign_consistency",
+                "commercial_lighting",
+                "visual_hierarchy"
+              ],
+              "evidence_ids": [
+                "e1",
+                "e2"
+              ],
+              "spec_id": "listing_square"
+            },
+            {
+              "id": "lp2",
+              "title": "便携场景",
+              "main_point": "紧凑机身随行办公，随处可用（策划假设：移动办公人群）",
+              "composition": "鼠标置于简洁桌面与笔记本电脑边缘旁，俯拍45度，环境留白克制，鼠标清晰为第一焦点，午后柔光，画面下方留白排版",
+              "headline": "Take It Anywhere",
+              "body": "Compact shape fits your workspace, wherever you are",
+              "copy_space": "bottom",
+              "design_direction": "casual",
+              "design_principles": [
+                "product_identity",
+                "campaign_consistency",
+                "scale_context",
+                "emotional_story"
+              ],
+              "evidence_ids": [
+                "e1",
+                "e4"
+              ],
+              "spec_id": "listing_square"
+            },
+            {
+              "id": "lp3",
+              "title": "MagSpeed滚轮",
+              "main_point": "MagSpeed滚轮逐格与高速滚动双模式",
+              "composition": "微距特写滚轮与滚轮后按键，金属横向纹路与金属光泽清晰，浅景深背景虚化，左侧光勾勒滚轮轮廓，上部留白排版",
+              "headline": "MagSpeed Scrolling",
+              "body": "Precise click-to-click and ultra-fast hyper scrolling",
+              "copy_space": "top",
+              "design_direction": "detail",
+              "design_principles": [
+                "detail_truth",
+                "commercial_lighting",
+                "visual_hierarchy",
+                "copy_separation"
+              ],
+              "evidence_ids": [
+                "e1",
+                "e4"
+              ],
+              "spec_id": "listing_square"
+            },
+            {
+              "id": "lp4",
+              "title": "安静与传感器",
+              "main_point": "Quiet Clicks 更安静点击 + 8K DPI 传感器",
+              "composition": "斜侧视角鼠标主体配手指轻按左键的自然使用关系，背景极简安静暗调或浅灰统一，按键动作清晰，右侧留白排版，不出现分贝数值",
+              "headline": "Quiet Clicks. 8K DPI Sensor.",
+              "body": "Lower click noise than MX Anywhere 3, with precise 8K DPI tracking",
+              "copy_space": "right",
+              "design_direction": "detail",
+              "design_principles": [
+                "product_identity",
+                "detail_truth",
+                "visual_hierarchy",
+                "copy_separation"
+              ],
+              "evidence_ids": [
+                "e2",
+                "e4"
+              ],
+              "spec_id": "listing_square"
+            },
+            {
+              "id": "lp5",
+              "title": "多设备切换",
+              "main_point": "Easy-Switch 一键切换最多三台设备，USB-C 充电",
+              "composition": "鼠标旁安排笔记本、平板、手机三台设备为简洁轮廓场景，鼠标居中为第一焦点，俯视构图，三台设备呈扇形环绕暗示切换，左/上留白排版，不展示未确认随附配件",
+              "headline": "One Mouse, Three Devices",
+              "body": "Easy-Switch pairing with up to three devices, USB-C charging",
+              "copy_space": "top",
+              "design_direction": "casual",
+              "design_principles": [
+                "product_identity",
+                "multi_slot_storytelling",
+                "visual_hierarchy",
+                "campaign_consistency"
+              ],
+              "evidence_ids": [
+                "e3",
+                "e4"
+              ],
+              "spec_id": "listing_square"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "at": "2026-11-06T06:53:36.181Z",
+      "type": "tool.result",
+      "session": "executor-353ce00ab270ace479372aecefaea0746c42e675771647e9ea350592f0c31250",
+      "name": "produce_listing",
+      "result": {
+        "amazon_plan_id": "420e3e93-ab04-45e6-b946-a21f57e058fd",
+        "findings": [],
+        "message": "草稿已保存，尚未确认或生成。",
+        "batch_id": "05db832f-838d-4b00-aa01-947caddbe7d0",
+        "job_ids": [
+          "e1f95f4b-d76a-47f7-84d1-d90eda1172b5",
+          "7a71ecd1-c079-4318-bceb-75f714958174",
+          "7de45a8b-b391-4a43-a338-143c5aff74a6",
+          "0648eeed-9c6c-4b0f-a9c7-d2907218444b",
+          "df486538-2dd7-4fa2-967f-0d740cc2f3f3"
+        ],
+        "module_ids": [
+          "lp1",
+          "lp2",
+          "lp3",
+          "lp4",
+          "lp5"
+        ],
+        "slot_ids": [
+          "main",
+          "main",
+          "main",
+          "main",
+          "main"
+        ],
+        "request_key": "dsh-tool:72c2f51fb8de4d2bb5169415f325de54bd79484417c3f4b15289ee17179d53f1:images",
+        "module_signatures": {
+          "lp1::main": "slot-v1:88964faaa751e9d9f731c44b5fa2527a27ab16dcad11870ce83a31d83cd73e70",
+          "lp2::main": "slot-v1:1a693a0ad542c0cf52a37f53d392d729cab4ac142b04ab46ccbb79e1a7002016",
+          "lp3::main": "slot-v1:276180e6696f9d61da99f8c1aacbba6a59efd412e1947434af457777a59d7038",
+          "lp4::main": "slot-v1:e68572b8b04acfb1b9b8cfe2f650372d1b4615443efdd19797457fffb604cbeb",
+          "lp5::main": "slot-v1:11d28d55867502f73e94f56d882cbbea4324de4526357f1f1f5182250191c2c8"
+        },
+        "project_id": "4a57114a-8560-4017-8c82-ef29e00e6cfa"
+      }
+    }
+  ],
+  "display_outputs": [
+    {
+      "id": "90f38ec6-130f-4a15-9cba-2bc9d5655cf5",
+      "asset_id": "580d6e2f-3fd9-4fc2-b43c-5292d78d3acc",
+      "job_id": "e1f95f4b-d76a-47f7-84d1-d90eda1172b5",
+      "run_id": "273c1d62-1e62-461e-9d44-7766640921ca",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "420e3e93-ab04-45e6-b946-a21f57e058fd",
+        "slot_id": "main",
+        "module_id": "lp1",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "product_identity",
+            "campaign_consistency",
+            "commercial_lighting",
+            "visual_hierarchy"
+          ],
+          "art_direction": null
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "",
+          "headline": "",
+          "composition": "三-quarter俯视角度，鼠标主体居中偏左占画面约55%，浅灰渐变摄影背景，柔和主光从左上方，滚轮金属高光清晰，右下留白用于排版",
+          "reference_asset_ids": null
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "listing",
+          "label": "公司 Listing 交付目标，非所有站点通用发布保证",
+          "width": 1600,
+          "height": 1600
+        },
+        "module_snapshot": {
+          "id": "lp1",
+          "body": "Compact wireless mouse in Graphite",
+          "title": "总览Hero",
+          "spec_id": "listing_square",
+          "headline": "MX Anywhere 3S",
+          "user_need": "Graphite 紧凑旗舰级无线鼠标总览",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "Graphite 紧凑旗舰级无线鼠标总览",
+          "prohibited": [],
+          "composition": "三-quarter俯视角度，鼠标主体居中偏左占画面约55%，浅灰渐变摄影背景，柔和主光从左上方，滚轮金属高光清晰，右下留白用于排版",
+          "image_slots": [],
+          "evidence_ids": [
+            "e1",
+            "e2"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: Graphite 紧凑旗舰级无线鼠标总览\nModel-authored scene and camera direction: 三-quarter俯视角度，鼠标主体居中偏左占画面约55%，浅灰渐变摄影背景，柔和主光从左上方，滚轮金属高光清晰，右下留白用于排版\nCopy zone: right. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": null,
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留right侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": "white",
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "campaign_consistency",
+            "commercial_lighting",
+            "visual_hierarchy"
+          ],
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ]
+        }
+      },
+      "number": 1,
+      "sequence_number": 0,
+      "filename": "generated-1-1600x1600.png",
+      "width": 1600,
+      "height": 1600,
+      "size": 2105284,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/580d6e2f-3fd9-4fc2-b43c-5292d78d3acc/content",
+      "download_url": "/api/v1/assets/580d6e2f-3fd9-4fc2-b43c-5292d78d3acc/download",
+      "parent_output_id": null,
+      "root_output_id": "90f38ec6-130f-4a15-9cba-2bc9d5655cf5",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "28e8bc01-8635-43b3-85cf-0623f61ab6e9",
+      "asset_id": "ab0b23f9-b695-4981-816f-36a7b3b5d300",
+      "job_id": "7a71ecd1-c079-4318-bceb-75f714958174",
+      "run_id": "273c1d62-1e62-461e-9d44-7766640921ca",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "420e3e93-ab04-45e6-b946-a21f57e058fd",
+        "slot_id": "main",
+        "module_id": "lp2",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "product_identity",
+            "campaign_consistency",
+            "scale_context",
+            "emotional_story"
+          ],
+          "art_direction": null
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "",
+          "headline": "",
+          "composition": "鼠标置于简洁桌面与笔记本电脑边缘旁，俯拍45度，环境留白克制，鼠标清晰为第一焦点，午后柔光，画面下方留白排版",
+          "reference_asset_ids": null
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "listing",
+          "label": "公司 Listing 交付目标，非所有站点通用发布保证",
+          "width": 1600,
+          "height": 1600
+        },
+        "module_snapshot": {
+          "id": "lp2",
+          "body": "Compact shape fits your workspace, wherever you are",
+          "title": "便携场景",
+          "spec_id": "listing_square",
+          "headline": "Take It Anywhere",
+          "user_need": "紧凑机身随行办公，随处可用（策划假设：移动办公人群）",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "紧凑机身随行办公，随处可用（策划假设：移动办公人群）",
+          "prohibited": [],
+          "composition": "鼠标置于简洁桌面与笔记本电脑边缘旁，俯拍45度，环境留白克制，鼠标清晰为第一焦点，午后柔光，画面下方留白排版",
+          "image_slots": [],
+          "evidence_ids": [
+            "e1",
+            "e4"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 紧凑机身随行办公，随处可用（策划假设：移动办公人群）\nModel-authored scene and camera direction: 鼠标置于简洁桌面与笔记本电脑边缘旁，俯拍45度，环境留白克制，鼠标清晰为第一焦点，午后柔光，画面下方留白排版\nCopy zone: bottom. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": null,
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留bottom侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": "casual",
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "campaign_consistency",
+            "scale_context",
+            "emotional_story"
+          ],
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ]
+        }
+      },
+      "number": 2,
+      "sequence_number": 0,
+      "filename": "generated-1-1600x1600.png",
+      "width": 1600,
+      "height": 1600,
+      "size": 2508479,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/ab0b23f9-b695-4981-816f-36a7b3b5d300/content",
+      "download_url": "/api/v1/assets/ab0b23f9-b695-4981-816f-36a7b3b5d300/download",
+      "parent_output_id": null,
+      "root_output_id": "28e8bc01-8635-43b3-85cf-0623f61ab6e9",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "5b24215c-f2c3-41bf-9c25-524472a47bec",
+      "asset_id": "204e9781-05fa-4b2b-8dc3-985849562327",
+      "job_id": "7de45a8b-b391-4a43-a338-143c5aff74a6",
+      "run_id": "273c1d62-1e62-461e-9d44-7766640921ca",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "420e3e93-ab04-45e6-b946-a21f57e058fd",
+        "slot_id": "main",
+        "module_id": "lp3",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "detail_truth",
+            "commercial_lighting",
+            "visual_hierarchy",
+            "copy_separation"
+          ],
+          "art_direction": null
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "",
+          "headline": "",
+          "composition": "微距特写滚轮与滚轮后按键，金属横向纹路与金属光泽清晰，浅景深背景虚化，左侧光勾勒滚轮轮廓，上部留白排版",
+          "reference_asset_ids": null
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "listing",
+          "label": "公司 Listing 交付目标，非所有站点通用发布保证",
+          "width": 1600,
+          "height": 1600
+        },
+        "module_snapshot": {
+          "id": "lp3",
+          "body": "Precise click-to-click and ultra-fast hyper scrolling",
+          "title": "MagSpeed滚轮",
+          "spec_id": "listing_square",
+          "headline": "MagSpeed Scrolling",
+          "user_need": "MagSpeed滚轮逐格与高速滚动双模式",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "MagSpeed滚轮逐格与高速滚动双模式",
+          "prohibited": [],
+          "composition": "微距特写滚轮与滚轮后按键，金属横向纹路与金属光泽清晰，浅景深背景虚化，左侧光勾勒滚轮轮廓，上部留白排版",
+          "image_slots": [],
+          "evidence_ids": [
+            "e1",
+            "e4"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: MagSpeed滚轮逐格与高速滚动双模式\nModel-authored scene and camera direction: 微距特写滚轮与滚轮后按键，金属横向纹路与金属光泽清晰，浅景深背景虚化，左侧光勾勒滚轮轮廓，上部留白排版\nCopy zone: top. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": null,
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留top侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": "detail",
+          "requested_height": null,
+          "design_principles": [
+            "detail_truth",
+            "commercial_lighting",
+            "visual_hierarchy",
+            "copy_separation"
+          ],
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ]
+        }
+      },
+      "number": 3,
+      "sequence_number": 0,
+      "filename": "generated-1-1600x1600.png",
+      "width": 1600,
+      "height": 1600,
+      "size": 2505167,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/204e9781-05fa-4b2b-8dc3-985849562327/content",
+      "download_url": "/api/v1/assets/204e9781-05fa-4b2b-8dc3-985849562327/download",
+      "parent_output_id": null,
+      "root_output_id": "5b24215c-f2c3-41bf-9c25-524472a47bec",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "5f9b9109-86d1-4fa5-9d6e-aa273a3ceda1",
+      "asset_id": "59968d29-1599-4d38-affb-278891d8b8a4",
+      "job_id": "0648eeed-9c6c-4b0f-a9c7-d2907218444b",
+      "run_id": "273c1d62-1e62-461e-9d44-7766640921ca",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "420e3e93-ab04-45e6-b946-a21f57e058fd",
+        "slot_id": "main",
+        "module_id": "lp4",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "product_identity",
+            "detail_truth",
+            "visual_hierarchy",
+            "copy_separation"
+          ],
+          "art_direction": null
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "",
+          "headline": "",
+          "composition": "斜侧视角鼠标主体配手指轻按左键的自然使用关系，背景极简安静暗调或浅灰统一，按键动作清晰，右侧留白排版，不出现分贝数值",
+          "reference_asset_ids": null
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "listing",
+          "label": "公司 Listing 交付目标，非所有站点通用发布保证",
+          "width": 1600,
+          "height": 1600
+        },
+        "module_snapshot": {
+          "id": "lp4",
+          "body": "Lower click noise than MX Anywhere 3, with precise 8K DPI tracking",
+          "title": "安静与传感器",
+          "spec_id": "listing_square",
+          "headline": "Quiet Clicks. 8K DPI Sensor.",
+          "user_need": "Quiet Clicks 更安静点击 + 8K DPI 传感器",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "Quiet Clicks 更安静点击 + 8K DPI 传感器",
+          "prohibited": [],
+          "composition": "斜侧视角鼠标主体配手指轻按左键的自然使用关系，背景极简安静暗调或浅灰统一，按键动作清晰，右侧留白排版，不出现分贝数值",
+          "image_slots": [],
+          "evidence_ids": [
+            "e2",
+            "e4"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: Quiet Clicks 更安静点击 + 8K DPI 传感器\nModel-authored scene and camera direction: 斜侧视角鼠标主体配手指轻按左键的自然使用关系，背景极简安静暗调或浅灰统一，按键动作清晰，右侧留白排版，不出现分贝数值\nCopy zone: right. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": null,
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留right侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": "detail",
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "detail_truth",
+            "visual_hierarchy",
+            "copy_separation"
+          ],
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ]
+        }
+      },
+      "number": 4,
+      "sequence_number": 0,
+      "filename": "generated-1-1600x1600.png",
+      "width": 1600,
+      "height": 1600,
+      "size": 2415724,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/59968d29-1599-4d38-affb-278891d8b8a4/content",
+      "download_url": "/api/v1/assets/59968d29-1599-4d38-affb-278891d8b8a4/download",
+      "parent_output_id": null,
+      "root_output_id": "5f9b9109-86d1-4fa5-9d6e-aa273a3ceda1",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "0f48f2fa-5f81-43a3-a35f-d21a3d57b92d",
+      "asset_id": "7911bb93-c673-432f-b378-b503d36db0f5",
+      "job_id": "df486538-2dd7-4fa2-967f-0d740cc2f3f3",
+      "run_id": "273c1d62-1e62-461e-9d44-7766640921ca",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "420e3e93-ab04-45e6-b946-a21f57e058fd",
+        "slot_id": "main",
+        "module_id": "lp5",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "product_identity",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "campaign_consistency"
+          ],
+          "art_direction": null
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "",
+          "headline": "",
+          "composition": "鼠标旁安排笔记本、平板、手机三台设备为简洁轮廓场景，鼠标居中为第一焦点，俯视构图，三台设备呈扇形环绕暗示切换，左/上留白排版，不展示未确认随附配件",
+          "reference_asset_ids": null
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "listing",
+          "label": "公司 Listing 交付目标，非所有站点通用发布保证",
+          "width": 1600,
+          "height": 1600
+        },
+        "module_snapshot": {
+          "id": "lp5",
+          "body": "Easy-Switch pairing with up to three devices, USB-C charging",
+          "title": "多设备切换",
+          "spec_id": "listing_square",
+          "headline": "One Mouse, Three Devices",
+          "user_need": "Easy-Switch 一键切换最多三台设备，USB-C 充电",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "Easy-Switch 一键切换最多三台设备，USB-C 充电",
+          "prohibited": [],
+          "composition": "鼠标旁安排笔记本、平板、手机三台设备为简洁轮廓场景，鼠标居中为第一焦点，俯视构图，三台设备呈扇形环绕暗示切换，左/上留白排版，不展示未确认随附配件",
+          "image_slots": [],
+          "evidence_ids": [
+            "e3",
+            "e4"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: Easy-Switch 一键切换最多三台设备，USB-C 充电\nModel-authored scene and camera direction: 鼠标旁安排笔记本、平板、手机三台设备为简洁轮廓场景，鼠标居中为第一焦点，俯视构图，三台设备呈扇形环绕暗示切换，左/上留白排版，不展示未确认随附配件\nCopy zone: top. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": null,
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留top侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": "casual",
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "campaign_consistency"
+          ],
+          "reference_asset_ids": [
+            "74d52ca5-f00f-4635-8b2b-4dcd4af8714e",
+            "7928057f-d608-4b73-b5df-47a72207c5a0"
+          ]
+        }
+      },
+      "number": 5,
+      "sequence_number": 0,
+      "filename": "generated-1-1600x1600.png",
+      "width": 1600,
+      "height": 1600,
+      "size": 2584096,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/7911bb93-c673-432f-b378-b503d36db0f5/content",
+      "download_url": "/api/v1/assets/7911bb93-c673-432f-b378-b503d36db0f5/download",
+      "parent_output_id": null,
+      "root_output_id": "0f48f2fa-5f81-43a3-a35f-d21a3d57b92d",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    }
+  ]
+}

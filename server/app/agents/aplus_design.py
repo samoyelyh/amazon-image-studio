@@ -46,6 +46,6 @@ def quality(plan,*,complete=True):
         errors.append('镜头景别和主体安排重复，需至少三种服务不同营销目的的画面组织。')
     for i,m in enumerate(plan.modules):
         for n in plan.modules[i+1:]:
-            if SequenceMatcher(None,m.composition.strip(),n.composition.strip()).ratio()>.92:
+            if not plan.creative_strategy and SequenceMatcher(None,m.composition.strip(),n.composition.strip()).ratio()>.92:
                 errors.append(f'{m.id}/{n.id}: 构图近乎重复，应改变景别、主体位置或叙事方式。')
     return {'version':VERSION,'errors':list(dict.fromkeys(errors)),'modules':report,'automated_check':'deterministic_not_visual_acceptance'}

@@ -65,3 +65,16 @@ test('stopped mandate cannot resume; missing focus asks a question',()=>{
   const a=c.intake(input('req1'));c.intake(input('req2','停止任务',{mode:'stop',ticket:a.ticket}))
   assert.throws(()=>c.intake(input('req3','继续',{mode:'continue',ticket:a.ticket})),/new authorization/)
 })
+
+test('an old Run completion cannot end a later Assignment on the same Ticket',()=>{
+  const c=new PlatformController(':memory:',true);const first=c.intake(input('scoped-1'));
+  const a=c.sessionStarted(alice,first.ticket,'first-session').assignment;
+  c.report(alice,first.ticket,'ready','first complete',a);
+  c.intake(input('scoped-2','修改指定图片',{mode:'continue',ticket:first.ticket}));
+  const b=c.sessionStarted(alice,first.ticket,'second-session').assignment;
+  assert.notEqual(a,b);
+  c.report(alice,first.ticket,'ready','stale UI poll',a);
+  assert.equal(c.list(alice)[0].assignments.at(-1)!.state,'running');
+  c.report(alice,first.ticket,'ready','second complete',b);
+  assert.equal(c.list(alice)[0].assignments.at(-1)!.state,'ended');
+})

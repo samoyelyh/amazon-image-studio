@@ -54,7 +54,7 @@ export async function createNativeRuntime(root, bridge) {
       for(const t of tools)scope.tools.register({...t,output:{schema:{type:'object',additionalProperties:true},render:(_,v)=>[{type:'text',text:JSON.stringify(v)}]}});
     };
     let handle;
-    const maxTokens=id.startsWith('main-')?1200:id.startsWith('vision-')?2500:12000;
+    const maxTokens=id.startsWith('main-')?1200:id.startsWith('vision-')?2500:id.startsWith('quality-')?3500:12000;
     try {handle=await ctx.agents.resume({resumeSessionId:id,agentOptions:{provider:'platform',model,maxTokens},setup});}
     catch(error){if(!String(error).includes('not found')&&!String(error).includes('not-found'))throw error;
       handle=await ctx.agents.create({sessionId:id,agentOptions:{provider:'platform',model,maxTokens},setup});}

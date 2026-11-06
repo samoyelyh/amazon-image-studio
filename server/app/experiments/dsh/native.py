@@ -30,7 +30,7 @@ from app.services.task_service import submit_job, dispatch_jobs
 from app.schemas.tasks import JobSubmitRequest
 from app.agents.contracts import StrictModel
 from app.agents.amazon_contracts import ArtDirection
-from pydantic import Field
+from pydantic import Field,ValidationError
 
 class VisualRevision(StrictModel):
     plan_id:str
@@ -45,11 +45,15 @@ router=APIRouter(prefix='/experiment/native')
 
 def digest(v):return hashlib.sha256(json.dumps(v,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
 
+def assignment_id(native):
+    return native.get('assignment') or next((e.get('assignment') for e in reversed(native.get('events',[])) if e['type']=='engine.assignment' and e.get('session')==native.get('executor_session')),None)
+
 def connection():
     c=sqlite3.connect(STATE/'native-gateway.sqlite',timeout=30);c.row_factory=sqlite3.Row
     c.execute('CREATE TABLE IF NOT EXISTS turns(id TEXT PRIMARY KEY, owner TEXT, payload TEXT, permissions TEXT, ticket TEXT, conversation TEXT, run TEXT, created REAL)')
     c.execute('CREATE TABLE IF NOT EXISTS receipts(id TEXT PRIMARY KEY, turn_id TEXT, tool TEXT, args TEXT, state TEXT, result TEXT)')
     c.execute('CREATE TABLE IF NOT EXISTS model_jobs(turn_id TEXT,role TEXT,job TEXT PRIMARY KEY,model TEXT,created REAL)')
+    c.execute('CREATE TABLE IF NOT EXISTS turn_policies(turn_id TEXT PRIMARY KEY,plan_only INTEGER NOT NULL)')
     return c
 
 def get_turn(id):
@@ -108,13 +112,15 @@ async def status(id,principal):
             if jobs:
                 from app.agents.samples import upstream_unknown
                 if any(j.status in {'queued','dispatching','running','pending'} for j in jobs):state='waiting_jobs'
-                elif all(j.status=='succeeded' for j in jobs):state='completed'
+                elif all(j.status=='succeeded' for j in jobs):
+                    state='waiting_jobs' if native.get('quality',{}).get('state') in {'pending','running'} else 'completed'
                 else:state='remote_unknown' if any([await upstream_unknown(db,j) for j in jobs if j.status=='failed']) else 'failed'
                 run.status=state;await db.commit()
-                await rpc('/report',{**who,'ticket':row['ticket'],'state':'ready' if state=='completed' else 'failed' if state=='failed' else 'blocked' if state=='remote_unknown' else 'progress',
+                await rpc('/report',{**who,'ticket':row['ticket'],'assignment':assignment_id(native),'state':'ready' if state=='completed' else 'failed' if state=='failed' else 'blocked' if state=='remote_unknown' else 'progress',
                     'summary':f"DSH native: {sum(j.status=='succeeded' for j in jobs)}/{len(jobs)} images; {state}"})
             result['state']=state
             if state=='completed':result['answer']=f'已完成 {len(jobs)} 张独立图片，可预览和下载。'
+            elif native.get('quality',{}).get('state') in {'pending','running'} and jobs and all(j.status=='succeeded' for j in jobs):result['answer']=f'{len(jobs)} 张图片已生成，正在检查整套叙事、商品保真和文案匹配，可先预览。'
             result['run']={'id':run.id,'status':state,'graph_version':'dsh-native-v1','plan':run.plan_json,
                 'result':{'outputs':outputs,'all_outputs':all_outputs,'native':True},'outputs':outputs,
                 'jobs':[{'id':j.id,'status':j.status,'error_code':j.error_code,'result':j.result_json} for j in jobs],
@@ -150,16 +156,55 @@ async def reconcile_jobs(db):
     for run in runs:
         jobs=(await db.scalars(select(Job).join(AgentJobLink,AgentJobLink.job_id==Job.id).where(AgentJobLink.run_id==run.id,Job.capability!='text_generation'))).all()
         if not jobs or any(j.status not in {'succeeded','failed','cancelled'} for j in jobs):continue
+        native=await rpc('/native/status',{'id':run.result_json['dsh_turn'],'org':run.organization_id,'user':run.user_id})
+        if all(j.status=='succeeded' for j in jobs) and any(j.input_json.get('metadata',{}).get('amazon_module',{}).get('design_trace',{}).get('creative_strategy_version') for j in jobs):
+            if native.get('quality',{}).get('state') in {'pending','running'}:continue
         unknown=any([await upstream_unknown(db,j) for j in jobs if j.status=='failed'])
         run.status='remote_unknown' if unknown else 'completed' if all(j.status=='succeeded' for j in jobs) else 'failed'
         await db.commit()
-        await rpc('/report',{'org':run.organization_id,'user':run.user_id,'ticket':run.result_json['dsh_ticket'],
+        await rpc('/report',{'org':run.organization_id,'user':run.user_id,'ticket':run.result_json['dsh_ticket'],'assignment':assignment_id(native),
             'state':'ready' if run.status=='completed' else 'blocked' if unknown else 'failed','summary':f'DSH native Worker results: {run.status}; {len(jobs)} jobs.'})
 
 async def owned_conversation(db,row):
     who=json.loads(row['owner']);conv=await db.get(HermesConversation,row['conversation'])
     if not conv or (conv.organization_id,conv.user_id)!=(who['org'],who['user']):raise AppError('dsh.scope_denied','Conversation not found',404)
     return conv
+
+@router.post('/quality-context',dependencies=[Depends(internal_auth)])
+async def quality_context(value:dict,db:AsyncSession=Depends(get_db_session)):
+    """Read the complete latest suite, never resubmit Jobs or review legacy history."""
+    from app.agents import amazon
+    from app.agents.creative_strategy import VisualQualityReview
+    row=get_turn(value['turn']);conv=await owned_conversation(db,row)
+    run=await db.get(AgentRun,row['run'])
+    jobs=(await db.scalars(select(Job).join(AgentJobLink,AgentJobLink.job_id==Job.id).where(AgentJobLink.run_id==run.id,Job.capability!='text_generation'))).all()
+    if not jobs or any(j.status not in {'succeeded','failed','cancelled'} for j in jobs):return {'state':'pending'}
+    if any(j.status!='succeeded' for j in jobs):return {'state':'unavailable','reason':'存在失败或未知付费结果；不自动重发或审核缺失图片。'}
+    ids={j.input_json.get('metadata',{}).get('amazon_module',{}).get('plan_id') for j in jobs}
+    if len(ids)!=1 or None in ids:return {'state':'not_applicable'}
+    record,plan=await amazon.record(db,conv,ids.pop())
+    if not plan.creative_strategy:return {'state':'not_applicable'}
+    revision=record.metadata_json['revision']
+    prior=next((r for r in record.metadata_json.get('visual_reviews',[]) if r['expected_revision']==revision),None)
+    if prior:return {'state':'completed','review':prior}
+    outputs=await chat.outputs(db,conv);latest={}
+    for o in outputs:
+        meta=o.get('amazon_module') or {}
+        if meta.get('plan_id')!=record.id:continue
+        key=(meta['module_id'],meta.get('slot_id','main'))
+        if key not in latest or o['version']>latest[key]['version']:latest[key]=o
+    ordered=list(latest.values())
+    if len(ordered)>9:return {'state':'unavailable','reason':'本套超过9个独立画面，超出一次受控视觉检查的图片上限；保留全部输出供人工审阅。'}
+    from app.agents.aplus_design import slots
+    expected={(m.id,s['id']) for m in plan.modules for s in slots(plan,m)}
+    if set(latest)!=expected:return {'state':'unavailable','reason':'整套输出尚不完整，不能声称已完成视觉审阅。'}
+    source=plan.modules[0].reference_asset_ids[0]
+    return {'state':'ready','plan_id':record.id,'expected_revision':revision,'plan':plan.model_dump(mode='json'),
+        'authenticated_request':json.loads(row['payload'])['text'],
+        'outputs':[{'id':o['id'],'asset_id':o['asset_id'],'module':o['amazon_module']['module_id'],'slot':o['amazon_module'].get('slot_id','main'),'version':o['version']} for o in ordered],
+        'reference_asset_ids':[source,*[o['asset_id'] for o in ordered]],
+        'reference_order':'第一张是商品原图，其余图片依次对应outputs。只评估实际可见画面；精确Logo/小字需人工核对。',
+        'tool_schema':VisualQualityReview.model_json_schema()}
 
 def registry(row):
     who=json.loads(row['owner'])
@@ -196,13 +241,15 @@ async def prepare(value:dict,db:AsyncSession=Depends(get_db_session)):
     with connection() as c:c.execute('UPDATE turns SET ticket=?,conversation=?,run=? WHERE id=?',(ticket,conv_id,run.id,row['id']))
     await rpc('/bind',{**who,'ticket':ticket,'conversation':conv_id})
     row=get_turn(row['id'])
-    skill_ids=['amazon-market-insight'] if value.get('executor')=='research' else ['image-creation','amazon-aplus-planner'] if value.get('executor')=='image_edit' else ['image-creation'] if value.get('executor')=='batch_images' else ['amazon-aplus-planner','amazon-market-insight','image-creation']
+    with connection() as c:c.execute('INSERT OR REPLACE INTO turn_policies VALUES(?,?)',(row['id'],int(bool(value.get('plan_only')))))
+    skill_ids=['amazon-market-insight'] if value.get('executor')=='research' else ['image-creation'] if value.get('executor')=='batch_images' else ['amazon-aplus-planner','image-creation']
+    if value.get('needs_research') and 'amazon-market-insight' not in skill_ids:skill_ids.append('amazon-market-insight')
     skills=[await tool({'turn':row['id'],'name':'load_skill','args':{'id':sid},'call':'binding:'+sid},db) for sid in skill_ids]
     context=await tool({'turn':row['id'],'name':'read_context','args':{},'call':'binding:context'},db)
     return {'conversation':conv_id,'run':run.id,'catalog':catalog(row),'skills':skills,'context':context}
 
 def catalog(row):
-    from app.agents.amazon_brief import SaveProfessionalBrief, SaveDesignBrief
+    from app.agents.amazon_brief import SaveDirectorAPlus as SaveProfessionalBrief, SaveDirectorListing as SaveDesignBrief
     from app.agents.amazon_contracts import ModuleRevisions,GenerateAPlus
     from app.agents.contracts import ChatImageAction
     reg=registry(row)
@@ -272,6 +319,10 @@ async def model(value:dict,db:AsyncSession=Depends(get_db_session)):
     if role=='vision' and row['conversation']:
         conv=await owned_conversation(db,row)
         refs=[a['asset_id'] for a in await chat.attachments(db,conv)][:6]
+    elif role=='quality':
+        qc=await quality_context({'turn':row['id']},db)
+        if qc['state']!='ready':raise AppError('dsh.quality_unavailable','整套视觉检查条件已变化，请读取原回执。',409)
+        refs=qc['reference_asset_ids']
     job,_=await submit_job(db,get_settings(),organization_id=who['org'],user_id=who['user'],payload=JobSubmitRequest(
         operation_code='listing.plan',workspace_type='listing',queue_name='planning_queue',capability='text_generation',model_code=o['model'],idempotency_key=key,
         input={'native_transcript_gzip':packed,'reference_asset_ids':refs,'stream':True,'response_format':None,
@@ -301,6 +352,8 @@ async def tool(value:dict,db:AsyncSession=Depends(get_db_session)):
         if old['state']=='succeeded':return json.loads(old['result'])
         raise AppError('dsh.tool_unknown','Prior business tool outcome unknown; inspect receipt before retry',409)
     if name in {'produce_aplus','produce_listing','generate','create_images','revise_visual','revise_and_generate'}:
+        with connection() as c:policy=c.execute('SELECT plan_only FROM turn_policies WHERE turn_id=?',(row['id'],)).fetchone()
+        if policy and policy['plan_only']:raise AppError('dsh.plan_only','本轮仅审方案，不能创建付费图片任务。',409)
         # A new tool-call ID or prompt cannot bypass an unresolved paid image
         # request on the same durable Ticket, including generic image tasks.
         from app.agents.samples import upstream_unknown
@@ -334,18 +387,40 @@ async def tool(value:dict,db:AsyncSession=Depends(get_db_session)):
         db.add(HermesMessage(conversation_id=conv.id,organization_id=who['org'],user_id=who['user'],role='dsh_visual_facts',content='Native DSH visual observations',metadata_json=result,created_at=datetime.now(timezone.utc)))
         await db.commit()
     elif name=='complete':result={'message':args['message']}
+    elif name=='record_quality_review':
+        from app.agents.creative_strategy import VisualQualityReview
+        from app.agents import amazon
+        review=VisualQualityReview.model_validate(args)
+        qc=await quality_context({'turn':row['id']},db)
+        if qc['state']=='completed':result=qc['review']
+        else:
+            if qc['state']!='ready' or review.plan_id!=qc['plan_id'] or review.expected_revision!=qc['expected_revision'] or set(review.inspected_output_ids)!={o['id'] for o in qc['outputs']}:
+                raise AppError('dsh.quality_scope','视觉审阅必须覆盖本会话当前版本的整套图片。',409)
+            if any(set(f.output_ids)-set(review.inspected_output_ids) for f in review.findings):raise AppError('dsh.quality_scope','审阅意见只能引用实际检查的图片。',409)
+            record,_=await amazon.record(db,conv,review.plan_id,lock=True)
+            if record.metadata_json['revision']!=review.expected_revision:raise AppError('dsh.quality_stale','方案已更新，本次审阅不能覆盖新版本。',409)
+            result={**review.model_dump(mode='json'),'source':'native-dsh-visual-session','human_approved':False,'created_at':datetime.now(timezone.utc).isoformat()}
+            record.metadata_json={**record.metadata_json,'visual_reviews':[*record.metadata_json.get('visual_reviews',[]),result]}
+            await db.commit()
     else:
         with connection() as c:
             loaded=[json.loads(r[0])['id'] for r in c.execute("SELECT args FROM receipts WHERE turn_id=? AND tool='load_skill' AND state='succeeded'",(row['id'],))]
         required='amazon-market-insight' if name.startswith('mcp_') else 'image-creation' if name=='create_images' else 'amazon-aplus-planner'
         if required not in loaded:raise AppError('dsh.skill_required',f'First load and apply {required}',409)
-        # Durable reservation precedes side effects. A crash never silently replays a charged tool.
-        with connection() as c:c.execute('INSERT INTO receipts VALUES(?,?,?,?,?,?)',(key,row['id'],name,json.dumps(args,ensure_ascii=False),'started','{}'))
         from app.agents import tool_registry,amazon,amazon_brief
         from app.agents.contracts import ToolAction
         if name in {'save_design','save_listing','produce_aplus','produce_listing'}:
+            from app.agents.amazon_brief import SaveDirectorAPlus,SaveDirectorListing
+            try:director=(SaveDirectorListing if name in {'save_listing','produce_listing'} else SaveDirectorAPlus).model_validate(args).brief
+            except ValidationError as error:raise AppError('dsh.design_invalid','策划字段不完整：'+'; '.join('.'.join(map(str,e['loc']))+': '+e['msg'] for e in error.errors(include_input=False)),422) from None
+            if director.creative_strategy.research_basis=='verified_mcp':
+                from app.agents.amazon_research import receipts
+                known={r['id'] for r in await receipts(db,conv) if r.get('data_available')}
+                if not set(director.creative_strategy.research_receipt_ids)<=known:raise AppError('dsh.research_unverified','市场依据必须引用本会话真实取得数据的MCP回执。',422)
+            source_texts=[p['text'],*(await db.scalars(select(HermesMessage.content).where(HermesMessage.conversation_id==conv.id,
+                HermesMessage.organization_id==who['org'],HermesMessage.user_id==who['user'],HermesMessage.role=='user').order_by(HermesMessage.created_at.desc()).limit(100))).all()]
             for evidence in args.get('brief',{}).get('evidence',[]):
-                if evidence.get('basis')=='user_confirmed' and (not evidence.get('source_quote') or evidence['source_quote'] not in p['text']):
+                if evidence.get('basis')=='user_confirmed' and (not evidence.get('source_quote') or not any(evidence['source_quote'] in s for s in source_texts)):
                     raise AppError('dsh.fact_quote_invalid','A user-confirmed fact needs an exact authenticated user quotation',422)
             normalized=amazon_brief.normalize_arguments(args)
             from app.agents.amazon_contracts import APlusPlan
@@ -406,6 +481,9 @@ async def tool(value:dict,db:AsyncSession=Depends(get_db_session)):
         else:raise AppError('dsh.tool_denied','Tool unavailable',403)
         # Explicit registry allowlist; the old model planners are never callable here.
         if action.tool=='plan_intent':raise AppError('dsh.planner_denied','Legacy planner forbidden',403)
+        # Validate first, then reserve immediately before business side effects.
+        # Invalid plans never acquire an ambiguous paid-execution receipt.
+        with connection() as c:c.execute('INSERT INTO receipts VALUES(?,?,?,?,?,?)',(key,row['id'],name,json.dumps(args,ensure_ascii=False),'started','{}'))
         result=await tool_registry.execute(db,get_settings(),get_redis_client(),org=who['org'],user=who['user'],permissions=json.loads(row['permissions']),
             action=action,action_key=key,confirmed=True,conversation_id=conv.id,human_request='' if name=='revise_visual' else p['text'],run_id=run.id)
         if name in {'save_design','save_listing','produce_aplus','produce_listing'}:

@@ -29,8 +29,8 @@ it('offers one suite confirmation without requiring per-fact checkboxes first',(
  const listing={...record,plan:{...record.plan,deliverable:'listing' as const,modules:[{...module,id:'m1'},{...module,id:'m2'}]}}
  const html=renderToStaticMarkup(<AgentAmazonCard record={listing} conversationId="chat" onRefresh={vi.fn()} onError={vi.fn()}/> )
  expect(html).toContain('Listing 图片方案')
- expect(html).toMatch(/<button[^>]*>确认方案，生成所选 2 张<\/button>/)
- expect(html).not.toMatch(/<button[^>]* disabled=""[^>]*>确认方案，生成所选/)
+ expect(html).toMatch(/<button[^>]*>\s*生成所选 2 张素材<\/button>/)
+ expect(html).not.toMatch(/<button[^>]* disabled=""[^>]*>\s*生成所选/)
  expect(html).toContain('查看依据与编辑完整方案')
  expect(html).toContain('下载整套 ZIP')
 })

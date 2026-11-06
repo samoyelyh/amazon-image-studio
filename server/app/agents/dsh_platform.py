@@ -92,7 +92,7 @@ async def sync(db,run,principal):
     run.status={'accepted':'planning','main_session':'planning','routed':'planning','vision_session':'planning','executor_session':'planning','submitted':'waiting_jobs','needs_input':'needs_input','interrupted':'blocked'}.get(state,state)
     run.result_json={**run.result_json,'dsh_ticket':detail.get('ticket'),'native':True,'native_state':state,'native_sessions':{k:detail.get(k) for k in ['main_session','vision_session','executor_session']},
         'planning_seconds':detail.get('seconds'),'model_calls':{'main':detail.get('main_calls'),'executor':detail.get('executor_calls')},'delivery_pending':False}
-    mapped={'produce_aplus':'save_aplus_plan','produce_listing':'save_aplus_plan','revise_visual':'revise_amazon_modules','revise_and_generate':'revise_amazon_modules','create_images':'generate_chat_images'}
+    mapped={'save_design':'save_aplus_plan','save_listing':'save_aplus_plan','generate':'generate_aplus','produce_aplus':'save_aplus_plan','produce_listing':'save_aplus_plan','revise_visual':'revise_amazon_modules','revise_and_generate':'revise_amazon_modules','create_images':'generate_chat_images'}
     receipts=[{'tool':mapped[e['name']],'result':e['result']} for e in detail.get('events',[]) if e['type']=='tool.result' and e.get('name') in mapped]
     if receipts:run.result_json={**run.result_json,'actions':receipts}
     image_ids=list(dict.fromkeys(j for receipt in receipts for j in receipt['result'].get('job_ids',[])))

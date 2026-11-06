@@ -1,0 +1,3733 @@
+{
+  "conversation": "30f62d5b-3c5c-40c5-96f9-9441b75cedac",
+  "run": "460f8f03-6c31-4b7b-8086-8454e5253123",
+  "development_runs": [],
+  "ticket": "be0936a1722417c6934f4a66176d2f90",
+  "status": "completed",
+  "planning_seconds": 121.32985016199946,
+  "recovery_count": 0,
+  "main_calls": 1,
+  "executor_calls": 1,
+  "quality": null,
+  "sessions": {
+    "main_session": "main-f99448c3492bdacf08645892ac9797b0816a303ea6b95b1441c2965aa1ec134b",
+    "vision_session": "vision-755d7f70e551d7accc0957e14dedb2496fe00f24b341a52535d920e8a437b2ef",
+    "executor_session": "executor-fc617d475bc8fe73b9f328931574e91cbb7b64832f0175a4bbc8f1dabea9ae00"
+  },
+  "plan": {
+    "id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+    "plan": {
+      "insight": {
+        "evidence": [
+          {
+            "id": "e_color",
+            "asin": null,
+            "scope": "own_product",
+            "period": "",
+            "source": "本会话已授权商品参考图",
+            "status": "fact",
+            "statement": "杯身呈灰绿色哑光单色外观，锥形圆杯结构，一侧环形把手",
+            "collected_at": "2026-11-06T06:54:26.946303Z",
+            "review_scope": "",
+            "review_sample_count": null
+          },
+          {
+            "id": "e_material",
+            "asin": null,
+            "scope": "own_product",
+            "period": "",
+            "source": "用户确认引文：石器（Stoneware），彩色釉（Colored glaze）",
+            "status": "fact",
+            "statement": "Stoneware 石器材质，colored glaze 彩色釉",
+            "collected_at": "2026-11-06T06:54:26.946303Z",
+            "review_scope": "",
+            "review_sample_count": null
+          },
+          {
+            "id": "e_micro",
+            "asin": null,
+            "scope": "own_product",
+            "period": "",
+            "source": "用户确认引文：可微波炉使用（Microwave-safe）",
+            "status": "fact",
+            "statement": "Microwave-safe 可微波炉使用",
+            "collected_at": "2026-11-06T06:54:26.946303Z",
+            "review_scope": "",
+            "review_sample_count": null
+          },
+          {
+            "id": "e_dish",
+            "asin": null,
+            "scope": "own_product",
+            "period": "",
+            "source": "用户确认引文：可洗碗机清洗（Dishwasher-safe）",
+            "status": "fact",
+            "statement": "Dishwasher-safe 可洗碗机清洗",
+            "collected_at": "2026-11-06T06:54:26.946303Z",
+            "review_scope": "",
+            "review_sample_count": null
+          },
+          {
+            "id": "e_size",
+            "asin": null,
+            "scope": "own_product",
+            "period": "",
+            "source": "用户确认引文：官方标称容量13 oz、高4英寸",
+            "status": "fact",
+            "statement": "官方标称容量13 oz、高4英寸",
+            "collected_at": "2026-11-06T06:54:26.946303Z",
+            "review_scope": "",
+            "review_sample_count": null
+          }
+        ],
+        "limitations": [
+          "参考图杯身正面未见可见Logo，若实际有Logo需后期排版补位，生图不臆造",
+          "官方资料仅作用户确认事实，不得引申为保温/防烫/防摔/套装",
+          "13 oz与4英寸为官方标称，图片中不生成小字标注"
+        ],
+        "buyer_concerns": [],
+        "competitor_points": [],
+        "keywords_and_intent": [],
+        "customers_and_scenes": [],
+        "visual_opportunities": [
+          "美国站家居厨房类目；消费动机为策划假设（早餐咖啡/茶日常仪式感、易打理、低调纯色搭配），未做VOC调研，不声称已研究。"
+        ]
+      },
+      "modules": [
+        {
+          "id": "mod1_hero",
+          "body": "A stoneware mug with a calm matte-green glaze, made for slow mornings and everyday coffee or tea.",
+          "title": "主视觉 · 清晨第一杯",
+          "spec_id": "basic_header_image_text",
+          "headline": "A Quiet Morning, Held in Matte Green",
+          "user_need": "建立商品识别：哑光灰绿马克杯作为早餐桌视觉主角，传递安静日常仪式感（策划假设）。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "建立商品识别：哑光灰绿马克杯作为早餐桌视觉主角，传递安静日常仪式感（策划假设）。",
+          "prohibited": [],
+          "composition": "横幅主视觉：马克杯置于浅色木桌中央偏右，左后方虚化的窗户晨光与少量早餐道具（ folded linen、小碟），杯身占画面约三分之一，左半幅留安静文案区，浅景深。",
+          "image_slots": [
+            {
+              "id": "main",
+              "body": "A stoneware mug with a calm matte-green glaze, made for slow mornings and everyday coffee or tea.",
+              "headline": "A Quiet Morning, Held in Matte Green",
+              "composition": "970x600横幅：哑光灰绿马克杯置于浅色木桌，右后方柔和窗光，左侧安静留白，浅景深，无文字无Logo臆造",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_color",
+            "e_material"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 建立商品识别：哑光灰绿马克杯作为早餐桌视觉主角，传递安静日常仪式感（策划假设）。\nModel-authored scene and camera direction: 横幅主视觉：马克杯置于浅色木桌中央偏右，左后方虚化的窗户晨光与少量早餐道具（ folded linen、小碟），杯身占画面约三分之一，左半幅留安静文案区，浅景深。\nCopy zone: left. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "横幅中景，眼平略低角度，杯体居右三分之一，背景窗光虚化",
+            "lighting": "左后窗光作主光，正面柔补光，低反差，杯身哑光质感可见",
+            "hierarchy": "第一焦点杯身轮廓与把手，第二焦点晨光氛围，左侧为文字留白",
+            "integration": "杯底与桌面自然接触阴影，道具比例真实，无悬浮感"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "campaign_consistency",
+            "emotional_story",
+            "copy_separation"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        },
+        {
+          "id": "mod2_craft",
+          "body": "Colored-glaze stoneware with a soft matte finish. Stands about 4 in tall — a comfortable, familiar hand-feel.",
+          "title": "材质与器型 · 石与釉",
+          "spec_id": "basic_single_image_left",
+          "headline": "Stoneware, Colored Glaze",
+          "user_need": "回答材质与工艺问题：石器彩釉的哑光质地与上手尺度（4英寸高）。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "回答材质与工艺问题：石器彩釉的哑光质地与上手尺度（4英寸高）。",
+          "prohibited": [],
+          "composition": "左图右文：手部轻握杯身侧后方，三分之四侧面视角展示锥形轮廓与哑光釉面微反光，背景为米白中性墙面，右侧为文案区。",
+          "image_slots": [
+            {
+              "id": "main",
+              "body": "Colored-glaze stoneware with a soft matte finish. Stands about 4 in tall — a comfortable, familiar hand-feel.",
+              "headline": "Stoneware, Colored Glaze",
+              "composition": "600x600方图：三分之四侧面近景，手轻握灰绿哑光杯身，米白背景，展示锥形轮廓与彩釉质感，右侧留文案区，无文字",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_material",
+            "e_size"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 回答材质与工艺问题：石器彩釉的哑光质地与上手尺度（4英寸高）。\nModel-authored scene and camera direction: 左图右文：手部轻握杯身侧后方，三分之四侧面视角展示锥形轮廓与哑光釉面微反光，背景为米白中性墙面，右侧为文案区。\nCopy zone: right. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "近景三分之四侧面，手入画托握杯身，展示器型曲线",
+            "lighting": "左前柔光主光，杯沿一圈细腻边缘光体现釉面",
+            "hierarchy": "第一焦点釉面质感与杯型，第二焦点手部尺度参照",
+            "integration": "手指与杯身自然遮挡接触，握持受力真实，阴影落地"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "detail_truth",
+            "scale_context",
+            "copy_separation"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        },
+        {
+          "id": "mod3_daily",
+          "body": "At about 13 oz, it holds a generous cup of coffee or tea — equally at home on a kitchen counter or office desk.",
+          "title": "使用场景 · 一日的陪伴",
+          "spec_id": "basic_single_image_right",
+          "headline": "Right at Home on Any Table",
+          "user_need": "使用关系：从办公桌到厨房台面，13 oz容量适合日常咖啡/茶（动机为策划假设）。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "使用关系：从办公桌到厨房台面，13 oz容量适合日常咖啡/茶（动机为策划假设）。",
+          "prohibited": [],
+          "composition": "右图左文：马克杯置于办公/居家桌面一角，旁有笔记本与一小枝绿植，自然日光从侧面进入，杯为画面主角，左侧文案区。",
+          "image_slots": [
+            {
+              "id": "main",
+              "body": "At about 13 oz, it holds a generous cup of coffee or tea — equally at home on a kitchen counter or office desk.",
+              "headline": "Right at Home on Any Table",
+              "composition": "600x600方图：灰绿马克杯盛深色咖啡置于居家办公桌，侧窗自然光，旁有笔记本与绿植，杯为视觉主角，左侧留白，无文字",
+              "reference_asset_ids": [
+                "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_size",
+            "e_color"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 使用关系：从办公桌到厨房台面，13 oz容量适合日常咖啡/茶（动机为策划假设）。\nModel-authored scene and camera direction: 右图左文：马克杯置于办公/居家桌面一角，旁有笔记本与一小枝绿植，自然日光从侧面进入，杯为画面主角，左侧文案区。\nCopy zone: left. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "中景侧前方视角，杯体位于画面左中部偏右，桌面道具陪衬不抢焦",
+            "lighting": "侧窗自然光为主，柔和补光，杯内可见深色饮品与微热气",
+            "hierarchy": "第一焦点杯中饮品与杯身颜色呼应，第二焦点桌面生活氛围",
+            "integration": "杯与桌面接触阴影真实，道具比例符合日常桌面透视"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "emotional_story",
+            "scale_context",
+            "campaign_consistency",
+            "copy_separation"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        },
+        {
+          "id": "mod4_facts",
+          "body": "Three everyday facts, built in.",
+          "title": "三图文 · 易打理三事实",
+          "spec_id": "basic_three_image_text",
+          "headline": "Made for Real Life",
+          "user_need": "分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。",
+          "prohibited": [],
+          "composition": "三栏并列：block1为马克杯置于微波炉内微开的场景；block2为洗碗机碗架中倒置的杯子；block3为俯拍杯中注满饮品、旁有量感参照。三槽位分别中景、中景、俯拍，构图各异。",
+          "image_slots": [
+            {
+              "id": "block1",
+              "body": "Warm up your drink right in the mug.",
+              "headline": "Microwave-Safe",
+              "composition": "600x600：灰绿马克杯置于微波炉转盘中央、炉门微开视角，厨房暖光，底部留文案区，无文字无品牌标识",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            },
+            {
+              "id": "block2",
+              "body": "Easy cleanup, cycle after cycle.",
+              "headline": "Dishwasher-Safe",
+              "composition": "600x600：灰绿马克杯倒扣在洗碗机碗架格栅上，喷淋臂背景虚化，水珠细节，底部留文案区，无文字",
+              "reference_asset_ids": [
+                "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+              ]
+            },
+            {
+              "id": "block3",
+              "body": "A generous size for your daily coffee or tea.",
+              "headline": "About 13 oz",
+              "composition": "600x600：俯视桌面，灰绿马克杯注满深色饮品，旁放咖啡豆与小勺体现13 oz容量感，柔和顶光，底部留文案区，无文字",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_micro",
+            "e_dish",
+            "e_size"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nModel-authored scene and camera direction: 三栏并列：block1为马克杯置于微波炉内微开的场景；block2为洗碗机碗架中倒置的杯子；block3为俯拍杯中注满饮品、旁有量感参照。三槽位分别中景、中景、俯拍，构图各异。\nCopy zone: bottom. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "三槽位分别：箱内中景、碗架中景、桌面俯拍，主体居中偏上",
+            "lighting": "统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感",
+            "hierarchy": "每槽第一焦点为杯子与设备关系，底部为原生文字区",
+            "integration": "杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "detail_truth",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "commercial_lighting"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        },
+        {
+          "id": "mod5_close",
+          "body": "One calm color that fits right in — from morning coffee to a quiet evening tea.",
+          "title": "收尾横幅 · 安静收尾",
+          "spec_id": "basic_image_text_overlay",
+          "headline": "Simple Color, Easy Living",
+          "user_need": "情感收束：哑光灰绿与中性环境融合，强化低调纯色搭配价值（策划假设）。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "情感收束：哑光灰绿与中性环境融合，强化低调纯色搭配价值（策划假设）。",
+          "prohibited": [],
+          "composition": "970x300横幅：杯身局部特写与把手曲线占据画面右侧，背景为同色系虚化厨房环境形成色调层次，左侧为叠字区，整体安静克制。",
+          "image_slots": [
+            {
+              "id": "main",
+              "body": "One calm color that fits right in — from morning coffee to a quiet evening tea.",
+              "headline": "Simple Color, Easy Living",
+              "composition": "970x300横幅：灰绿哑光杯身与把手曲线特写居右，左侧同色系虚化厨房背景，柔和左前光，左侧为文字叠放区，无文字无Logo臆造",
+              "reference_asset_ids": [
+                "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_color",
+            "e_material"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 情感收束：哑光灰绿与中性环境融合，强化低调纯色搭配价值（策划假设）。\nModel-authored scene and camera direction: 970x300横幅：杯身局部特写与把手曲线占据画面右侧，背景为同色系虚化厨房环境形成色调层次，左侧为叠字区，整体安静克制。\nCopy zone: left. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "横幅局部特写，杯身与把手曲线居右，左半幅为柔和虚化背景",
+            "lighting": "与整套一致的左前柔光，低反差，哑光表面细腻过渡",
+            "hierarchy": "第一焦点把手与杯身曲线质感，第二焦点同色系环境氛围",
+            "integration": "杯体与背景色调统一但有明暗分离，无贴图感"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留left侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "campaign_consistency",
+            "emotional_story",
+            "copy_separation",
+            "visual_hierarchy"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        }
+      ],
+      "aplus_type": "basic",
+      "deliverable": "aplus",
+      "marketplace": "US",
+      "rules_version": "amazon-aplus-2026-11-05-r4",
+      "design_version": "professional-aplus-v2",
+      "suite_rationale": "叙事节奏：主视觉建立识别→材质与尺寸回答购买问题→使用场景代入→三图文分述微波/洗碗机/13oz三大已确认事实→横幅收尾情感价值；含header、左右图文、三图文、overlay共五种不同布局。",
+      "campaign_style_lock": "整套统一暖调生活厨房光效：左前45°柔和大窗主光、低反差、自然接触阴影；背景为浅色木质台面与中性厨房/餐桌环境，景深浅、焦点清晰；配色以哑光灰绿为主体、米白与浅木色为辅助，排版气质克制、留白充足。",
+      "product_identity_lock": "灰绿色哑光单耳马克杯：上宽下窄锥形杯身、圆形杯口、右侧环形把手、表面柔和哑光反光、圆润杯底；杯身无可见图案文字。严格保留参考图颜色、结构、把手位置与哑光质感，不新增Logo、不改动器型。"
+    },
+    "revision": 1,
+    "approvals": {
+      "mod1_hero": {
+        "at": "2026-11-06T06:54:27.010442+00:00",
+        "by": "7453c95a-00bd-47ae-a545-e71c7d2ed3cd",
+        "source": "dsh-authenticated-task",
+        "signature": "76c99815cc15ca185c4d5dbb2e10e4347bea4ebfdc2470fdff44a58137b1ef23",
+        "evidence_ids": [
+          "e_color",
+          "e_material"
+        ],
+        "rights_confirmed": false
+      },
+      "mod2_craft": {
+        "at": "2026-11-06T06:54:27.010588+00:00",
+        "by": "7453c95a-00bd-47ae-a545-e71c7d2ed3cd",
+        "source": "dsh-authenticated-task",
+        "signature": "8a080068eefc37eeaa7a4995cc35b3d078e06e75e95067497fb77335b5b5ddbe",
+        "evidence_ids": [
+          "e_material",
+          "e_size"
+        ],
+        "rights_confirmed": false
+      },
+      "mod3_daily": {
+        "at": "2026-11-06T06:54:27.010730+00:00",
+        "by": "7453c95a-00bd-47ae-a545-e71c7d2ed3cd",
+        "source": "dsh-authenticated-task",
+        "signature": "1b8392ced822a1d6d331668263ae6ffbb92e2c35a16441dc67314798bc187312",
+        "evidence_ids": [
+          "e_size",
+          "e_color"
+        ],
+        "rights_confirmed": false
+      },
+      "mod4_facts": {
+        "at": "2026-11-06T06:54:27.010935+00:00",
+        "by": "7453c95a-00bd-47ae-a545-e71c7d2ed3cd",
+        "source": "dsh-authenticated-task",
+        "signature": "1e7adf41d7b4ed0dc7e4d6c99ebfe03806213c6acbf97cba109243c6e8b9f5c2",
+        "evidence_ids": [
+          "e_micro",
+          "e_dish",
+          "e_size"
+        ],
+        "rights_confirmed": false
+      },
+      "mod5_close": {
+        "at": "2026-11-06T06:54:27.011050+00:00",
+        "by": "7453c95a-00bd-47ae-a545-e71c7d2ed3cd",
+        "source": "dsh-authenticated-task",
+        "signature": "d921d09b19ed1b70ce9e2a828aacbbeaacb5579be6ddc09289f660680b2ad45e",
+        "evidence_ids": [
+          "e_color",
+          "e_material"
+        ],
+        "rights_confirmed": false
+      }
+    },
+    "controller": "dsh-native",
+    "project_id": "1a5d87ec-12b1-4000-b8bf-0f5a04bf51b1",
+    "request_key": "dsh-tool:3f94e4979df69aaebbcacb1cccbea0db7783ad388e425197616959e838cbf0e4",
+    "skill_trace": [
+      {
+        "id": "amazon-aplus-planner",
+        "version": "2",
+        "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+      },
+      {
+        "id": "amazon-market-insight",
+        "version": "1",
+        "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+      },
+      {
+        "id": "image-creation",
+        "version": "1",
+        "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+      }
+    ],
+    "submissions": [
+      {
+        "job_ids": [
+          "1cd9dfa9-7651-4d72-8f55-197587ea199e",
+          "22b0bcdb-f863-46b6-ad31-ba6c630d3e6f",
+          "0c2a5f6e-c220-4fa5-a7ea-dc299e36983a",
+          "63981adf-35bf-44e0-ac48-c7eacfd983ef",
+          "22d1c599-bf21-4477-9250-f0d3794c7b8a",
+          "0829bc83-1450-4a45-a1ce-9e97bc9c6903",
+          "6b331be7-d648-4b54-81b3-7f5c85038638"
+        ],
+        "batch_id": "f6d9e3f8-0f8a-4c1a-95cb-56f2f9b6eeff",
+        "slot_ids": [
+          "main",
+          "main",
+          "main",
+          "block1",
+          "block2",
+          "block3",
+          "main"
+        ],
+        "module_ids": [
+          "mod1_hero",
+          "mod2_craft",
+          "mod3_daily",
+          "mod4_facts",
+          "mod4_facts",
+          "mod4_facts",
+          "mod5_close"
+        ],
+        "request_key": "dsh-tool:3f94e4979df69aaebbcacb1cccbea0db7783ad388e425197616959e838cbf0e4:images",
+        "module_signatures": {
+          "mod1_hero::main": "slot-v1:76c99815cc15ca185c4d5dbb2e10e4347bea4ebfdc2470fdff44a58137b1ef23",
+          "mod2_craft::main": "slot-v1:8a080068eefc37eeaa7a4995cc35b3d078e06e75e95067497fb77335b5b5ddbe",
+          "mod3_daily::main": "slot-v1:1b8392ced822a1d6d331668263ae6ffbb92e2c35a16441dc67314798bc187312",
+          "mod5_close::main": "slot-v1:d921d09b19ed1b70ce9e2a828aacbbeaacb5579be6ddc09289f660680b2ad45e",
+          "mod4_facts::block1": "slot-v1:20b6b48ba3180d830a94c7c5696bf9ebd2a55284dee7245915db515f51a61aac",
+          "mod4_facts::block2": "slot-v1:0507d86d96736ec5bd1f6d0f8d24766c810212bc0bb4a6ad8aeb183460b4c7f3",
+          "mod4_facts::block3": "slot-v1:5e2482bab392eebb7a17a14af42db8aae18383397f747273f11da0c0af97e952"
+        }
+      }
+    ],
+    "schema_version": 1,
+    "findings": [],
+    "manual_checks": [
+      "商品颜色/图案/Logo/结构",
+      "实际卖点与事实",
+      "英文拼写和可读性",
+      "移动端完整性",
+      "素材商业使用权",
+      "球队/品牌/赛事授权",
+      "无价格/促销/竞品比较"
+    ],
+    "module_specs": {
+      "mod1_hero": {
+        "type": "basic",
+        "width": 970,
+        "height": 600,
+        "minimum_width": 970,
+        "minimum_height": 600,
+        "label": "Basic 主视觉图文",
+        "layout": "header",
+        "official_module_type": "STANDARD_HEADER_IMAGE_TEXT",
+        "official_payload_field": "standardHeaderImageText",
+        "headline_max": 150,
+        "body_max": 6000,
+        "native_text_fields": {
+          "headline": "headline.value",
+          "body": "block.body.textList"
+        },
+        "slots": [
+          {
+            "id": "main",
+            "width": 970,
+            "height": 600,
+            "minimum_width": 970,
+            "minimum_height": 600,
+            "field": "block.image"
+          }
+        ]
+      },
+      "mod2_craft": {
+        "type": "basic",
+        "width": 600,
+        "height": 600,
+        "minimum_width": 300,
+        "minimum_height": 300,
+        "label": "Basic 左图右文",
+        "layout": "image_left",
+        "official_module_type": "STANDARD_SINGLE_SIDE_IMAGE",
+        "official_payload_field": "standardSingleSideImage",
+        "image_position_type": "LEFT",
+        "headline_max": 160,
+        "body_max": 1000,
+        "native_text_fields": {
+          "headline": "block.headline.value",
+          "body": "block.body.textList"
+        },
+        "slots": [
+          {
+            "id": "main",
+            "width": 600,
+            "height": 600,
+            "minimum_width": 300,
+            "minimum_height": 300,
+            "field": "block.image"
+          }
+        ]
+      },
+      "mod3_daily": {
+        "type": "basic",
+        "width": 600,
+        "height": 600,
+        "minimum_width": 300,
+        "minimum_height": 300,
+        "label": "Basic 右图左文",
+        "layout": "image_right",
+        "official_module_type": "STANDARD_SINGLE_SIDE_IMAGE",
+        "official_payload_field": "standardSingleSideImage",
+        "image_position_type": "RIGHT",
+        "headline_max": 160,
+        "body_max": 1000,
+        "native_text_fields": {
+          "headline": "block.headline.value",
+          "body": "block.body.textList"
+        },
+        "slots": [
+          {
+            "id": "main",
+            "width": 600,
+            "height": 600,
+            "minimum_width": 300,
+            "minimum_height": 300,
+            "field": "block.image"
+          }
+        ]
+      },
+      "mod4_facts": {
+        "type": "basic",
+        "width": 600,
+        "height": 600,
+        "label": "Basic 三图文组合",
+        "layout": "three_columns",
+        "official_module_type": "STANDARD_THREE_IMAGE_TEXT",
+        "official_payload_field": "standardThreeImageText",
+        "headline_max": 200,
+        "body_max": 1000,
+        "native_text_fields": {
+          "headline": "headline.value",
+          "slot_headline": "blockN.headline.value",
+          "slot_body": "blockN.body.textList"
+        },
+        "slots": [
+          {
+            "id": "block1",
+            "width": 600,
+            "height": 600,
+            "minimum_width": 300,
+            "minimum_height": 300,
+            "field": "block1.image"
+          },
+          {
+            "id": "block2",
+            "width": 600,
+            "height": 600,
+            "minimum_width": 300,
+            "minimum_height": 300,
+            "field": "block2.image"
+          },
+          {
+            "id": "block3",
+            "width": 600,
+            "height": 600,
+            "minimum_width": 300,
+            "minimum_height": 300,
+            "field": "block3.image"
+          }
+        ]
+      },
+      "mod5_close": {
+        "type": "basic",
+        "width": 970,
+        "height": 300,
+        "minimum_width": 970,
+        "minimum_height": 300,
+        "layout": "overlay",
+        "label": "Basic 图片与文字覆盖",
+        "mobile": "responsive_operator_review",
+        "official_module_type": "STANDARD_IMAGE_TEXT_OVERLAY",
+        "official_payload_field": "standardImageTextOverlay",
+        "native_text_fields": {
+          "headline": "block.headline.value",
+          "body": "block.body.textList"
+        },
+        "native_image_fields": {
+          "desktop": "block.image"
+        },
+        "required_operator_fields": [
+          "overlayColorType",
+          "image.altText"
+        ],
+        "spec_status": "Official legacy layout guide confirms 970x300; current account text limits and mobile rendering unverified"
+      }
+    },
+    "module_jobs": [
+      {
+        "job_id": "0829bc83-1450-4a45-a1ce-9e97bc9c6903",
+        "status": "succeeded",
+        "error_code": null,
+        "module_id": "mod4_facts",
+        "slot_id": "block3"
+      },
+      {
+        "job_id": "0c2a5f6e-c220-4fa5-a7ea-dc299e36983a",
+        "status": "succeeded",
+        "error_code": null,
+        "module_id": "mod3_daily",
+        "slot_id": "main"
+      },
+      {
+        "job_id": "1cd9dfa9-7651-4d72-8f55-197587ea199e",
+        "status": "succeeded",
+        "error_code": null,
+        "module_id": "mod1_hero",
+        "slot_id": "main"
+      },
+      {
+        "job_id": "22b0bcdb-f863-46b6-ad31-ba6c630d3e6f",
+        "status": "succeeded",
+        "error_code": null,
+        "module_id": "mod2_craft",
+        "slot_id": "main"
+      },
+      {
+        "job_id": "22d1c599-bf21-4477-9250-f0d3794c7b8a",
+        "status": "succeeded",
+        "error_code": null,
+        "module_id": "mod4_facts",
+        "slot_id": "block2"
+      },
+      {
+        "job_id": "63981adf-35bf-44e0-ac48-c7eacfd983ef",
+        "status": "succeeded",
+        "error_code": null,
+        "module_id": "mod4_facts",
+        "slot_id": "block1"
+      },
+      {
+        "job_id": "6b331be7-d648-4b54-81b3-7f5c85038638",
+        "status": "succeeded",
+        "error_code": null,
+        "module_id": "mod5_close",
+        "slot_id": "main"
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "id": "8b6dba1a-e2a5-457b-9ac5-7202d7c5bc66",
+      "asset_id": "dc0700a8-cb55-4e44-8f0c-7afad1fcadb9",
+      "job_id": "1cd9dfa9-7651-4d72-8f55-197587ea199e",
+      "run_id": "460f8f03-6c31-4b7b-8086-8454e5253123",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+        "slot_id": "main",
+        "module_id": "mod1_hero",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "product_identity",
+            "campaign_consistency",
+            "emotional_story",
+            "copy_separation"
+          ],
+          "art_direction": {
+            "framing": "横幅中景，眼平略低角度，杯体居右三分之一，背景窗光虚化",
+            "lighting": "左后窗光作主光，正面柔补光，低反差，杯身哑光质感可见",
+            "hierarchy": "第一焦点杯身轮廓与把手，第二焦点晨光氛围，左侧为文字留白",
+            "integration": "杯底与桌面自然接触阴影，道具比例真实，无悬浮感"
+          }
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "A stoneware mug with a calm matte-green glaze, made for slow mornings and everyday coffee or tea.",
+          "headline": "A Quiet Morning, Held in Matte Green",
+          "composition": "970x600横幅：哑光灰绿马克杯置于浅色木桌，右后方柔和窗光，左侧安静留白，浅景深，无文字无Logo臆造",
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+          ]
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "basic",
+          "field": "block.image",
+          "label": "Basic 主视觉图文",
+          "slots": [
+            {
+              "id": "main",
+              "field": "block.image",
+              "width": 970,
+              "height": 600,
+              "minimum_width": 970,
+              "minimum_height": 600
+            }
+          ],
+          "width": 970,
+          "height": 600,
+          "layout": "header",
+          "body_max": 6000,
+          "headline_max": 150,
+          "minimum_width": 970,
+          "minimum_height": 600,
+          "native_text_fields": {
+            "body": "block.body.textList",
+            "headline": "headline.value"
+          },
+          "official_module_type": "STANDARD_HEADER_IMAGE_TEXT",
+          "official_payload_field": "standardHeaderImageText"
+        },
+        "module_snapshot": {
+          "id": "mod1_hero",
+          "body": "A stoneware mug with a calm matte-green glaze, made for slow mornings and everyday coffee or tea.",
+          "title": "主视觉 · 清晨第一杯",
+          "spec_id": "basic_header_image_text",
+          "headline": "A Quiet Morning, Held in Matte Green",
+          "user_need": "建立商品识别：哑光灰绿马克杯作为早餐桌视觉主角，传递安静日常仪式感（策划假设）。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "建立商品识别：哑光灰绿马克杯作为早餐桌视觉主角，传递安静日常仪式感（策划假设）。",
+          "prohibited": [],
+          "composition": "横幅主视觉：马克杯置于浅色木桌中央偏右，左后方虚化的窗户晨光与少量早餐道具（ folded linen、小碟），杯身占画面约三分之一，左半幅留安静文案区，浅景深。",
+          "image_slots": [
+            {
+              "id": "main",
+              "body": "A stoneware mug with a calm matte-green glaze, made for slow mornings and everyday coffee or tea.",
+              "headline": "A Quiet Morning, Held in Matte Green",
+              "composition": "970x600横幅：哑光灰绿马克杯置于浅色木桌，右后方柔和窗光，左侧安静留白，浅景深，无文字无Logo臆造",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_color",
+            "e_material"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 建立商品识别：哑光灰绿马克杯作为早餐桌视觉主角，传递安静日常仪式感（策划假设）。\nModel-authored scene and camera direction: 横幅主视觉：马克杯置于浅色木桌中央偏右，左后方虚化的窗户晨光与少量早餐道具（ folded linen、小碟），杯身占画面约三分之一，左半幅留安静文案区，浅景深。\nCopy zone: left. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "横幅中景，眼平略低角度，杯体居右三分之一，背景窗光虚化",
+            "lighting": "左后窗光作主光，正面柔补光，低反差，杯身哑光质感可见",
+            "hierarchy": "第一焦点杯身轮廓与把手，第二焦点晨光氛围，左侧为文字留白",
+            "integration": "杯底与桌面自然接触阴影，道具比例真实，无悬浮感"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "campaign_consistency",
+            "emotional_story",
+            "copy_separation"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        }
+      },
+      "number": 1,
+      "sequence_number": 0,
+      "filename": "generated-1-970x600.png",
+      "width": 970,
+      "height": 600,
+      "size": 682465,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/dc0700a8-cb55-4e44-8f0c-7afad1fcadb9/content",
+      "download_url": "/api/v1/assets/dc0700a8-cb55-4e44-8f0c-7afad1fcadb9/download",
+      "parent_output_id": null,
+      "root_output_id": "8b6dba1a-e2a5-457b-9ac5-7202d7c5bc66",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "284883d2-9b93-49d6-8448-b9dbe84fd38f",
+      "asset_id": "21ea4ca1-99dd-444c-a624-b517e7dc977f",
+      "job_id": "22b0bcdb-f863-46b6-ad31-ba6c630d3e6f",
+      "run_id": "460f8f03-6c31-4b7b-8086-8454e5253123",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+        "slot_id": "main",
+        "module_id": "mod2_craft",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "product_identity",
+            "detail_truth",
+            "scale_context",
+            "copy_separation"
+          ],
+          "art_direction": {
+            "framing": "近景三分之四侧面，手入画托握杯身，展示器型曲线",
+            "lighting": "左前柔光主光，杯沿一圈细腻边缘光体现釉面",
+            "hierarchy": "第一焦点釉面质感与杯型，第二焦点手部尺度参照",
+            "integration": "手指与杯身自然遮挡接触，握持受力真实，阴影落地"
+          }
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "Colored-glaze stoneware with a soft matte finish. Stands about 4 in tall — a comfortable, familiar hand-feel.",
+          "headline": "Stoneware, Colored Glaze",
+          "composition": "600x600方图：三分之四侧面近景，手轻握灰绿哑光杯身，米白背景，展示锥形轮廓与彩釉质感，右侧留文案区，无文字",
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+          ]
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "basic",
+          "field": "block.image",
+          "label": "Basic 左图右文",
+          "slots": [
+            {
+              "id": "main",
+              "field": "block.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            }
+          ],
+          "width": 600,
+          "height": 600,
+          "layout": "image_left",
+          "body_max": 1000,
+          "headline_max": 160,
+          "minimum_width": 300,
+          "minimum_height": 300,
+          "native_text_fields": {
+            "body": "block.body.textList",
+            "headline": "block.headline.value"
+          },
+          "image_position_type": "LEFT",
+          "official_module_type": "STANDARD_SINGLE_SIDE_IMAGE",
+          "official_payload_field": "standardSingleSideImage"
+        },
+        "module_snapshot": {
+          "id": "mod2_craft",
+          "body": "Colored-glaze stoneware with a soft matte finish. Stands about 4 in tall — a comfortable, familiar hand-feel.",
+          "title": "材质与器型 · 石与釉",
+          "spec_id": "basic_single_image_left",
+          "headline": "Stoneware, Colored Glaze",
+          "user_need": "回答材质与工艺问题：石器彩釉的哑光质地与上手尺度（4英寸高）。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "回答材质与工艺问题：石器彩釉的哑光质地与上手尺度（4英寸高）。",
+          "prohibited": [],
+          "composition": "左图右文：手部轻握杯身侧后方，三分之四侧面视角展示锥形轮廓与哑光釉面微反光，背景为米白中性墙面，右侧为文案区。",
+          "image_slots": [
+            {
+              "id": "main",
+              "body": "Colored-glaze stoneware with a soft matte finish. Stands about 4 in tall — a comfortable, familiar hand-feel.",
+              "headline": "Stoneware, Colored Glaze",
+              "composition": "600x600方图：三分之四侧面近景，手轻握灰绿哑光杯身，米白背景，展示锥形轮廓与彩釉质感，右侧留文案区，无文字",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_material",
+            "e_size"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 回答材质与工艺问题：石器彩釉的哑光质地与上手尺度（4英寸高）。\nModel-authored scene and camera direction: 左图右文：手部轻握杯身侧后方，三分之四侧面视角展示锥形轮廓与哑光釉面微反光，背景为米白中性墙面，右侧为文案区。\nCopy zone: right. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "近景三分之四侧面，手入画托握杯身，展示器型曲线",
+            "lighting": "左前柔光主光，杯沿一圈细腻边缘光体现釉面",
+            "hierarchy": "第一焦点釉面质感与杯型，第二焦点手部尺度参照",
+            "integration": "手指与杯身自然遮挡接触，握持受力真实，阴影落地"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "detail_truth",
+            "scale_context",
+            "copy_separation"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        }
+      },
+      "number": 2,
+      "sequence_number": 0,
+      "filename": "generated-1-600x600.png",
+      "width": 600,
+      "height": 600,
+      "size": 422722,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/21ea4ca1-99dd-444c-a624-b517e7dc977f/content",
+      "download_url": "/api/v1/assets/21ea4ca1-99dd-444c-a624-b517e7dc977f/download",
+      "parent_output_id": null,
+      "root_output_id": "284883d2-9b93-49d6-8448-b9dbe84fd38f",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "ff6da3f8-4b6e-4f36-9272-4b1f2067390e",
+      "asset_id": "132946f2-055e-4bd7-910a-f7dd736b2774",
+      "job_id": "0c2a5f6e-c220-4fa5-a7ea-dc299e36983a",
+      "run_id": "460f8f03-6c31-4b7b-8086-8454e5253123",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+        "slot_id": "main",
+        "module_id": "mod3_daily",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "emotional_story",
+            "scale_context",
+            "campaign_consistency",
+            "copy_separation"
+          ],
+          "art_direction": {
+            "framing": "中景侧前方视角，杯体位于画面左中部偏右，桌面道具陪衬不抢焦",
+            "lighting": "侧窗自然光为主，柔和补光，杯内可见深色饮品与微热气",
+            "hierarchy": "第一焦点杯中饮品与杯身颜色呼应，第二焦点桌面生活氛围",
+            "integration": "杯与桌面接触阴影真实，道具比例符合日常桌面透视"
+          }
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "At about 13 oz, it holds a generous cup of coffee or tea — equally at home on a kitchen counter or office desk.",
+          "headline": "Right at Home on Any Table",
+          "composition": "600x600方图：灰绿马克杯盛深色咖啡置于居家办公桌，侧窗自然光，旁有笔记本与绿植，杯为视觉主角，左侧留白，无文字",
+          "reference_asset_ids": [
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "basic",
+          "field": "block.image",
+          "label": "Basic 右图左文",
+          "slots": [
+            {
+              "id": "main",
+              "field": "block.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            }
+          ],
+          "width": 600,
+          "height": 600,
+          "layout": "image_right",
+          "body_max": 1000,
+          "headline_max": 160,
+          "minimum_width": 300,
+          "minimum_height": 300,
+          "native_text_fields": {
+            "body": "block.body.textList",
+            "headline": "block.headline.value"
+          },
+          "image_position_type": "RIGHT",
+          "official_module_type": "STANDARD_SINGLE_SIDE_IMAGE",
+          "official_payload_field": "standardSingleSideImage"
+        },
+        "module_snapshot": {
+          "id": "mod3_daily",
+          "body": "At about 13 oz, it holds a generous cup of coffee or tea — equally at home on a kitchen counter or office desk.",
+          "title": "使用场景 · 一日的陪伴",
+          "spec_id": "basic_single_image_right",
+          "headline": "Right at Home on Any Table",
+          "user_need": "使用关系：从办公桌到厨房台面，13 oz容量适合日常咖啡/茶（动机为策划假设）。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "使用关系：从办公桌到厨房台面，13 oz容量适合日常咖啡/茶（动机为策划假设）。",
+          "prohibited": [],
+          "composition": "右图左文：马克杯置于办公/居家桌面一角，旁有笔记本与一小枝绿植，自然日光从侧面进入，杯为画面主角，左侧文案区。",
+          "image_slots": [
+            {
+              "id": "main",
+              "body": "At about 13 oz, it holds a generous cup of coffee or tea — equally at home on a kitchen counter or office desk.",
+              "headline": "Right at Home on Any Table",
+              "composition": "600x600方图：灰绿马克杯盛深色咖啡置于居家办公桌，侧窗自然光，旁有笔记本与绿植，杯为视觉主角，左侧留白，无文字",
+              "reference_asset_ids": [
+                "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_size",
+            "e_color"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 使用关系：从办公桌到厨房台面，13 oz容量适合日常咖啡/茶（动机为策划假设）。\nModel-authored scene and camera direction: 右图左文：马克杯置于办公/居家桌面一角，旁有笔记本与一小枝绿植，自然日光从侧面进入，杯为画面主角，左侧文案区。\nCopy zone: left. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "中景侧前方视角，杯体位于画面左中部偏右，桌面道具陪衬不抢焦",
+            "lighting": "侧窗自然光为主，柔和补光，杯内可见深色饮品与微热气",
+            "hierarchy": "第一焦点杯中饮品与杯身颜色呼应，第二焦点桌面生活氛围",
+            "integration": "杯与桌面接触阴影真实，道具比例符合日常桌面透视"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "emotional_story",
+            "scale_context",
+            "campaign_consistency",
+            "copy_separation"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        }
+      },
+      "number": 3,
+      "sequence_number": 0,
+      "filename": "generated-1-600x600.png",
+      "width": 600,
+      "height": 600,
+      "size": 436588,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/132946f2-055e-4bd7-910a-f7dd736b2774/content",
+      "download_url": "/api/v1/assets/132946f2-055e-4bd7-910a-f7dd736b2774/download",
+      "parent_output_id": null,
+      "root_output_id": "ff6da3f8-4b6e-4f36-9272-4b1f2067390e",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "6da79267-09dc-4e29-b8b5-dda19784b5dd",
+      "asset_id": "6dc706de-bbf9-45b1-9651-c792bdcf55c0",
+      "job_id": "63981adf-35bf-44e0-ac48-c7eacfd983ef",
+      "run_id": "460f8f03-6c31-4b7b-8086-8454e5253123",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+        "slot_id": "block1",
+        "module_id": "mod4_facts",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "detail_truth",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "commercial_lighting"
+          ],
+          "art_direction": {
+            "framing": "三槽位分别：箱内中景、碗架中景、桌面俯拍，主体居中偏上",
+            "lighting": "统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感",
+            "hierarchy": "每槽第一焦点为杯子与设备关系，底部为原生文字区",
+            "integration": "杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致"
+          }
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "block1",
+          "body": "Warm up your drink right in the mug.",
+          "headline": "Microwave-Safe",
+          "composition": "600x600：灰绿马克杯置于微波炉转盘中央、炉门微开视角，厨房暖光，底部留文案区，无文字无品牌标识",
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+          ]
+        },
+        "spec_snapshot": {
+          "id": "block1",
+          "type": "basic",
+          "field": "block1.image",
+          "label": "Basic 三图文组合",
+          "slots": [
+            {
+              "id": "block1",
+              "field": "block1.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            },
+            {
+              "id": "block2",
+              "field": "block2.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            },
+            {
+              "id": "block3",
+              "field": "block3.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            }
+          ],
+          "width": 600,
+          "height": 600,
+          "layout": "three_columns",
+          "body_max": 1000,
+          "headline_max": 200,
+          "minimum_width": 300,
+          "minimum_height": 300,
+          "native_text_fields": {
+            "headline": "headline.value",
+            "slot_body": "blockN.body.textList",
+            "slot_headline": "blockN.headline.value"
+          },
+          "official_module_type": "STANDARD_THREE_IMAGE_TEXT",
+          "official_payload_field": "standardThreeImageText"
+        },
+        "module_snapshot": {
+          "id": "mod4_facts",
+          "body": "Three everyday facts, built in.",
+          "title": "三图文 · 易打理三事实",
+          "spec_id": "basic_three_image_text",
+          "headline": "Made for Real Life",
+          "user_need": "分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。",
+          "prohibited": [],
+          "composition": "三栏并列：block1为马克杯置于微波炉内微开的场景；block2为洗碗机碗架中倒置的杯子；block3为俯拍杯中注满饮品、旁有量感参照。三槽位分别中景、中景、俯拍，构图各异。",
+          "image_slots": [
+            {
+              "id": "block1",
+              "body": "Warm up your drink right in the mug.",
+              "headline": "Microwave-Safe",
+              "composition": "600x600：灰绿马克杯置于微波炉转盘中央、炉门微开视角，厨房暖光，底部留文案区，无文字无品牌标识",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            },
+            {
+              "id": "block2",
+              "body": "Easy cleanup, cycle after cycle.",
+              "headline": "Dishwasher-Safe",
+              "composition": "600x600：灰绿马克杯倒扣在洗碗机碗架格栅上，喷淋臂背景虚化，水珠细节，底部留文案区，无文字",
+              "reference_asset_ids": [
+                "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+              ]
+            },
+            {
+              "id": "block3",
+              "body": "A generous size for your daily coffee or tea.",
+              "headline": "About 13 oz",
+              "composition": "600x600：俯视桌面，灰绿马克杯注满深色饮品，旁放咖啡豆与小勺体现13 oz容量感，柔和顶光，底部留文案区，无文字",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_micro",
+            "e_dish",
+            "e_size"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nModel-authored scene and camera direction: 三栏并列：block1为马克杯置于微波炉内微开的场景；block2为洗碗机碗架中倒置的杯子；block3为俯拍杯中注满饮品、旁有量感参照。三槽位分别中景、中景、俯拍，构图各异。\nCopy zone: bottom. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "三槽位分别：箱内中景、碗架中景、桌面俯拍，主体居中偏上",
+            "lighting": "统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感",
+            "hierarchy": "每槽第一焦点为杯子与设备关系，底部为原生文字区",
+            "integration": "杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "detail_truth",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "commercial_lighting"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        }
+      },
+      "number": 4,
+      "sequence_number": 0,
+      "filename": "generated-1-600x600.png",
+      "width": 600,
+      "height": 600,
+      "size": 410658,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/6dc706de-bbf9-45b1-9651-c792bdcf55c0/content",
+      "download_url": "/api/v1/assets/6dc706de-bbf9-45b1-9651-c792bdcf55c0/download",
+      "parent_output_id": null,
+      "root_output_id": "6da79267-09dc-4e29-b8b5-dda19784b5dd",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "a731a4aa-ba18-471c-ab47-ae407f1d5d55",
+      "asset_id": "89aa70ae-0303-4c6f-aea9-7dfe64162504",
+      "job_id": "22d1c599-bf21-4477-9250-f0d3794c7b8a",
+      "run_id": "460f8f03-6c31-4b7b-8086-8454e5253123",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+        "slot_id": "block2",
+        "module_id": "mod4_facts",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "detail_truth",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "commercial_lighting"
+          ],
+          "art_direction": {
+            "framing": "三槽位分别：箱内中景、碗架中景、桌面俯拍，主体居中偏上",
+            "lighting": "统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感",
+            "hierarchy": "每槽第一焦点为杯子与设备关系，底部为原生文字区",
+            "integration": "杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致"
+          }
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "block2",
+          "body": "Easy cleanup, cycle after cycle.",
+          "headline": "Dishwasher-Safe",
+          "composition": "600x600：灰绿马克杯倒扣在洗碗机碗架格栅上，喷淋臂背景虚化，水珠细节，底部留文案区，无文字",
+          "reference_asset_ids": [
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        },
+        "spec_snapshot": {
+          "id": "block2",
+          "type": "basic",
+          "field": "block2.image",
+          "label": "Basic 三图文组合",
+          "slots": [
+            {
+              "id": "block1",
+              "field": "block1.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            },
+            {
+              "id": "block2",
+              "field": "block2.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            },
+            {
+              "id": "block3",
+              "field": "block3.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            }
+          ],
+          "width": 600,
+          "height": 600,
+          "layout": "three_columns",
+          "body_max": 1000,
+          "headline_max": 200,
+          "minimum_width": 300,
+          "minimum_height": 300,
+          "native_text_fields": {
+            "headline": "headline.value",
+            "slot_body": "blockN.body.textList",
+            "slot_headline": "blockN.headline.value"
+          },
+          "official_module_type": "STANDARD_THREE_IMAGE_TEXT",
+          "official_payload_field": "standardThreeImageText"
+        },
+        "module_snapshot": {
+          "id": "mod4_facts",
+          "body": "Three everyday facts, built in.",
+          "title": "三图文 · 易打理三事实",
+          "spec_id": "basic_three_image_text",
+          "headline": "Made for Real Life",
+          "user_need": "分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。",
+          "prohibited": [],
+          "composition": "三栏并列：block1为马克杯置于微波炉内微开的场景；block2为洗碗机碗架中倒置的杯子；block3为俯拍杯中注满饮品、旁有量感参照。三槽位分别中景、中景、俯拍，构图各异。",
+          "image_slots": [
+            {
+              "id": "block1",
+              "body": "Warm up your drink right in the mug.",
+              "headline": "Microwave-Safe",
+              "composition": "600x600：灰绿马克杯置于微波炉转盘中央、炉门微开视角，厨房暖光，底部留文案区，无文字无品牌标识",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            },
+            {
+              "id": "block2",
+              "body": "Easy cleanup, cycle after cycle.",
+              "headline": "Dishwasher-Safe",
+              "composition": "600x600：灰绿马克杯倒扣在洗碗机碗架格栅上，喷淋臂背景虚化，水珠细节，底部留文案区，无文字",
+              "reference_asset_ids": [
+                "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+              ]
+            },
+            {
+              "id": "block3",
+              "body": "A generous size for your daily coffee or tea.",
+              "headline": "About 13 oz",
+              "composition": "600x600：俯视桌面，灰绿马克杯注满深色饮品，旁放咖啡豆与小勺体现13 oz容量感，柔和顶光，底部留文案区，无文字",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_micro",
+            "e_dish",
+            "e_size"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nModel-authored scene and camera direction: 三栏并列：block1为马克杯置于微波炉内微开的场景；block2为洗碗机碗架中倒置的杯子；block3为俯拍杯中注满饮品、旁有量感参照。三槽位分别中景、中景、俯拍，构图各异。\nCopy zone: bottom. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "三槽位分别：箱内中景、碗架中景、桌面俯拍，主体居中偏上",
+            "lighting": "统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感",
+            "hierarchy": "每槽第一焦点为杯子与设备关系，底部为原生文字区",
+            "integration": "杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "detail_truth",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "commercial_lighting"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        }
+      },
+      "number": 5,
+      "sequence_number": 0,
+      "filename": "generated-1-600x600.png",
+      "width": 600,
+      "height": 600,
+      "size": 474305,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/89aa70ae-0303-4c6f-aea9-7dfe64162504/content",
+      "download_url": "/api/v1/assets/89aa70ae-0303-4c6f-aea9-7dfe64162504/download",
+      "parent_output_id": null,
+      "root_output_id": "a731a4aa-ba18-471c-ab47-ae407f1d5d55",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "eefe2b24-529a-427f-8814-dd09a5dfcf42",
+      "asset_id": "8e78cb54-f44f-4011-bba8-d97a0febb2c2",
+      "job_id": "0829bc83-1450-4a45-a1ce-9e97bc9c6903",
+      "run_id": "460f8f03-6c31-4b7b-8086-8454e5253123",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+        "slot_id": "block3",
+        "module_id": "mod4_facts",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "detail_truth",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "commercial_lighting"
+          ],
+          "art_direction": {
+            "framing": "三槽位分别：箱内中景、碗架中景、桌面俯拍，主体居中偏上",
+            "lighting": "统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感",
+            "hierarchy": "每槽第一焦点为杯子与设备关系，底部为原生文字区",
+            "integration": "杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致"
+          }
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "block3",
+          "body": "A generous size for your daily coffee or tea.",
+          "headline": "About 13 oz",
+          "composition": "600x600：俯视桌面，灰绿马克杯注满深色饮品，旁放咖啡豆与小勺体现13 oz容量感，柔和顶光，底部留文案区，无文字",
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+          ]
+        },
+        "spec_snapshot": {
+          "id": "block3",
+          "type": "basic",
+          "field": "block3.image",
+          "label": "Basic 三图文组合",
+          "slots": [
+            {
+              "id": "block1",
+              "field": "block1.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            },
+            {
+              "id": "block2",
+              "field": "block2.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            },
+            {
+              "id": "block3",
+              "field": "block3.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            }
+          ],
+          "width": 600,
+          "height": 600,
+          "layout": "three_columns",
+          "body_max": 1000,
+          "headline_max": 200,
+          "minimum_width": 300,
+          "minimum_height": 300,
+          "native_text_fields": {
+            "headline": "headline.value",
+            "slot_body": "blockN.body.textList",
+            "slot_headline": "blockN.headline.value"
+          },
+          "official_module_type": "STANDARD_THREE_IMAGE_TEXT",
+          "official_payload_field": "standardThreeImageText"
+        },
+        "module_snapshot": {
+          "id": "mod4_facts",
+          "body": "Three everyday facts, built in.",
+          "title": "三图文 · 易打理三事实",
+          "spec_id": "basic_three_image_text",
+          "headline": "Made for Real Life",
+          "user_need": "分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。",
+          "prohibited": [],
+          "composition": "三栏并列：block1为马克杯置于微波炉内微开的场景；block2为洗碗机碗架中倒置的杯子；block3为俯拍杯中注满饮品、旁有量感参照。三槽位分别中景、中景、俯拍，构图各异。",
+          "image_slots": [
+            {
+              "id": "block1",
+              "body": "Warm up your drink right in the mug.",
+              "headline": "Microwave-Safe",
+              "composition": "600x600：灰绿马克杯置于微波炉转盘中央、炉门微开视角，厨房暖光，底部留文案区，无文字无品牌标识",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            },
+            {
+              "id": "block2",
+              "body": "Easy cleanup, cycle after cycle.",
+              "headline": "Dishwasher-Safe",
+              "composition": "600x600：灰绿马克杯倒扣在洗碗机碗架格栅上，喷淋臂背景虚化，水珠细节，底部留文案区，无文字",
+              "reference_asset_ids": [
+                "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+              ]
+            },
+            {
+              "id": "block3",
+              "body": "A generous size for your daily coffee or tea.",
+              "headline": "About 13 oz",
+              "composition": "600x600：俯视桌面，灰绿马克杯注满深色饮品，旁放咖啡豆与小勺体现13 oz容量感，柔和顶光，底部留文案区，无文字",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_micro",
+            "e_dish",
+            "e_size"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nModel-authored scene and camera direction: 三栏并列：block1为马克杯置于微波炉内微开的场景；block2为洗碗机碗架中倒置的杯子；block3为俯拍杯中注满饮品、旁有量感参照。三槽位分别中景、中景、俯拍，构图各异。\nCopy zone: bottom. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "三槽位分别：箱内中景、碗架中景、桌面俯拍，主体居中偏上",
+            "lighting": "统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感",
+            "hierarchy": "每槽第一焦点为杯子与设备关系，底部为原生文字区",
+            "integration": "杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "detail_truth",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "commercial_lighting"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        }
+      },
+      "number": 6,
+      "sequence_number": 0,
+      "filename": "generated-1-600x600.png",
+      "width": 600,
+      "height": 600,
+      "size": 554339,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/8e78cb54-f44f-4011-bba8-d97a0febb2c2/content",
+      "download_url": "/api/v1/assets/8e78cb54-f44f-4011-bba8-d97a0febb2c2/download",
+      "parent_output_id": null,
+      "root_output_id": "eefe2b24-529a-427f-8814-dd09a5dfcf42",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "04896ddf-afc6-45c2-89b4-a0065da3aee6",
+      "asset_id": "0c2402ac-c411-4b4b-ad87-0c6d2369cd94",
+      "job_id": "6b331be7-d648-4b54-81b3-7f5c85038638",
+      "run_id": "460f8f03-6c31-4b7b-8086-8454e5253123",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+        "slot_id": "main",
+        "module_id": "mod5_close",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "campaign_consistency",
+            "emotional_story",
+            "copy_separation",
+            "visual_hierarchy"
+          ],
+          "art_direction": {
+            "framing": "横幅局部特写，杯身与把手曲线居右，左半幅为柔和虚化背景",
+            "lighting": "与整套一致的左前柔光，低反差，哑光表面细腻过渡",
+            "hierarchy": "第一焦点把手与杯身曲线质感，第二焦点同色系环境氛围",
+            "integration": "杯体与背景色调统一但有明暗分离，无贴图感"
+          }
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "One calm color that fits right in — from morning coffee to a quiet evening tea.",
+          "headline": "Simple Color, Easy Living",
+          "composition": "970x300横幅：灰绿哑光杯身与把手曲线特写居右，左侧同色系虚化厨房背景，柔和左前光，左侧为文字叠放区，无文字无Logo臆造",
+          "reference_asset_ids": [
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "basic",
+          "label": "Basic 图片与文字覆盖",
+          "width": 970,
+          "height": 300,
+          "layout": "overlay",
+          "mobile": "responsive_operator_review",
+          "spec_status": "Official legacy layout guide confirms 970x300; current account text limits and mobile rendering unverified",
+          "minimum_width": 970,
+          "minimum_height": 300,
+          "native_text_fields": {
+            "body": "block.body.textList",
+            "headline": "block.headline.value"
+          },
+          "native_image_fields": {
+            "desktop": "block.image"
+          },
+          "official_module_type": "STANDARD_IMAGE_TEXT_OVERLAY",
+          "official_payload_field": "standardImageTextOverlay",
+          "required_operator_fields": [
+            "overlayColorType",
+            "image.altText"
+          ]
+        },
+        "module_snapshot": {
+          "id": "mod5_close",
+          "body": "One calm color that fits right in — from morning coffee to a quiet evening tea.",
+          "title": "收尾横幅 · 安静收尾",
+          "spec_id": "basic_image_text_overlay",
+          "headline": "Simple Color, Easy Living",
+          "user_need": "情感收束：哑光灰绿与中性环境融合，强化低调纯色搭配价值（策划假设）。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "情感收束：哑光灰绿与中性环境融合，强化低调纯色搭配价值（策划假设）。",
+          "prohibited": [],
+          "composition": "970x300横幅：杯身局部特写与把手曲线占据画面右侧，背景为同色系虚化厨房环境形成色调层次，左侧为叠字区，整体安静克制。",
+          "image_slots": [
+            {
+              "id": "main",
+              "body": "One calm color that fits right in — from morning coffee to a quiet evening tea.",
+              "headline": "Simple Color, Easy Living",
+              "composition": "970x300横幅：灰绿哑光杯身与把手曲线特写居右，左侧同色系虚化厨房背景，柔和左前光，左侧为文字叠放区，无文字无Logo臆造",
+              "reference_asset_ids": [
+                "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_color",
+            "e_material"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 情感收束：哑光灰绿与中性环境融合，强化低调纯色搭配价值（策划假设）。\nModel-authored scene and camera direction: 970x300横幅：杯身局部特写与把手曲线占据画面右侧，背景为同色系虚化厨房环境形成色调层次，左侧为叠字区，整体安静克制。\nCopy zone: left. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "横幅局部特写，杯身与把手曲线居右，左半幅为柔和虚化背景",
+            "lighting": "与整套一致的左前柔光，低反差，哑光表面细腻过渡",
+            "hierarchy": "第一焦点把手与杯身曲线质感，第二焦点同色系环境氛围",
+            "integration": "杯体与背景色调统一但有明暗分离，无贴图感"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留left侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "campaign_consistency",
+            "emotional_story",
+            "copy_separation",
+            "visual_hierarchy"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        }
+      },
+      "number": 7,
+      "sequence_number": 0,
+      "filename": "generated-1-970x300.png",
+      "width": 970,
+      "height": 300,
+      "size": 290284,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/0c2402ac-c411-4b4b-ad87-0c6d2369cd94/content",
+      "download_url": "/api/v1/assets/0c2402ac-c411-4b4b-ad87-0c6d2369cd94/download",
+      "parent_output_id": null,
+      "root_output_id": "04896ddf-afc6-45c2-89b4-a0065da3aee6",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    }
+  ],
+  "prompts": [
+    {
+      "id": "job-0829bc83-1450-4a45-a1ce-9e97bc9c6903",
+      "version": 0,
+      "content": "Create the photographic artwork for ONE Amazon A+ module, not a complete page or a collage of modules.\n\nREFERENCE AND CUSTOM VALUES: 素材角色以本次会话的明确指定为准。存在图A模板时A保护构图/人物/有效定制值，图B产品决定真实款式/配色/图案/Logo，图C只决定被指定定制字段的字体轮廓，不得覆盖有效姓名号码。没有实体模板时自主设计，不假设必须有A/B/C。 本次用户明确值优先，其次模板有效定制值；0/00/YOUR NAME仅为占位。未知定制能力、背面、肩号结构和工艺不得编造。正背对应，缺少视角但可生成时记录风险，不强制裁剪。\nPRODUCT IDENTITY LOCK: 灰绿色哑光单耳马克杯：上宽下窄锥形杯身、圆形杯口、右侧环形把手、表面柔和哑光反光、圆润杯底；杯身无可见图案文字。严格保留参考图颜色、结构、把手位置与哑光质感，不新增Logo、不改动器型。\nUse the original product reference as the product source; follow any explicit scene/style reference roles in the module brief.\nThe actual product references are the visual ground truth for color placement, silhouette, seams, collar, cuffs, printed text, numbers and logos. Do not borrow a different product from scene/style references.\nCAMPAIGN STYLE LOCK: 整套统一暖调生活厨房光效：左前45°柔和大窗主光、低反差、自然接触阴影；背景为浅色木质台面与中性厨房/餐桌环境，景深浅、焦点清晰；配色以哑光灰绿为主体、米白与浅木色为辅助，排版气质克制、留白充足。\nKeep this shared palette, lighting character, contrast and material treatment consistent with the campaign; vary the composition to suit THIS module instead of repeating one poster.\nSINGLE VISUAL MESSAGE: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nCUSTOMER NEED: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nCONFIRMED PRODUCT EVIDENCE: Microwave-safe 可微波炉使用; Dishwasher-safe 可洗碗机清洗; 官方标称容量13 oz、高4英寸\nMODULE ART DIRECTION: 600x600：俯视桌面，灰绿马克杯注满深色饮品，旁放咖啡豆与小勺体现13 oz容量感，柔和顶光，底部留文案区，无文字\nCAMERA AND FRAMING: 600x600：俯视桌面，灰绿马克杯注满深色饮品，旁放咖啡豆与小勺体现13 oz容量感，柔和顶光，底部留文案区，无文字\nCOMMERCIAL LIGHTING: 统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感\nFOCAL / INFORMATION HIERARCHY: 每槽第一焦点为杯子与设备关系，底部为原生文字区\nPHYSICAL SCENE INTEGRATION: 杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致\nAPPLIED DESIGN PRINCIPLES: detail_truth, multi_slot_storytelling, visual_hierarchy, commercial_lighting\nIMPLEMENTED DESIGN RULES: Show only details visible in original references; do not invent microscopic fabric or performance. This is one distinct image slot; other independently generated slots complete the native module. Make the intended product feature the first focal point and keep supporting information subordinate. Use deliberate key/fill separation, coherent highlights and contact shadows, not generic glow.\nTHIS INDEPENDENT IMAGE SLOT: block3; 600x600：俯视桌面，灰绿马克杯注满深色饮品，旁放咖啡豆与小勺体现13 oz容量感，柔和顶光，底部留文案区，无文字\nINDEPENDENT IMAGE PROMPT: Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.\nOUTPUT FRAME: 600:600. Compose for this frame without stretching or cutting off the product.\nDESKTOP COMPOSITION / COPY SPACE: Native headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\nMOBILE SAFE CONTENT: 保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。\nEstablish one clear focal hierarchy: product first, supporting scene second. Use deliberate depth separation, believable key/fill light and clean edge contrast, without generic glow or fake effects.\nIntegrate the product physically: coherent scale and perspective, contact shadows, matching light direction, natural fabric folds and correct foreground occlusion. No floating cutout or pasted flat decal.\nNative headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\nDo not render NEW headlines, body copy, labels, captions or watermarks. These are typeset separately. This does NOT remove or rewrite the product's inherent printed words, numbers or logos.\nDo not invent material, size, certification, performance benefits, brand/team authorization or unprovided garment faces.\nForbidden: \nACCEPTANCE: 商品颜色/图案/Logo/结构; 实际卖点与事实; 英文拼写和可读性; 移动端完整性; 素材商业使用权; 球队/品牌/赛事授权; 无价格/促销/竞品比较\nFINAL IMAGE SLOT CONTRACT: 600x600：俯视桌面，灰绿马克杯注满深色饮品，旁放咖啡豆与小勺体现13 oz容量感，柔和顶光，底部留文案区，无文字. This request creates ONLY this independent slot, not its neighbouring views or the whole multi-image module. Do not substitute a front/back garment pair or a full-garment overview for a requested close-up. For a detail view, tightly frame the actual visible region without inventing unseen microstructure. Native headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\n\nDELIVERY COMPOSITION CONTRACT: The final delivery canvas is exactly 600x600 pixels with a 1:1 aspect ratio. The upstream working canvas uses the verified 1:1 aspect ratio. Requested rendering quality is HIGH; produce maximum fine detail, clean edges, realistic texture, and professional commercial polish. The delivery format is PNG with quality/compression value 90. Compose natively for the complete final 1:1 canvas and keep the entire product, face, garment, text-free focal details, and all critical edges visible. Nothing may be cropped out. Leave sufficient natural background around the subject. Do not add borders, letterboxing, pillarboxing, frames, or artificial blank margins. Preserve natural perspective and avoid stretching.",
+      "source": "executed",
+      "job_id": "0829bc83-1450-4a45-a1ce-9e97bc9c6903",
+      "job_status": "succeeded",
+      "replayable": false,
+      "created_at": "2026-11-06T06:54:27"
+    },
+    {
+      "id": "job-0c2a5f6e-c220-4fa5-a7ea-dc299e36983a",
+      "version": 0,
+      "content": "Create the photographic artwork for ONE Amazon A+ module, not a complete page or a collage of modules.\n\nREFERENCE AND CUSTOM VALUES: 素材角色以本次会话的明确指定为准。存在图A模板时A保护构图/人物/有效定制值，图B产品决定真实款式/配色/图案/Logo，图C只决定被指定定制字段的字体轮廓，不得覆盖有效姓名号码。没有实体模板时自主设计，不假设必须有A/B/C。 本次用户明确值优先，其次模板有效定制值；0/00/YOUR NAME仅为占位。未知定制能力、背面、肩号结构和工艺不得编造。正背对应，缺少视角但可生成时记录风险，不强制裁剪。\nPRODUCT IDENTITY LOCK: 灰绿色哑光单耳马克杯：上宽下窄锥形杯身、圆形杯口、右侧环形把手、表面柔和哑光反光、圆润杯底；杯身无可见图案文字。严格保留参考图颜色、结构、把手位置与哑光质感，不新增Logo、不改动器型。\nUse the original product reference as the product source; follow any explicit scene/style reference roles in the module brief.\nThe actual product references are the visual ground truth for color placement, silhouette, seams, collar, cuffs, printed text, numbers and logos. Do not borrow a different product from scene/style references.\nCAMPAIGN STYLE LOCK: 整套统一暖调生活厨房光效：左前45°柔和大窗主光、低反差、自然接触阴影；背景为浅色木质台面与中性厨房/餐桌环境，景深浅、焦点清晰；配色以哑光灰绿为主体、米白与浅木色为辅助，排版气质克制、留白充足。\nKeep this shared palette, lighting character, contrast and material treatment consistent with the campaign; vary the composition to suit THIS module instead of repeating one poster.\nSINGLE VISUAL MESSAGE: 使用关系：从办公桌到厨房台面，13 oz容量适合日常咖啡/茶（动机为策划假设）。\nCUSTOMER NEED: 使用关系：从办公桌到厨房台面，13 oz容量适合日常咖啡/茶（动机为策划假设）。\nCONFIRMED PRODUCT EVIDENCE: 杯身呈灰绿色哑光单色外观，锥形圆杯结构，一侧环形把手; 官方标称容量13 oz、高4英寸\nMODULE ART DIRECTION: 右图左文：马克杯置于办公/居家桌面一角，旁有笔记本与一小枝绿植，自然日光从侧面进入，杯为画面主角，左侧文案区。\nCAMERA AND FRAMING: 中景侧前方视角，杯体位于画面左中部偏右，桌面道具陪衬不抢焦\nCOMMERCIAL LIGHTING: 侧窗自然光为主，柔和补光，杯内可见深色饮品与微热气\nFOCAL / INFORMATION HIERARCHY: 第一焦点杯中饮品与杯身颜色呼应，第二焦点桌面生活氛围\nPHYSICAL SCENE INTEGRATION: 杯与桌面接触阴影真实，道具比例符合日常桌面透视\nAPPLIED DESIGN PRINCIPLES: emotional_story, scale_context, campaign_consistency, copy_separation\nIMPLEMENTED DESIGN RULES: Communicate the specified human occasion through purposeful action and environment. Use credible human/environment scale and camera perspective. Keep the campaign palette and lighting language consistent without repeating layouts. Keep native marketing copy outside the generated artwork; preserve inherent product print.\nTHIS INDEPENDENT IMAGE SLOT: main; 600x600方图：灰绿马克杯盛深色咖啡置于居家办公桌，侧窗自然光，旁有笔记本与绿植，杯为视觉主角，左侧留白，无文字\nINDEPENDENT IMAGE PROMPT: Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 使用关系：从办公桌到厨房台面，13 oz容量适合日常咖啡/茶（动机为策划假设）。\nModel-authored scene and camera direction: 右图左文：马克杯置于办公/居家桌面一角，旁有笔记本与一小枝绿植，自然日光从侧面进入，杯为画面主角，左侧文案区。\nCopy zone: left. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.\nOUTPUT FRAME: 600:600. Compose for this frame without stretching or cutting off the product.\nDESKTOP COMPOSITION / COPY SPACE: Native headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\nMOBILE SAFE CONTENT: 保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。\nEstablish one clear focal hierarchy: product first, supporting scene second. Use deliberate depth separation, believable key/fill light and clean edge contrast, without generic glow or fake effects.\nIntegrate the product physically: coherent scale and perspective, contact shadows, matching light direction, natural fabric folds and correct foreground occlusion. No floating cutout or pasted flat decal.\nNative headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\nDo not render NEW headlines, body copy, labels, captions or watermarks. These are typeset separately. This does NOT remove or rewrite the product's inherent printed words, numbers or logos.\nDo not invent material, size, certification, performance benefits, brand/team authorization or unprovided garment faces.\nForbidden: \nACCEPTANCE: 商品颜色/图案/Logo/结构; 实际卖点与事实; 英文拼写和可读性; 移动端完整性; 素材商业使用权; 球队/品牌/赛事授权; 无价格/促销/竞品比较\nFINAL IMAGE SLOT CONTRACT: 右图左文：马克杯置于办公/居家桌面一角，旁有笔记本与一小枝绿植，自然日光从侧面进入，杯为画面主角，左侧文案区。. This request creates ONLY this independent slot, not its neighbouring views or the whole multi-image module. Do not substitute a front/back garment pair or a full-garment overview for a requested close-up. For a detail view, tightly frame the actual visible region without inventing unseen microstructure. Native headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\n\nDELIVERY COMPOSITION CONTRACT: The final delivery canvas is exactly 600x600 pixels with a 1:1 aspect ratio. The upstream working canvas uses the verified 1:1 aspect ratio. Requested rendering quality is HIGH; produce maximum fine detail, clean edges, realistic texture, and professional commercial polish. The delivery format is PNG with quality/compression value 90. Compose natively for the complete final 1:1 canvas and keep the entire product, face, garment, text-free focal details, and all critical edges visible. Nothing may be cropped out. Leave sufficient natural background around the subject. Do not add borders, letterboxing, pillarboxing, frames, or artificial blank margins. Preserve natural perspective and avoid stretching.",
+      "source": "executed",
+      "job_id": "0c2a5f6e-c220-4fa5-a7ea-dc299e36983a",
+      "job_status": "succeeded",
+      "replayable": false,
+      "created_at": "2026-11-06T06:54:27"
+    },
+    {
+      "id": "job-1cd9dfa9-7651-4d72-8f55-197587ea199e",
+      "version": 0,
+      "content": "Create the photographic artwork for ONE Amazon A+ module, not a complete page or a collage of modules.\n\nREFERENCE AND CUSTOM VALUES: 素材角色以本次会话的明确指定为准。存在图A模板时A保护构图/人物/有效定制值，图B产品决定真实款式/配色/图案/Logo，图C只决定被指定定制字段的字体轮廓，不得覆盖有效姓名号码。没有实体模板时自主设计，不假设必须有A/B/C。 本次用户明确值优先，其次模板有效定制值；0/00/YOUR NAME仅为占位。未知定制能力、背面、肩号结构和工艺不得编造。正背对应，缺少视角但可生成时记录风险，不强制裁剪。\nPRODUCT IDENTITY LOCK: 灰绿色哑光单耳马克杯：上宽下窄锥形杯身、圆形杯口、右侧环形把手、表面柔和哑光反光、圆润杯底；杯身无可见图案文字。严格保留参考图颜色、结构、把手位置与哑光质感，不新增Logo、不改动器型。\nUse the original product reference as the product source; follow any explicit scene/style reference roles in the module brief.\nThe actual product references are the visual ground truth for color placement, silhouette, seams, collar, cuffs, printed text, numbers and logos. Do not borrow a different product from scene/style references.\nCAMPAIGN STYLE LOCK: 整套统一暖调生活厨房光效：左前45°柔和大窗主光、低反差、自然接触阴影；背景为浅色木质台面与中性厨房/餐桌环境，景深浅、焦点清晰；配色以哑光灰绿为主体、米白与浅木色为辅助，排版气质克制、留白充足。\nKeep this shared palette, lighting character, contrast and material treatment consistent with the campaign; vary the composition to suit THIS module instead of repeating one poster.\nSINGLE VISUAL MESSAGE: 建立商品识别：哑光灰绿马克杯作为早餐桌视觉主角，传递安静日常仪式感（策划假设）。\nCUSTOMER NEED: 建立商品识别：哑光灰绿马克杯作为早餐桌视觉主角，传递安静日常仪式感（策划假设）。\nCONFIRMED PRODUCT EVIDENCE: 杯身呈灰绿色哑光单色外观，锥形圆杯结构，一侧环形把手; Stoneware 石器材质，colored glaze 彩色釉\nMODULE ART DIRECTION: 横幅主视觉：马克杯置于浅色木桌中央偏右，左后方虚化的窗户晨光与少量早餐道具（ folded linen、小碟），杯身占画面约三分之一，左半幅留安静文案区，浅景深。\nCAMERA AND FRAMING: 横幅中景，眼平略低角度，杯体居右三分之一，背景窗光虚化\nCOMMERCIAL LIGHTING: 左后窗光作主光，正面柔补光，低反差，杯身哑光质感可见\nFOCAL / INFORMATION HIERARCHY: 第一焦点杯身轮廓与把手，第二焦点晨光氛围，左侧为文字留白\nPHYSICAL SCENE INTEGRATION: 杯底与桌面自然接触阴影，道具比例真实，无悬浮感\nAPPLIED DESIGN PRINCIPLES: product_identity, campaign_consistency, emotional_story, copy_separation\nIMPLEMENTED DESIGN RULES: Preserve reference-grounded product contour, exact color placement and printed identity. Keep the campaign palette and lighting language consistent without repeating layouts. Communicate the specified human occasion through purposeful action and environment. Keep native marketing copy outside the generated artwork; preserve inherent product print.\nTHIS INDEPENDENT IMAGE SLOT: main; 970x600横幅：哑光灰绿马克杯置于浅色木桌，右后方柔和窗光，左侧安静留白，浅景深，无文字无Logo臆造\nINDEPENDENT IMAGE PROMPT: Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 建立商品识别：哑光灰绿马克杯作为早餐桌视觉主角，传递安静日常仪式感（策划假设）。\nModel-authored scene and camera direction: 横幅主视觉：马克杯置于浅色木桌中央偏右，左后方虚化的窗户晨光与少量早餐道具（ folded linen、小碟），杯身占画面约三分之一，左半幅留安静文案区，浅景深。\nCopy zone: left. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.\nOUTPUT FRAME: 970:600. Compose for this frame without stretching or cutting off the product.\nDESKTOP COMPOSITION / COPY SPACE: Native headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\nMOBILE SAFE CONTENT: 保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。\nEstablish one clear focal hierarchy: product first, supporting scene second. Use deliberate depth separation, believable key/fill light and clean edge contrast, without generic glow or fake effects.\nIntegrate the product physically: coherent scale and perspective, contact shadows, matching light direction, natural fabric folds and correct foreground occlusion. No floating cutout or pasted flat decal.\nNative headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\nDo not render NEW headlines, body copy, labels, captions or watermarks. These are typeset separately. This does NOT remove or rewrite the product's inherent printed words, numbers or logos.\nDo not invent material, size, certification, performance benefits, brand/team authorization or unprovided garment faces.\nForbidden: \nACCEPTANCE: 商品颜色/图案/Logo/结构; 实际卖点与事实; 英文拼写和可读性; 移动端完整性; 素材商业使用权; 球队/品牌/赛事授权; 无价格/促销/竞品比较\nFINAL IMAGE SLOT CONTRACT: 横幅主视觉：马克杯置于浅色木桌中央偏右，左后方虚化的窗户晨光与少量早餐道具（ folded linen、小碟），杯身占画面约三分之一，左半幅留安静文案区，浅景深。. This request creates ONLY this independent slot, not its neighbouring views or the whole multi-image module. Do not substitute a front/back garment pair or a full-garment overview for a requested close-up. For a detail view, tightly frame the actual visible region without inventing unseen microstructure. Native headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\n\nDELIVERY COMPOSITION CONTRACT: The final delivery canvas is exactly 970x600 pixels with a 97:60 aspect ratio. The upstream working canvas uses the verified 1:1 aspect ratio. Requested rendering quality is HIGH; produce maximum fine detail, clean edges, realistic texture, and professional commercial polish. The delivery format is PNG with quality/compression value 90. Compose natively for the complete final 97:60 canvas and keep the entire product, face, garment, text-free focal details, and all critical edges visible. Nothing may be cropped out. Leave sufficient natural background around the subject. Do not add borders, letterboxing, pillarboxing, frames, or artificial blank margins. Preserve natural perspective and avoid stretching.",
+      "source": "executed",
+      "job_id": "1cd9dfa9-7651-4d72-8f55-197587ea199e",
+      "job_status": "succeeded",
+      "replayable": false,
+      "created_at": "2026-11-06T06:54:27"
+    },
+    {
+      "id": "job-22b0bcdb-f863-46b6-ad31-ba6c630d3e6f",
+      "version": 0,
+      "content": "Create the photographic artwork for ONE Amazon A+ module, not a complete page or a collage of modules.\n\nREFERENCE AND CUSTOM VALUES: 素材角色以本次会话的明确指定为准。存在图A模板时A保护构图/人物/有效定制值，图B产品决定真实款式/配色/图案/Logo，图C只决定被指定定制字段的字体轮廓，不得覆盖有效姓名号码。没有实体模板时自主设计，不假设必须有A/B/C。 本次用户明确值优先，其次模板有效定制值；0/00/YOUR NAME仅为占位。未知定制能力、背面、肩号结构和工艺不得编造。正背对应，缺少视角但可生成时记录风险，不强制裁剪。\nPRODUCT IDENTITY LOCK: 灰绿色哑光单耳马克杯：上宽下窄锥形杯身、圆形杯口、右侧环形把手、表面柔和哑光反光、圆润杯底；杯身无可见图案文字。严格保留参考图颜色、结构、把手位置与哑光质感，不新增Logo、不改动器型。\nUse the original product reference as the product source; follow any explicit scene/style reference roles in the module brief.\nThe actual product references are the visual ground truth for color placement, silhouette, seams, collar, cuffs, printed text, numbers and logos. Do not borrow a different product from scene/style references.\nCAMPAIGN STYLE LOCK: 整套统一暖调生活厨房光效：左前45°柔和大窗主光、低反差、自然接触阴影；背景为浅色木质台面与中性厨房/餐桌环境，景深浅、焦点清晰；配色以哑光灰绿为主体、米白与浅木色为辅助，排版气质克制、留白充足。\nKeep this shared palette, lighting character, contrast and material treatment consistent with the campaign; vary the composition to suit THIS module instead of repeating one poster.\nSINGLE VISUAL MESSAGE: 回答材质与工艺问题：石器彩釉的哑光质地与上手尺度（4英寸高）。\nCUSTOMER NEED: 回答材质与工艺问题：石器彩釉的哑光质地与上手尺度（4英寸高）。\nCONFIRMED PRODUCT EVIDENCE: Stoneware 石器材质，colored glaze 彩色釉; 官方标称容量13 oz、高4英寸\nMODULE ART DIRECTION: 左图右文：手部轻握杯身侧后方，三分之四侧面视角展示锥形轮廓与哑光釉面微反光，背景为米白中性墙面，右侧为文案区。\nCAMERA AND FRAMING: 近景三分之四侧面，手入画托握杯身，展示器型曲线\nCOMMERCIAL LIGHTING: 左前柔光主光，杯沿一圈细腻边缘光体现釉面\nFOCAL / INFORMATION HIERARCHY: 第一焦点釉面质感与杯型，第二焦点手部尺度参照\nPHYSICAL SCENE INTEGRATION: 手指与杯身自然遮挡接触，握持受力真实，阴影落地\nAPPLIED DESIGN PRINCIPLES: product_identity, detail_truth, scale_context, copy_separation\nIMPLEMENTED DESIGN RULES: Preserve reference-grounded product contour, exact color placement and printed identity. Show only details visible in original references; do not invent microscopic fabric or performance. Use credible human/environment scale and camera perspective. Keep native marketing copy outside the generated artwork; preserve inherent product print.\nTHIS INDEPENDENT IMAGE SLOT: main; 600x600方图：三分之四侧面近景，手轻握灰绿哑光杯身，米白背景，展示锥形轮廓与彩釉质感，右侧留文案区，无文字\nINDEPENDENT IMAGE PROMPT: Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 回答材质与工艺问题：石器彩釉的哑光质地与上手尺度（4英寸高）。\nModel-authored scene and camera direction: 左图右文：手部轻握杯身侧后方，三分之四侧面视角展示锥形轮廓与哑光釉面微反光，背景为米白中性墙面，右侧为文案区。\nCopy zone: right. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.\nOUTPUT FRAME: 600:600. Compose for this frame without stretching or cutting off the product.\nDESKTOP COMPOSITION / COPY SPACE: Native headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\nMOBILE SAFE CONTENT: 保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。\nEstablish one clear focal hierarchy: product first, supporting scene second. Use deliberate depth separation, believable key/fill light and clean edge contrast, without generic glow or fake effects.\nIntegrate the product physically: coherent scale and perspective, contact shadows, matching light direction, natural fabric folds and correct foreground occlusion. No floating cutout or pasted flat decal.\nNative headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\nDo not render NEW headlines, body copy, labels, captions or watermarks. These are typeset separately. This does NOT remove or rewrite the product's inherent printed words, numbers or logos.\nDo not invent material, size, certification, performance benefits, brand/team authorization or unprovided garment faces.\nForbidden: \nACCEPTANCE: 商品颜色/图案/Logo/结构; 实际卖点与事实; 英文拼写和可读性; 移动端完整性; 素材商业使用权; 球队/品牌/赛事授权; 无价格/促销/竞品比较\nFINAL IMAGE SLOT CONTRACT: 左图右文：手部轻握杯身侧后方，三分之四侧面视角展示锥形轮廓与哑光釉面微反光，背景为米白中性墙面，右侧为文案区。. This request creates ONLY this independent slot, not its neighbouring views or the whole multi-image module. Do not substitute a front/back garment pair or a full-garment overview for a requested close-up. For a detail view, tightly frame the actual visible region without inventing unseen microstructure. Native headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\n\nDELIVERY COMPOSITION CONTRACT: The final delivery canvas is exactly 600x600 pixels with a 1:1 aspect ratio. The upstream working canvas uses the verified 1:1 aspect ratio. Requested rendering quality is HIGH; produce maximum fine detail, clean edges, realistic texture, and professional commercial polish. The delivery format is PNG with quality/compression value 90. Compose natively for the complete final 1:1 canvas and keep the entire product, face, garment, text-free focal details, and all critical edges visible. Nothing may be cropped out. Leave sufficient natural background around the subject. Do not add borders, letterboxing, pillarboxing, frames, or artificial blank margins. Preserve natural perspective and avoid stretching.",
+      "source": "executed",
+      "job_id": "22b0bcdb-f863-46b6-ad31-ba6c630d3e6f",
+      "job_status": "succeeded",
+      "replayable": false,
+      "created_at": "2026-11-06T06:54:27"
+    },
+    {
+      "id": "job-22d1c599-bf21-4477-9250-f0d3794c7b8a",
+      "version": 0,
+      "content": "Create the photographic artwork for ONE Amazon A+ module, not a complete page or a collage of modules.\n\nREFERENCE AND CUSTOM VALUES: 素材角色以本次会话的明确指定为准。存在图A模板时A保护构图/人物/有效定制值，图B产品决定真实款式/配色/图案/Logo，图C只决定被指定定制字段的字体轮廓，不得覆盖有效姓名号码。没有实体模板时自主设计，不假设必须有A/B/C。 本次用户明确值优先，其次模板有效定制值；0/00/YOUR NAME仅为占位。未知定制能力、背面、肩号结构和工艺不得编造。正背对应，缺少视角但可生成时记录风险，不强制裁剪。\nPRODUCT IDENTITY LOCK: 灰绿色哑光单耳马克杯：上宽下窄锥形杯身、圆形杯口、右侧环形把手、表面柔和哑光反光、圆润杯底；杯身无可见图案文字。严格保留参考图颜色、结构、把手位置与哑光质感，不新增Logo、不改动器型。\nUse the original product reference as the product source; follow any explicit scene/style reference roles in the module brief.\nThe actual product references are the visual ground truth for color placement, silhouette, seams, collar, cuffs, printed text, numbers and logos. Do not borrow a different product from scene/style references.\nCAMPAIGN STYLE LOCK: 整套统一暖调生活厨房光效：左前45°柔和大窗主光、低反差、自然接触阴影；背景为浅色木质台面与中性厨房/餐桌环境，景深浅、焦点清晰；配色以哑光灰绿为主体、米白与浅木色为辅助，排版气质克制、留白充足。\nKeep this shared palette, lighting character, contrast and material treatment consistent with the campaign; vary the composition to suit THIS module instead of repeating one poster.\nSINGLE VISUAL MESSAGE: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nCUSTOMER NEED: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nCONFIRMED PRODUCT EVIDENCE: Microwave-safe 可微波炉使用; Dishwasher-safe 可洗碗机清洗; 官方标称容量13 oz、高4英寸\nMODULE ART DIRECTION: 600x600：灰绿马克杯倒扣在洗碗机碗架格栅上，喷淋臂背景虚化，水珠细节，底部留文案区，无文字\nCAMERA AND FRAMING: 600x600：灰绿马克杯倒扣在洗碗机碗架格栅上，喷淋臂背景虚化，水珠细节，底部留文案区，无文字\nCOMMERCIAL LIGHTING: 统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感\nFOCAL / INFORMATION HIERARCHY: 每槽第一焦点为杯子与设备关系，底部为原生文字区\nPHYSICAL SCENE INTEGRATION: 杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致\nAPPLIED DESIGN PRINCIPLES: detail_truth, multi_slot_storytelling, visual_hierarchy, commercial_lighting\nIMPLEMENTED DESIGN RULES: Show only details visible in original references; do not invent microscopic fabric or performance. This is one distinct image slot; other independently generated slots complete the native module. Make the intended product feature the first focal point and keep supporting information subordinate. Use deliberate key/fill separation, coherent highlights and contact shadows, not generic glow.\nTHIS INDEPENDENT IMAGE SLOT: block2; 600x600：灰绿马克杯倒扣在洗碗机碗架格栅上，喷淋臂背景虚化，水珠细节，底部留文案区，无文字\nINDEPENDENT IMAGE PROMPT: Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.\nOUTPUT FRAME: 600:600. Compose for this frame without stretching or cutting off the product.\nDESKTOP COMPOSITION / COPY SPACE: Native headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\nMOBILE SAFE CONTENT: 保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。\nEstablish one clear focal hierarchy: product first, supporting scene second. Use deliberate depth separation, believable key/fill light and clean edge contrast, without generic glow or fake effects.\nIntegrate the product physically: coherent scale and perspective, contact shadows, matching light direction, natural fabric folds and correct foreground occlusion. No floating cutout or pasted flat decal.\nNative headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\nDo not render NEW headlines, body copy, labels, captions or watermarks. These are typeset separately. This does NOT remove or rewrite the product's inherent printed words, numbers or logos.\nDo not invent material, size, certification, performance benefits, brand/team authorization or unprovided garment faces.\nForbidden: \nACCEPTANCE: 商品颜色/图案/Logo/结构; 实际卖点与事实; 英文拼写和可读性; 移动端完整性; 素材商业使用权; 球队/品牌/赛事授权; 无价格/促销/竞品比较\nFINAL IMAGE SLOT CONTRACT: 600x600：灰绿马克杯倒扣在洗碗机碗架格栅上，喷淋臂背景虚化，水珠细节，底部留文案区，无文字. This request creates ONLY this independent slot, not its neighbouring views or the whole multi-image module. Do not substitute a front/back garment pair or a full-garment overview for a requested close-up. For a detail view, tightly frame the actual visible region without inventing unseen microstructure. Native headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\n\nDELIVERY COMPOSITION CONTRACT: The final delivery canvas is exactly 600x600 pixels with a 1:1 aspect ratio. The upstream working canvas uses the verified 1:1 aspect ratio. Requested rendering quality is HIGH; produce maximum fine detail, clean edges, realistic texture, and professional commercial polish. The delivery format is PNG with quality/compression value 90. Compose natively for the complete final 1:1 canvas and keep the entire product, face, garment, text-free focal details, and all critical edges visible. Nothing may be cropped out. Leave sufficient natural background around the subject. Do not add borders, letterboxing, pillarboxing, frames, or artificial blank margins. Preserve natural perspective and avoid stretching.",
+      "source": "executed",
+      "job_id": "22d1c599-bf21-4477-9250-f0d3794c7b8a",
+      "job_status": "succeeded",
+      "replayable": false,
+      "created_at": "2026-11-06T06:54:27"
+    },
+    {
+      "id": "job-63981adf-35bf-44e0-ac48-c7eacfd983ef",
+      "version": 0,
+      "content": "Create the photographic artwork for ONE Amazon A+ module, not a complete page or a collage of modules.\n\nREFERENCE AND CUSTOM VALUES: 素材角色以本次会话的明确指定为准。存在图A模板时A保护构图/人物/有效定制值，图B产品决定真实款式/配色/图案/Logo，图C只决定被指定定制字段的字体轮廓，不得覆盖有效姓名号码。没有实体模板时自主设计，不假设必须有A/B/C。 本次用户明确值优先，其次模板有效定制值；0/00/YOUR NAME仅为占位。未知定制能力、背面、肩号结构和工艺不得编造。正背对应，缺少视角但可生成时记录风险，不强制裁剪。\nPRODUCT IDENTITY LOCK: 灰绿色哑光单耳马克杯：上宽下窄锥形杯身、圆形杯口、右侧环形把手、表面柔和哑光反光、圆润杯底；杯身无可见图案文字。严格保留参考图颜色、结构、把手位置与哑光质感，不新增Logo、不改动器型。\nUse the original product reference as the product source; follow any explicit scene/style reference roles in the module brief.\nThe actual product references are the visual ground truth for color placement, silhouette, seams, collar, cuffs, printed text, numbers and logos. Do not borrow a different product from scene/style references.\nCAMPAIGN STYLE LOCK: 整套统一暖调生活厨房光效：左前45°柔和大窗主光、低反差、自然接触阴影；背景为浅色木质台面与中性厨房/餐桌环境，景深浅、焦点清晰；配色以哑光灰绿为主体、米白与浅木色为辅助，排版气质克制、留白充足。\nKeep this shared palette, lighting character, contrast and material treatment consistent with the campaign; vary the composition to suit THIS module instead of repeating one poster.\nSINGLE VISUAL MESSAGE: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nCUSTOMER NEED: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nCONFIRMED PRODUCT EVIDENCE: Microwave-safe 可微波炉使用; Dishwasher-safe 可洗碗机清洗; 官方标称容量13 oz、高4英寸\nMODULE ART DIRECTION: 600x600：灰绿马克杯置于微波炉转盘中央、炉门微开视角，厨房暖光，底部留文案区，无文字无品牌标识\nCAMERA AND FRAMING: 600x600：灰绿马克杯置于微波炉转盘中央、炉门微开视角，厨房暖光，底部留文案区，无文字无品牌标识\nCOMMERCIAL LIGHTING: 统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感\nFOCAL / INFORMATION HIERARCHY: 每槽第一焦点为杯子与设备关系，底部为原生文字区\nPHYSICAL SCENE INTEGRATION: 杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致\nAPPLIED DESIGN PRINCIPLES: detail_truth, multi_slot_storytelling, visual_hierarchy, commercial_lighting\nIMPLEMENTED DESIGN RULES: Show only details visible in original references; do not invent microscopic fabric or performance. This is one distinct image slot; other independently generated slots complete the native module. Make the intended product feature the first focal point and keep supporting information subordinate. Use deliberate key/fill separation, coherent highlights and contact shadows, not generic glow.\nTHIS INDEPENDENT IMAGE SLOT: block1; 600x600：灰绿马克杯置于微波炉转盘中央、炉门微开视角，厨房暖光，底部留文案区，无文字无品牌标识\nINDEPENDENT IMAGE PROMPT: Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.\nOUTPUT FRAME: 600:600. Compose for this frame without stretching or cutting off the product.\nDESKTOP COMPOSITION / COPY SPACE: Native headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\nMOBILE SAFE CONTENT: 保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。\nEstablish one clear focal hierarchy: product first, supporting scene second. Use deliberate depth separation, believable key/fill light and clean edge contrast, without generic glow or fake effects.\nIntegrate the product physically: coherent scale and perspective, contact shadows, matching light direction, natural fabric folds and correct foreground occlusion. No floating cutout or pasted flat decal.\nNative headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\nDo not render NEW headlines, body copy, labels, captions or watermarks. These are typeset separately. This does NOT remove or rewrite the product's inherent printed words, numbers or logos.\nDo not invent material, size, certification, performance benefits, brand/team authorization or unprovided garment faces.\nForbidden: \nACCEPTANCE: 商品颜色/图案/Logo/结构; 实际卖点与事实; 英文拼写和可读性; 移动端完整性; 素材商业使用权; 球队/品牌/赛事授权; 无价格/促销/竞品比较\nFINAL IMAGE SLOT CONTRACT: 600x600：灰绿马克杯置于微波炉转盘中央、炉门微开视角，厨房暖光，底部留文案区，无文字无品牌标识. This request creates ONLY this independent slot, not its neighbouring views or the whole multi-image module. Do not substitute a front/back garment pair or a full-garment overview for a requested close-up. For a detail view, tightly frame the actual visible region without inventing unseen microstructure. Native headline/body are OUTSIDE this photographic image, in the Amazon module text fields. Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.\n\nDELIVERY COMPOSITION CONTRACT: The final delivery canvas is exactly 600x600 pixels with a 1:1 aspect ratio. The upstream working canvas uses the verified 1:1 aspect ratio. Requested rendering quality is HIGH; produce maximum fine detail, clean edges, realistic texture, and professional commercial polish. The delivery format is PNG with quality/compression value 90. Compose natively for the complete final 1:1 canvas and keep the entire product, face, garment, text-free focal details, and all critical edges visible. Nothing may be cropped out. Leave sufficient natural background around the subject. Do not add borders, letterboxing, pillarboxing, frames, or artificial blank margins. Preserve natural perspective and avoid stretching.",
+      "source": "executed",
+      "job_id": "63981adf-35bf-44e0-ac48-c7eacfd983ef",
+      "job_status": "succeeded",
+      "replayable": false,
+      "created_at": "2026-11-06T06:54:27"
+    },
+    {
+      "id": "job-6b331be7-d648-4b54-81b3-7f5c85038638",
+      "version": 0,
+      "content": "Create the photographic artwork for ONE Amazon A+ module, not a complete page or a collage of modules.\n\nREFERENCE AND CUSTOM VALUES: 素材角色以本次会话的明确指定为准。存在图A模板时A保护构图/人物/有效定制值，图B产品决定真实款式/配色/图案/Logo，图C只决定被指定定制字段的字体轮廓，不得覆盖有效姓名号码。没有实体模板时自主设计，不假设必须有A/B/C。 本次用户明确值优先，其次模板有效定制值；0/00/YOUR NAME仅为占位。未知定制能力、背面、肩号结构和工艺不得编造。正背对应，缺少视角但可生成时记录风险，不强制裁剪。\nPRODUCT IDENTITY LOCK: 灰绿色哑光单耳马克杯：上宽下窄锥形杯身、圆形杯口、右侧环形把手、表面柔和哑光反光、圆润杯底；杯身无可见图案文字。严格保留参考图颜色、结构、把手位置与哑光质感，不新增Logo、不改动器型。\nUse the original product reference as the product source; follow any explicit scene/style reference roles in the module brief.\nThe actual product references are the visual ground truth for color placement, silhouette, seams, collar, cuffs, printed text, numbers and logos. Do not borrow a different product from scene/style references.\nCAMPAIGN STYLE LOCK: 整套统一暖调生活厨房光效：左前45°柔和大窗主光、低反差、自然接触阴影；背景为浅色木质台面与中性厨房/餐桌环境，景深浅、焦点清晰；配色以哑光灰绿为主体、米白与浅木色为辅助，排版气质克制、留白充足。\nKeep this shared palette, lighting character, contrast and material treatment consistent with the campaign; vary the composition to suit THIS module instead of repeating one poster.\nSINGLE VISUAL MESSAGE: 情感收束：哑光灰绿与中性环境融合，强化低调纯色搭配价值（策划假设）。\nCUSTOMER NEED: 情感收束：哑光灰绿与中性环境融合，强化低调纯色搭配价值（策划假设）。\nCONFIRMED PRODUCT EVIDENCE: 杯身呈灰绿色哑光单色外观，锥形圆杯结构，一侧环形把手; Stoneware 石器材质，colored glaze 彩色釉\nMODULE ART DIRECTION: 970x300横幅：杯身局部特写与把手曲线占据画面右侧，背景为同色系虚化厨房环境形成色调层次，左侧为叠字区，整体安静克制。\nCAMERA AND FRAMING: 横幅局部特写，杯身与把手曲线居右，左半幅为柔和虚化背景\nCOMMERCIAL LIGHTING: 与整套一致的左前柔光，低反差，哑光表面细腻过渡\nFOCAL / INFORMATION HIERARCHY: 第一焦点把手与杯身曲线质感，第二焦点同色系环境氛围\nPHYSICAL SCENE INTEGRATION: 杯体与背景色调统一但有明暗分离，无贴图感\nAPPLIED DESIGN PRINCIPLES: campaign_consistency, emotional_story, copy_separation, visual_hierarchy\nIMPLEMENTED DESIGN RULES: Keep the campaign palette and lighting language consistent without repeating layouts. Communicate the specified human occasion through purposeful action and environment. Keep native marketing copy outside the generated artwork; preserve inherent product print. Make the intended product feature the first focal point and keep supporting information subordinate.\nTHIS INDEPENDENT IMAGE SLOT: main; 970x300横幅：灰绿哑光杯身与把手曲线特写居右，左侧同色系虚化厨房背景，柔和左前光，左侧为文字叠放区，无文字无Logo臆造\nINDEPENDENT IMAGE PROMPT: Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 情感收束：哑光灰绿与中性环境融合，强化低调纯色搭配价值（策划假设）。\nModel-authored scene and camera direction: 970x300横幅：杯身局部特写与把手曲线占据画面右侧，背景为同色系虚化厨房环境形成色调层次，左侧为叠字区，整体安静克制。\nCopy zone: left. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.\nOUTPUT FRAME: 970:300. Compose for this frame without stretching or cutting off the product.\nDESKTOP COMPOSITION / COPY SPACE: 保留left侧安静文案区；商品与关键设计不进入文字区。\nMOBILE SAFE CONTENT: 保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。\nEstablish one clear focal hierarchy: product first, supporting scene second. Use deliberate depth separation, believable key/fill light and clean edge contrast, without generic glow or fake effects.\nIntegrate the product physically: coherent scale and perspective, contact shadows, matching light direction, natural fabric folds and correct foreground occlusion. No floating cutout or pasted flat decal.\nReserve the specified quiet copy area for separate platform text; preserve inherent product print.\nDo not render NEW headlines, body copy, labels, captions or watermarks. These are typeset separately. This does NOT remove or rewrite the product's inherent printed words, numbers or logos.\nDo not invent material, size, certification, performance benefits, brand/team authorization or unprovided garment faces.\nForbidden: \nACCEPTANCE: 商品颜色/图案/Logo/结构; 实际卖点与事实; 英文拼写和可读性; 移动端完整性; 素材商业使用权; 球队/品牌/赛事授权; 无价格/促销/竞品比较\nFINAL IMAGE SLOT CONTRACT: 970x300横幅：杯身局部特写与把手曲线占据画面右侧，背景为同色系虚化厨房环境形成色调层次，左侧为叠字区，整体安静克制。. This request creates ONLY this independent slot, not its neighbouring views or the whole multi-image module. Do not substitute a front/back garment pair or a full-garment overview for a requested close-up. For a detail view, tightly frame the actual visible region without inventing unseen microstructure. Reserve the specified quiet copy area for separate platform text; preserve inherent product print.\n\nDELIVERY COMPOSITION CONTRACT: The final delivery canvas is exactly 970x300 pixels with a 97:30 aspect ratio. The upstream working canvas uses the verified 1:1 aspect ratio. Requested rendering quality is HIGH; produce maximum fine detail, clean edges, realistic texture, and professional commercial polish. The delivery format is PNG with quality/compression value 90. Compose natively for the complete final 97:30 canvas and keep the entire product, face, garment, text-free focal details, and all critical edges visible. Nothing may be cropped out. Leave sufficient natural background around the subject. Do not add borders, letterboxing, pillarboxing, frames, or artificial blank margins. Preserve natural perspective and avoid stretching.",
+      "source": "executed",
+      "job_id": "6b331be7-d648-4b54-81b3-7f5c85038638",
+      "job_status": "succeeded",
+      "replayable": false,
+      "created_at": "2026-11-06T06:54:27"
+    }
+  ],
+  "calls": [
+    {
+      "job": "0829bc83-1450-4a45-a1ce-9e97bc9c6903",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "role": null,
+      "state": "succeeded",
+      "seconds": 33.136,
+      "usage": null,
+      "api_cost": null,
+      "started": 1793948079.098005,
+      "finished": 1793948112.2344651
+    },
+    {
+      "job": "0829bf9a-4e0c-4aa8-bbce-fa659cc6123f",
+      "kind": "text",
+      "model": "kimi-for-coding",
+      "role": "main",
+      "state": "succeeded",
+      "seconds": 8.766,
+      "usage": {
+        "prompt_tokens": 1138,
+        "completion_tokens": 247,
+        "total_tokens": 1385,
+        "cached_tokens": 256,
+        "reasoning_tokens": 21
+      },
+      "api_cost": null,
+      "started": 1793947947.4097803,
+      "finished": 1793947956.176248
+    },
+    {
+      "job": "0c2a5f6e-c220-4fa5-a7ea-dc299e36983a",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "role": null,
+      "state": "succeeded",
+      "seconds": 32.988,
+      "usage": null,
+      "api_cost": null,
+      "started": 1793948079.1323621,
+      "finished": 1793948112.1200595
+    },
+    {
+      "job": "1cd9dfa9-7651-4d72-8f55-197587ea199e",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "role": null,
+      "state": "succeeded",
+      "seconds": 29.415,
+      "usage": null,
+      "api_cost": null,
+      "started": 1793948117.4045632,
+      "finished": 1793948146.8197875
+    },
+    {
+      "job": "22b0bcdb-f863-46b6-ad31-ba6c630d3e6f",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "role": null,
+      "state": "succeeded",
+      "seconds": 34.718,
+      "usage": null,
+      "api_cost": null,
+      "started": 1793948084.6055748,
+      "finished": 1793948119.3236506
+    },
+    {
+      "job": "22d1c599-bf21-4477-9250-f0d3794c7b8a",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "role": null,
+      "state": "succeeded",
+      "seconds": 40.886,
+      "usage": null,
+      "api_cost": null,
+      "started": 1793948084.5835662,
+      "finished": 1793948125.4698052
+    },
+    {
+      "job": "63981adf-35bf-44e0-ac48-c7eacfd983ef",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "role": null,
+      "state": "succeeded",
+      "seconds": 39.385,
+      "usage": null,
+      "api_cost": null,
+      "started": 1793948079.1634512,
+      "finished": 1793948118.5481367
+    },
+    {
+      "job": "6b331be7-d648-4b54-81b3-7f5c85038638",
+      "kind": "image",
+      "model": "gpt-image-2.5-flare",
+      "role": null,
+      "state": "succeeded",
+      "seconds": 25.902,
+      "usage": null,
+      "api_cost": null,
+      "started": 1793948085.3873355,
+      "finished": 1793948111.2896647
+    },
+    {
+      "job": "b78de797-139c-48a5-86f6-490a583fe949",
+      "kind": "text",
+      "model": "kimi-for-coding",
+      "role": "executor",
+      "state": "succeeded",
+      "seconds": 89.935,
+      "usage": {
+        "prompt_tokens": 12291,
+        "completion_tokens": 3341,
+        "total_tokens": 15632,
+        "cached_tokens": 3840,
+        "reasoning_tokens": 334
+      },
+      "api_cost": null,
+      "started": 1793947976.6867657,
+      "finished": 1793948066.621407
+    },
+    {
+      "job": "cdc859e0-07d6-47b6-810e-1cdaf8539340",
+      "kind": "text",
+      "model": "kimi-for-coding",
+      "role": "vision",
+      "state": "succeeded",
+      "seconds": 17.81,
+      "usage": {
+        "prompt_tokens": 3190,
+        "completion_tokens": 517,
+        "total_tokens": 3707,
+        "reasoning_tokens": 147
+      },
+      "api_cost": null,
+      "started": 1793947958.1489518,
+      "finished": 1793947975.9584794
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-11-06T06:52:36.352Z",
+      "type": "main.decision",
+      "action": "task",
+      "executor": "amazon_aplus",
+      "ticket": null,
+      "message": "为IKEA FÄRGKLAR马克杯（matte green，产品号404.781.89）生成美国站A+ Basic五个模块全套图片。已核实事实：石器/彩色釉、可微波炉、可洗碗机、13 oz、高4英寸；禁止声称保温/防烫/防摔/套装件数。使用素材00d38ec1、13af86ef，保留Logo/颜色/结构。消费动机为策划假设（不可假称已做评论/市场研究）。自主设计五模块方案，完整覆盖各模块独立图片槽位，并发生成，无需许可确认。"
+    },
+    {
+      "at": "2026-11-06T06:52:37.341Z",
+      "type": "skill.bound",
+      "id": "amazon-aplus-planner",
+      "version": "2",
+      "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310",
+      "source": "SkillRegistry.session_binding"
+    },
+    {
+      "at": "2026-11-06T06:52:37.357Z",
+      "type": "skill.bound",
+      "id": "amazon-market-insight",
+      "version": "1",
+      "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d",
+      "source": "SkillRegistry.session_binding"
+    },
+    {
+      "at": "2026-11-06T06:52:37.376Z",
+      "type": "skill.bound",
+      "id": "image-creation",
+      "version": "1",
+      "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15",
+      "source": "SkillRegistry.session_binding"
+    },
+    {
+      "at": "2026-11-06T06:54:26.782Z",
+      "type": "tool.start",
+      "session": "executor-fc617d475bc8fe73b9f328931574e91cbb7b64832f0175a4bbc8f1dabea9ae00",
+      "name": "produce_aplus",
+      "args": {
+        "brief": {
+          "deliverable": "aplus",
+          "marketplace": "US",
+          "design_version": "professional-aplus-v2",
+          "aplus_type": "basic",
+          "product_identity_lock": "灰绿色哑光单耳马克杯：上宽下窄锥形杯身、圆形杯口、右侧环形把手、表面柔和哑光反光、圆润杯底；杯身无可见图案文字。严格保留参考图颜色、结构、把手位置与哑光质感，不新增Logo、不改动器型。",
+          "campaign_style_lock": "整套统一暖调生活厨房光效：左前45°柔和大窗主光、低反差、自然接触阴影；背景为浅色木质台面与中性厨房/餐桌环境，景深浅、焦点清晰；配色以哑光灰绿为主体、米白与浅木色为辅助，排版气质克制、留白充足。",
+          "market_basis": "美国站家居厨房类目；消费动机为策划假设（早餐咖啡/茶日常仪式感、易打理、低调纯色搭配），未做VOC调研，不声称已研究。",
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ],
+          "suite_rationale": "叙事节奏：主视觉建立识别→材质与尺寸回答购买问题→使用场景代入→三图文分述微波/洗碗机/13oz三大已确认事实→横幅收尾情感价值；含header、左右图文、三图文、overlay共五种不同布局。",
+          "risks": [
+            "参考图杯身正面未见可见Logo，若实际有Logo需后期排版补位，生图不臆造",
+            "官方资料仅作用户确认事实，不得引申为保温/防烫/防摔/套装",
+            "13 oz与4英寸为官方标称，图片中不生成小字标注"
+          ],
+          "evidence": [
+            {
+              "id": "e_color",
+              "statement": "杯身呈灰绿色哑光单色外观，锥形圆杯结构，一侧环形把手",
+              "basis": "visible_reference"
+            },
+            {
+              "id": "e_material",
+              "statement": "Stoneware 石器材质，colored glaze 彩色釉",
+              "basis": "user_confirmed",
+              "source_quote": "石器（Stoneware），彩色釉（Colored glaze）"
+            },
+            {
+              "id": "e_micro",
+              "statement": "Microwave-safe 可微波炉使用",
+              "basis": "user_confirmed",
+              "source_quote": "可微波炉使用（Microwave-safe）"
+            },
+            {
+              "id": "e_dish",
+              "statement": "Dishwasher-safe 可洗碗机清洗",
+              "basis": "user_confirmed",
+              "source_quote": "可洗碗机清洗（Dishwasher-safe）"
+            },
+            {
+              "id": "e_size",
+              "statement": "官方标称容量13 oz、高4英寸",
+              "basis": "user_confirmed",
+              "source_quote": "官方标称容量13 oz、高4英寸"
+            }
+          ],
+          "modules": [
+            {
+              "id": "mod1_hero",
+              "title": "主视觉 · 清晨第一杯",
+              "spec_id": "basic_header_image_text",
+              "main_point": "建立商品识别：哑光灰绿马克杯作为早餐桌视觉主角，传递安静日常仪式感（策划假设）。",
+              "headline": "A Quiet Morning, Held in Matte Green",
+              "body": "A stoneware mug with a calm matte-green glaze, made for slow mornings and everyday coffee or tea.",
+              "composition": "横幅主视觉：马克杯置于浅色木桌中央偏右，左后方虚化的窗户晨光与少量早餐道具（ folded linen、小碟），杯身占画面约三分之一，左半幅留安静文案区，浅景深。",
+              "copy_space": "left",
+              "evidence_ids": [
+                "e_color",
+                "e_material"
+              ],
+              "design_principles": [
+                "product_identity",
+                "campaign_consistency",
+                "emotional_story",
+                "copy_separation"
+              ],
+              "art_direction": {
+                "framing": "横幅中景，眼平略低角度，杯体居右三分之一，背景窗光虚化",
+                "lighting": "左后窗光作主光，正面柔补光，低反差，杯身哑光质感可见",
+                "hierarchy": "第一焦点杯身轮廓与把手，第二焦点晨光氛围，左侧为文字留白",
+                "integration": "杯底与桌面自然接触阴影，道具比例真实，无悬浮感"
+              },
+              "image_slots": [
+                {
+                  "id": "main",
+                  "composition": "970x600横幅：哑光灰绿马克杯置于浅色木桌，右后方柔和窗光，左侧安静留白，浅景深，无文字无Logo臆造",
+                  "headline": "A Quiet Morning, Held in Matte Green",
+                  "body": "A stoneware mug with a calm matte-green glaze, made for slow mornings and everyday coffee or tea.",
+                  "reference_asset_ids": [
+                    "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "mod2_craft",
+              "title": "材质与器型 · 石与釉",
+              "spec_id": "basic_single_image_left",
+              "main_point": "回答材质与工艺问题：石器彩釉的哑光质地与上手尺度（4英寸高）。",
+              "headline": "Stoneware, Colored Glaze",
+              "body": "Colored-glaze stoneware with a soft matte finish. Stands about 4 in tall — a comfortable, familiar hand-feel.",
+              "composition": "左图右文：手部轻握杯身侧后方，三分之四侧面视角展示锥形轮廓与哑光釉面微反光，背景为米白中性墙面，右侧为文案区。",
+              "copy_space": "right",
+              "evidence_ids": [
+                "e_material",
+                "e_size"
+              ],
+              "design_principles": [
+                "product_identity",
+                "detail_truth",
+                "scale_context",
+                "copy_separation"
+              ],
+              "art_direction": {
+                "framing": "近景三分之四侧面，手入画托握杯身，展示器型曲线",
+                "lighting": "左前柔光主光，杯沿一圈细腻边缘光体现釉面",
+                "hierarchy": "第一焦点釉面质感与杯型，第二焦点手部尺度参照",
+                "integration": "手指与杯身自然遮挡接触，握持受力真实，阴影落地"
+              },
+              "image_slots": [
+                {
+                  "id": "main",
+                  "composition": "600x600方图：三分之四侧面近景，手轻握灰绿哑光杯身，米白背景，展示锥形轮廓与彩釉质感，右侧留文案区，无文字",
+                  "headline": "Stoneware, Colored Glaze",
+                  "body": "Colored-glaze stoneware with a soft matte finish. Stands about 4 in tall — a comfortable, familiar hand-feel.",
+                  "reference_asset_ids": [
+                    "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "mod3_daily",
+              "title": "使用场景 · 一日的陪伴",
+              "spec_id": "basic_single_image_right",
+              "main_point": "使用关系：从办公桌到厨房台面，13 oz容量适合日常咖啡/茶（动机为策划假设）。",
+              "headline": "Right at Home on Any Table",
+              "body": "At about 13 oz, it holds a generous cup of coffee or tea — equally at home on a kitchen counter or office desk.",
+              "composition": "右图左文：马克杯置于办公/居家桌面一角，旁有笔记本与一小枝绿植，自然日光从侧面进入，杯为画面主角，左侧文案区。",
+              "copy_space": "left",
+              "evidence_ids": [
+                "e_size",
+                "e_color"
+              ],
+              "design_principles": [
+                "emotional_story",
+                "scale_context",
+                "campaign_consistency",
+                "copy_separation"
+              ],
+              "art_direction": {
+                "framing": "中景侧前方视角，杯体位于画面左中部偏右，桌面道具陪衬不抢焦",
+                "lighting": "侧窗自然光为主，柔和补光，杯内可见深色饮品与微热气",
+                "hierarchy": "第一焦点杯中饮品与杯身颜色呼应，第二焦点桌面生活氛围",
+                "integration": "杯与桌面接触阴影真实，道具比例符合日常桌面透视"
+              },
+              "image_slots": [
+                {
+                  "id": "main",
+                  "composition": "600x600方图：灰绿马克杯盛深色咖啡置于居家办公桌，侧窗自然光，旁有笔记本与绿植，杯为视觉主角，左侧留白，无文字",
+                  "headline": "Right at Home on Any Table",
+                  "body": "At about 13 oz, it holds a generous cup of coffee or tea — equally at home on a kitchen counter or office desk.",
+                  "reference_asset_ids": [
+                    "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "mod4_facts",
+              "title": "三图文 · 易打理三事实",
+              "spec_id": "basic_three_image_text",
+              "main_point": "分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。",
+              "headline": "Made for Real Life",
+              "body": "Three everyday facts, built in.",
+              "composition": "三栏并列：block1为马克杯置于微波炉内微开的场景；block2为洗碗机碗架中倒置的杯子；block3为俯拍杯中注满饮品、旁有量感参照。三槽位分别中景、中景、俯拍，构图各异。",
+              "copy_space": "bottom",
+              "evidence_ids": [
+                "e_micro",
+                "e_dish",
+                "e_size"
+              ],
+              "design_principles": [
+                "detail_truth",
+                "multi_slot_storytelling",
+                "visual_hierarchy",
+                "commercial_lighting"
+              ],
+              "art_direction": {
+                "framing": "三槽位分别：箱内中景、碗架中景、桌面俯拍，主体居中偏上",
+                "lighting": "统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感",
+                "hierarchy": "每槽第一焦点为杯子与设备关系，底部为原生文字区",
+                "integration": "杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致"
+              },
+              "image_slots": [
+                {
+                  "id": "block1",
+                  "composition": "600x600：灰绿马克杯置于微波炉转盘中央、炉门微开视角，厨房暖光，底部留文案区，无文字无品牌标识",
+                  "headline": "Microwave-Safe",
+                  "body": "Warm up your drink right in the mug.",
+                  "reference_asset_ids": [
+                    "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+                  ]
+                },
+                {
+                  "id": "block2",
+                  "composition": "600x600：灰绿马克杯倒扣在洗碗机碗架格栅上，喷淋臂背景虚化，水珠细节，底部留文案区，无文字",
+                  "headline": "Dishwasher-Safe",
+                  "body": "Easy cleanup, cycle after cycle.",
+                  "reference_asset_ids": [
+                    "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+                  ]
+                },
+                {
+                  "id": "block3",
+                  "composition": "600x600：俯视桌面，灰绿马克杯注满深色饮品，旁放咖啡豆与小勺体现13 oz容量感，柔和顶光，底部留文案区，无文字",
+                  "headline": "About 13 oz",
+                  "body": "A generous size for your daily coffee or tea.",
+                  "reference_asset_ids": [
+                    "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "mod5_close",
+              "title": "收尾横幅 · 安静收尾",
+              "spec_id": "basic_image_text_overlay",
+              "main_point": "情感收束：哑光灰绿与中性环境融合，强化低调纯色搭配价值（策划假设）。",
+              "headline": "Simple Color, Easy Living",
+              "body": "One calm color that fits right in — from morning coffee to a quiet evening tea.",
+              "composition": "970x300横幅：杯身局部特写与把手曲线占据画面右侧，背景为同色系虚化厨房环境形成色调层次，左侧为叠字区，整体安静克制。",
+              "copy_space": "left",
+              "evidence_ids": [
+                "e_color",
+                "e_material"
+              ],
+              "design_principles": [
+                "campaign_consistency",
+                "emotional_story",
+                "copy_separation",
+                "visual_hierarchy"
+              ],
+              "art_direction": {
+                "framing": "横幅局部特写，杯身与把手曲线居右，左半幅为柔和虚化背景",
+                "lighting": "与整套一致的左前柔光，低反差，哑光表面细腻过渡",
+                "hierarchy": "第一焦点把手与杯身曲线质感，第二焦点同色系环境氛围",
+                "integration": "杯体与背景色调统一但有明暗分离，无贴图感"
+              },
+              "image_slots": [
+                {
+                  "id": "main",
+                  "composition": "970x300横幅：灰绿哑光杯身与把手曲线特写居右，左侧同色系虚化厨房背景，柔和左前光，左侧为文字叠放区，无文字无Logo臆造",
+                  "headline": "Simple Color, Easy Living",
+                  "body": "One calm color that fits right in — from morning coffee to a quiet evening tea.",
+                  "reference_asset_ids": [
+                    "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "at": "2026-11-06T06:54:27.380Z",
+      "type": "tool.result",
+      "session": "executor-fc617d475bc8fe73b9f328931574e91cbb7b64832f0175a4bbc8f1dabea9ae00",
+      "name": "produce_aplus",
+      "result": {
+        "amazon_plan_id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+        "findings": [],
+        "message": "草稿已保存，尚未确认或生成。",
+        "batch_id": "f6d9e3f8-0f8a-4c1a-95cb-56f2f9b6eeff",
+        "job_ids": [
+          "1cd9dfa9-7651-4d72-8f55-197587ea199e",
+          "22b0bcdb-f863-46b6-ad31-ba6c630d3e6f",
+          "0c2a5f6e-c220-4fa5-a7ea-dc299e36983a",
+          "63981adf-35bf-44e0-ac48-c7eacfd983ef",
+          "22d1c599-bf21-4477-9250-f0d3794c7b8a",
+          "0829bc83-1450-4a45-a1ce-9e97bc9c6903",
+          "6b331be7-d648-4b54-81b3-7f5c85038638"
+        ],
+        "module_ids": [
+          "mod1_hero",
+          "mod2_craft",
+          "mod3_daily",
+          "mod4_facts",
+          "mod4_facts",
+          "mod4_facts",
+          "mod5_close"
+        ],
+        "slot_ids": [
+          "main",
+          "main",
+          "main",
+          "block1",
+          "block2",
+          "block3",
+          "main"
+        ],
+        "request_key": "dsh-tool:3f94e4979df69aaebbcacb1cccbea0db7783ad388e425197616959e838cbf0e4:images",
+        "module_signatures": {
+          "mod1_hero::main": "slot-v1:76c99815cc15ca185c4d5dbb2e10e4347bea4ebfdc2470fdff44a58137b1ef23",
+          "mod2_craft::main": "slot-v1:8a080068eefc37eeaa7a4995cc35b3d078e06e75e95067497fb77335b5b5ddbe",
+          "mod3_daily::main": "slot-v1:1b8392ced822a1d6d331668263ae6ffbb92e2c35a16441dc67314798bc187312",
+          "mod4_facts::block1": "slot-v1:20b6b48ba3180d830a94c7c5696bf9ebd2a55284dee7245915db515f51a61aac",
+          "mod4_facts::block2": "slot-v1:0507d86d96736ec5bd1f6d0f8d24766c810212bc0bb4a6ad8aeb183460b4c7f3",
+          "mod4_facts::block3": "slot-v1:5e2482bab392eebb7a17a14af42db8aae18383397f747273f11da0c0af97e952",
+          "mod5_close::main": "slot-v1:d921d09b19ed1b70ce9e2a828aacbbeaacb5579be6ddc09289f660680b2ad45e"
+        },
+        "project_id": "1a5d87ec-12b1-4000-b8bf-0f5a04bf51b1"
+      }
+    }
+  ],
+  "display_outputs": [
+    {
+      "id": "8b6dba1a-e2a5-457b-9ac5-7202d7c5bc66",
+      "asset_id": "dc0700a8-cb55-4e44-8f0c-7afad1fcadb9",
+      "job_id": "1cd9dfa9-7651-4d72-8f55-197587ea199e",
+      "run_id": "460f8f03-6c31-4b7b-8086-8454e5253123",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+        "slot_id": "main",
+        "module_id": "mod1_hero",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "product_identity",
+            "campaign_consistency",
+            "emotional_story",
+            "copy_separation"
+          ],
+          "art_direction": {
+            "framing": "横幅中景，眼平略低角度，杯体居右三分之一，背景窗光虚化",
+            "lighting": "左后窗光作主光，正面柔补光，低反差，杯身哑光质感可见",
+            "hierarchy": "第一焦点杯身轮廓与把手，第二焦点晨光氛围，左侧为文字留白",
+            "integration": "杯底与桌面自然接触阴影，道具比例真实，无悬浮感"
+          }
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "A stoneware mug with a calm matte-green glaze, made for slow mornings and everyday coffee or tea.",
+          "headline": "A Quiet Morning, Held in Matte Green",
+          "composition": "970x600横幅：哑光灰绿马克杯置于浅色木桌，右后方柔和窗光，左侧安静留白，浅景深，无文字无Logo臆造",
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+          ]
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "basic",
+          "field": "block.image",
+          "label": "Basic 主视觉图文",
+          "slots": [
+            {
+              "id": "main",
+              "field": "block.image",
+              "width": 970,
+              "height": 600,
+              "minimum_width": 970,
+              "minimum_height": 600
+            }
+          ],
+          "width": 970,
+          "height": 600,
+          "layout": "header",
+          "body_max": 6000,
+          "headline_max": 150,
+          "minimum_width": 970,
+          "minimum_height": 600,
+          "native_text_fields": {
+            "body": "block.body.textList",
+            "headline": "headline.value"
+          },
+          "official_module_type": "STANDARD_HEADER_IMAGE_TEXT",
+          "official_payload_field": "standardHeaderImageText"
+        },
+        "module_snapshot": {
+          "id": "mod1_hero",
+          "body": "A stoneware mug with a calm matte-green glaze, made for slow mornings and everyday coffee or tea.",
+          "title": "主视觉 · 清晨第一杯",
+          "spec_id": "basic_header_image_text",
+          "headline": "A Quiet Morning, Held in Matte Green",
+          "user_need": "建立商品识别：哑光灰绿马克杯作为早餐桌视觉主角，传递安静日常仪式感（策划假设）。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "建立商品识别：哑光灰绿马克杯作为早餐桌视觉主角，传递安静日常仪式感（策划假设）。",
+          "prohibited": [],
+          "composition": "横幅主视觉：马克杯置于浅色木桌中央偏右，左后方虚化的窗户晨光与少量早餐道具（ folded linen、小碟），杯身占画面约三分之一，左半幅留安静文案区，浅景深。",
+          "image_slots": [
+            {
+              "id": "main",
+              "body": "A stoneware mug with a calm matte-green glaze, made for slow mornings and everyday coffee or tea.",
+              "headline": "A Quiet Morning, Held in Matte Green",
+              "composition": "970x600横幅：哑光灰绿马克杯置于浅色木桌，右后方柔和窗光，左侧安静留白，浅景深，无文字无Logo臆造",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_color",
+            "e_material"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 建立商品识别：哑光灰绿马克杯作为早餐桌视觉主角，传递安静日常仪式感（策划假设）。\nModel-authored scene and camera direction: 横幅主视觉：马克杯置于浅色木桌中央偏右，左后方虚化的窗户晨光与少量早餐道具（ folded linen、小碟），杯身占画面约三分之一，左半幅留安静文案区，浅景深。\nCopy zone: left. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "横幅中景，眼平略低角度，杯体居右三分之一，背景窗光虚化",
+            "lighting": "左后窗光作主光，正面柔补光，低反差，杯身哑光质感可见",
+            "hierarchy": "第一焦点杯身轮廓与把手，第二焦点晨光氛围，左侧为文字留白",
+            "integration": "杯底与桌面自然接触阴影，道具比例真实，无悬浮感"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "campaign_consistency",
+            "emotional_story",
+            "copy_separation"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        }
+      },
+      "number": 1,
+      "sequence_number": 0,
+      "filename": "generated-1-970x600.png",
+      "width": 970,
+      "height": 600,
+      "size": 682465,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/dc0700a8-cb55-4e44-8f0c-7afad1fcadb9/content",
+      "download_url": "/api/v1/assets/dc0700a8-cb55-4e44-8f0c-7afad1fcadb9/download",
+      "parent_output_id": null,
+      "root_output_id": "8b6dba1a-e2a5-457b-9ac5-7202d7c5bc66",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "284883d2-9b93-49d6-8448-b9dbe84fd38f",
+      "asset_id": "21ea4ca1-99dd-444c-a624-b517e7dc977f",
+      "job_id": "22b0bcdb-f863-46b6-ad31-ba6c630d3e6f",
+      "run_id": "460f8f03-6c31-4b7b-8086-8454e5253123",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+        "slot_id": "main",
+        "module_id": "mod2_craft",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "product_identity",
+            "detail_truth",
+            "scale_context",
+            "copy_separation"
+          ],
+          "art_direction": {
+            "framing": "近景三分之四侧面，手入画托握杯身，展示器型曲线",
+            "lighting": "左前柔光主光，杯沿一圈细腻边缘光体现釉面",
+            "hierarchy": "第一焦点釉面质感与杯型，第二焦点手部尺度参照",
+            "integration": "手指与杯身自然遮挡接触，握持受力真实，阴影落地"
+          }
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "Colored-glaze stoneware with a soft matte finish. Stands about 4 in tall — a comfortable, familiar hand-feel.",
+          "headline": "Stoneware, Colored Glaze",
+          "composition": "600x600方图：三分之四侧面近景，手轻握灰绿哑光杯身，米白背景，展示锥形轮廓与彩釉质感，右侧留文案区，无文字",
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+          ]
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "basic",
+          "field": "block.image",
+          "label": "Basic 左图右文",
+          "slots": [
+            {
+              "id": "main",
+              "field": "block.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            }
+          ],
+          "width": 600,
+          "height": 600,
+          "layout": "image_left",
+          "body_max": 1000,
+          "headline_max": 160,
+          "minimum_width": 300,
+          "minimum_height": 300,
+          "native_text_fields": {
+            "body": "block.body.textList",
+            "headline": "block.headline.value"
+          },
+          "image_position_type": "LEFT",
+          "official_module_type": "STANDARD_SINGLE_SIDE_IMAGE",
+          "official_payload_field": "standardSingleSideImage"
+        },
+        "module_snapshot": {
+          "id": "mod2_craft",
+          "body": "Colored-glaze stoneware with a soft matte finish. Stands about 4 in tall — a comfortable, familiar hand-feel.",
+          "title": "材质与器型 · 石与釉",
+          "spec_id": "basic_single_image_left",
+          "headline": "Stoneware, Colored Glaze",
+          "user_need": "回答材质与工艺问题：石器彩釉的哑光质地与上手尺度（4英寸高）。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "回答材质与工艺问题：石器彩釉的哑光质地与上手尺度（4英寸高）。",
+          "prohibited": [],
+          "composition": "左图右文：手部轻握杯身侧后方，三分之四侧面视角展示锥形轮廓与哑光釉面微反光，背景为米白中性墙面，右侧为文案区。",
+          "image_slots": [
+            {
+              "id": "main",
+              "body": "Colored-glaze stoneware with a soft matte finish. Stands about 4 in tall — a comfortable, familiar hand-feel.",
+              "headline": "Stoneware, Colored Glaze",
+              "composition": "600x600方图：三分之四侧面近景，手轻握灰绿哑光杯身，米白背景，展示锥形轮廓与彩釉质感，右侧留文案区，无文字",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_material",
+            "e_size"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 回答材质与工艺问题：石器彩釉的哑光质地与上手尺度（4英寸高）。\nModel-authored scene and camera direction: 左图右文：手部轻握杯身侧后方，三分之四侧面视角展示锥形轮廓与哑光釉面微反光，背景为米白中性墙面，右侧为文案区。\nCopy zone: right. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "近景三分之四侧面，手入画托握杯身，展示器型曲线",
+            "lighting": "左前柔光主光，杯沿一圈细腻边缘光体现釉面",
+            "hierarchy": "第一焦点釉面质感与杯型，第二焦点手部尺度参照",
+            "integration": "手指与杯身自然遮挡接触，握持受力真实，阴影落地"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "product_identity",
+            "detail_truth",
+            "scale_context",
+            "copy_separation"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        }
+      },
+      "number": 2,
+      "sequence_number": 0,
+      "filename": "generated-1-600x600.png",
+      "width": 600,
+      "height": 600,
+      "size": 422722,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/21ea4ca1-99dd-444c-a624-b517e7dc977f/content",
+      "download_url": "/api/v1/assets/21ea4ca1-99dd-444c-a624-b517e7dc977f/download",
+      "parent_output_id": null,
+      "root_output_id": "284883d2-9b93-49d6-8448-b9dbe84fd38f",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "ff6da3f8-4b6e-4f36-9272-4b1f2067390e",
+      "asset_id": "132946f2-055e-4bd7-910a-f7dd736b2774",
+      "job_id": "0c2a5f6e-c220-4fa5-a7ea-dc299e36983a",
+      "run_id": "460f8f03-6c31-4b7b-8086-8454e5253123",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+        "slot_id": "main",
+        "module_id": "mod3_daily",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "emotional_story",
+            "scale_context",
+            "campaign_consistency",
+            "copy_separation"
+          ],
+          "art_direction": {
+            "framing": "中景侧前方视角，杯体位于画面左中部偏右，桌面道具陪衬不抢焦",
+            "lighting": "侧窗自然光为主，柔和补光，杯内可见深色饮品与微热气",
+            "hierarchy": "第一焦点杯中饮品与杯身颜色呼应，第二焦点桌面生活氛围",
+            "integration": "杯与桌面接触阴影真实，道具比例符合日常桌面透视"
+          }
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "At about 13 oz, it holds a generous cup of coffee or tea — equally at home on a kitchen counter or office desk.",
+          "headline": "Right at Home on Any Table",
+          "composition": "600x600方图：灰绿马克杯盛深色咖啡置于居家办公桌，侧窗自然光，旁有笔记本与绿植，杯为视觉主角，左侧留白，无文字",
+          "reference_asset_ids": [
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "basic",
+          "field": "block.image",
+          "label": "Basic 右图左文",
+          "slots": [
+            {
+              "id": "main",
+              "field": "block.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            }
+          ],
+          "width": 600,
+          "height": 600,
+          "layout": "image_right",
+          "body_max": 1000,
+          "headline_max": 160,
+          "minimum_width": 300,
+          "minimum_height": 300,
+          "native_text_fields": {
+            "body": "block.body.textList",
+            "headline": "block.headline.value"
+          },
+          "image_position_type": "RIGHT",
+          "official_module_type": "STANDARD_SINGLE_SIDE_IMAGE",
+          "official_payload_field": "standardSingleSideImage"
+        },
+        "module_snapshot": {
+          "id": "mod3_daily",
+          "body": "At about 13 oz, it holds a generous cup of coffee or tea — equally at home on a kitchen counter or office desk.",
+          "title": "使用场景 · 一日的陪伴",
+          "spec_id": "basic_single_image_right",
+          "headline": "Right at Home on Any Table",
+          "user_need": "使用关系：从办公桌到厨房台面，13 oz容量适合日常咖啡/茶（动机为策划假设）。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "使用关系：从办公桌到厨房台面，13 oz容量适合日常咖啡/茶（动机为策划假设）。",
+          "prohibited": [],
+          "composition": "右图左文：马克杯置于办公/居家桌面一角，旁有笔记本与一小枝绿植，自然日光从侧面进入，杯为画面主角，左侧文案区。",
+          "image_slots": [
+            {
+              "id": "main",
+              "body": "At about 13 oz, it holds a generous cup of coffee or tea — equally at home on a kitchen counter or office desk.",
+              "headline": "Right at Home on Any Table",
+              "composition": "600x600方图：灰绿马克杯盛深色咖啡置于居家办公桌，侧窗自然光，旁有笔记本与绿植，杯为视觉主角，左侧留白，无文字",
+              "reference_asset_ids": [
+                "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_size",
+            "e_color"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 使用关系：从办公桌到厨房台面，13 oz容量适合日常咖啡/茶（动机为策划假设）。\nModel-authored scene and camera direction: 右图左文：马克杯置于办公/居家桌面一角，旁有笔记本与一小枝绿植，自然日光从侧面进入，杯为画面主角，左侧文案区。\nCopy zone: left. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "中景侧前方视角，杯体位于画面左中部偏右，桌面道具陪衬不抢焦",
+            "lighting": "侧窗自然光为主，柔和补光，杯内可见深色饮品与微热气",
+            "hierarchy": "第一焦点杯中饮品与杯身颜色呼应，第二焦点桌面生活氛围",
+            "integration": "杯与桌面接触阴影真实，道具比例符合日常桌面透视"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "emotional_story",
+            "scale_context",
+            "campaign_consistency",
+            "copy_separation"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        }
+      },
+      "number": 3,
+      "sequence_number": 0,
+      "filename": "generated-1-600x600.png",
+      "width": 600,
+      "height": 600,
+      "size": 436588,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/132946f2-055e-4bd7-910a-f7dd736b2774/content",
+      "download_url": "/api/v1/assets/132946f2-055e-4bd7-910a-f7dd736b2774/download",
+      "parent_output_id": null,
+      "root_output_id": "ff6da3f8-4b6e-4f36-9272-4b1f2067390e",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "6da79267-09dc-4e29-b8b5-dda19784b5dd",
+      "asset_id": "6dc706de-bbf9-45b1-9651-c792bdcf55c0",
+      "job_id": "63981adf-35bf-44e0-ac48-c7eacfd983ef",
+      "run_id": "460f8f03-6c31-4b7b-8086-8454e5253123",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+        "slot_id": "block1",
+        "module_id": "mod4_facts",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "detail_truth",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "commercial_lighting"
+          ],
+          "art_direction": {
+            "framing": "三槽位分别：箱内中景、碗架中景、桌面俯拍，主体居中偏上",
+            "lighting": "统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感",
+            "hierarchy": "每槽第一焦点为杯子与设备关系，底部为原生文字区",
+            "integration": "杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致"
+          }
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "block1",
+          "body": "Warm up your drink right in the mug.",
+          "headline": "Microwave-Safe",
+          "composition": "600x600：灰绿马克杯置于微波炉转盘中央、炉门微开视角，厨房暖光，底部留文案区，无文字无品牌标识",
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+          ]
+        },
+        "spec_snapshot": {
+          "id": "block1",
+          "type": "basic",
+          "field": "block1.image",
+          "label": "Basic 三图文组合",
+          "slots": [
+            {
+              "id": "block1",
+              "field": "block1.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            },
+            {
+              "id": "block2",
+              "field": "block2.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            },
+            {
+              "id": "block3",
+              "field": "block3.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            }
+          ],
+          "width": 600,
+          "height": 600,
+          "layout": "three_columns",
+          "body_max": 1000,
+          "headline_max": 200,
+          "minimum_width": 300,
+          "minimum_height": 300,
+          "native_text_fields": {
+            "headline": "headline.value",
+            "slot_body": "blockN.body.textList",
+            "slot_headline": "blockN.headline.value"
+          },
+          "official_module_type": "STANDARD_THREE_IMAGE_TEXT",
+          "official_payload_field": "standardThreeImageText"
+        },
+        "module_snapshot": {
+          "id": "mod4_facts",
+          "body": "Three everyday facts, built in.",
+          "title": "三图文 · 易打理三事实",
+          "spec_id": "basic_three_image_text",
+          "headline": "Made for Real Life",
+          "user_need": "分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。",
+          "prohibited": [],
+          "composition": "三栏并列：block1为马克杯置于微波炉内微开的场景；block2为洗碗机碗架中倒置的杯子；block3为俯拍杯中注满饮品、旁有量感参照。三槽位分别中景、中景、俯拍，构图各异。",
+          "image_slots": [
+            {
+              "id": "block1",
+              "body": "Warm up your drink right in the mug.",
+              "headline": "Microwave-Safe",
+              "composition": "600x600：灰绿马克杯置于微波炉转盘中央、炉门微开视角，厨房暖光，底部留文案区，无文字无品牌标识",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            },
+            {
+              "id": "block2",
+              "body": "Easy cleanup, cycle after cycle.",
+              "headline": "Dishwasher-Safe",
+              "composition": "600x600：灰绿马克杯倒扣在洗碗机碗架格栅上，喷淋臂背景虚化，水珠细节，底部留文案区，无文字",
+              "reference_asset_ids": [
+                "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+              ]
+            },
+            {
+              "id": "block3",
+              "body": "A generous size for your daily coffee or tea.",
+              "headline": "About 13 oz",
+              "composition": "600x600：俯视桌面，灰绿马克杯注满深色饮品，旁放咖啡豆与小勺体现13 oz容量感，柔和顶光，底部留文案区，无文字",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_micro",
+            "e_dish",
+            "e_size"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nModel-authored scene and camera direction: 三栏并列：block1为马克杯置于微波炉内微开的场景；block2为洗碗机碗架中倒置的杯子；block3为俯拍杯中注满饮品、旁有量感参照。三槽位分别中景、中景、俯拍，构图各异。\nCopy zone: bottom. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "三槽位分别：箱内中景、碗架中景、桌面俯拍，主体居中偏上",
+            "lighting": "统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感",
+            "hierarchy": "每槽第一焦点为杯子与设备关系，底部为原生文字区",
+            "integration": "杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "detail_truth",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "commercial_lighting"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        }
+      },
+      "number": 4,
+      "sequence_number": 0,
+      "filename": "generated-1-600x600.png",
+      "width": 600,
+      "height": 600,
+      "size": 410658,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/6dc706de-bbf9-45b1-9651-c792bdcf55c0/content",
+      "download_url": "/api/v1/assets/6dc706de-bbf9-45b1-9651-c792bdcf55c0/download",
+      "parent_output_id": null,
+      "root_output_id": "6da79267-09dc-4e29-b8b5-dda19784b5dd",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "a731a4aa-ba18-471c-ab47-ae407f1d5d55",
+      "asset_id": "89aa70ae-0303-4c6f-aea9-7dfe64162504",
+      "job_id": "22d1c599-bf21-4477-9250-f0d3794c7b8a",
+      "run_id": "460f8f03-6c31-4b7b-8086-8454e5253123",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+        "slot_id": "block2",
+        "module_id": "mod4_facts",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "detail_truth",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "commercial_lighting"
+          ],
+          "art_direction": {
+            "framing": "三槽位分别：箱内中景、碗架中景、桌面俯拍，主体居中偏上",
+            "lighting": "统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感",
+            "hierarchy": "每槽第一焦点为杯子与设备关系，底部为原生文字区",
+            "integration": "杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致"
+          }
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "block2",
+          "body": "Easy cleanup, cycle after cycle.",
+          "headline": "Dishwasher-Safe",
+          "composition": "600x600：灰绿马克杯倒扣在洗碗机碗架格栅上，喷淋臂背景虚化，水珠细节，底部留文案区，无文字",
+          "reference_asset_ids": [
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        },
+        "spec_snapshot": {
+          "id": "block2",
+          "type": "basic",
+          "field": "block2.image",
+          "label": "Basic 三图文组合",
+          "slots": [
+            {
+              "id": "block1",
+              "field": "block1.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            },
+            {
+              "id": "block2",
+              "field": "block2.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            },
+            {
+              "id": "block3",
+              "field": "block3.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            }
+          ],
+          "width": 600,
+          "height": 600,
+          "layout": "three_columns",
+          "body_max": 1000,
+          "headline_max": 200,
+          "minimum_width": 300,
+          "minimum_height": 300,
+          "native_text_fields": {
+            "headline": "headline.value",
+            "slot_body": "blockN.body.textList",
+            "slot_headline": "blockN.headline.value"
+          },
+          "official_module_type": "STANDARD_THREE_IMAGE_TEXT",
+          "official_payload_field": "standardThreeImageText"
+        },
+        "module_snapshot": {
+          "id": "mod4_facts",
+          "body": "Three everyday facts, built in.",
+          "title": "三图文 · 易打理三事实",
+          "spec_id": "basic_three_image_text",
+          "headline": "Made for Real Life",
+          "user_need": "分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。",
+          "prohibited": [],
+          "composition": "三栏并列：block1为马克杯置于微波炉内微开的场景；block2为洗碗机碗架中倒置的杯子；block3为俯拍杯中注满饮品、旁有量感参照。三槽位分别中景、中景、俯拍，构图各异。",
+          "image_slots": [
+            {
+              "id": "block1",
+              "body": "Warm up your drink right in the mug.",
+              "headline": "Microwave-Safe",
+              "composition": "600x600：灰绿马克杯置于微波炉转盘中央、炉门微开视角，厨房暖光，底部留文案区，无文字无品牌标识",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            },
+            {
+              "id": "block2",
+              "body": "Easy cleanup, cycle after cycle.",
+              "headline": "Dishwasher-Safe",
+              "composition": "600x600：灰绿马克杯倒扣在洗碗机碗架格栅上，喷淋臂背景虚化，水珠细节，底部留文案区，无文字",
+              "reference_asset_ids": [
+                "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+              ]
+            },
+            {
+              "id": "block3",
+              "body": "A generous size for your daily coffee or tea.",
+              "headline": "About 13 oz",
+              "composition": "600x600：俯视桌面，灰绿马克杯注满深色饮品，旁放咖啡豆与小勺体现13 oz容量感，柔和顶光，底部留文案区，无文字",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_micro",
+            "e_dish",
+            "e_size"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nModel-authored scene and camera direction: 三栏并列：block1为马克杯置于微波炉内微开的场景；block2为洗碗机碗架中倒置的杯子；block3为俯拍杯中注满饮品、旁有量感参照。三槽位分别中景、中景、俯拍，构图各异。\nCopy zone: bottom. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "三槽位分别：箱内中景、碗架中景、桌面俯拍，主体居中偏上",
+            "lighting": "统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感",
+            "hierarchy": "每槽第一焦点为杯子与设备关系，底部为原生文字区",
+            "integration": "杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "detail_truth",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "commercial_lighting"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        }
+      },
+      "number": 5,
+      "sequence_number": 0,
+      "filename": "generated-1-600x600.png",
+      "width": 600,
+      "height": 600,
+      "size": 474305,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/89aa70ae-0303-4c6f-aea9-7dfe64162504/content",
+      "download_url": "/api/v1/assets/89aa70ae-0303-4c6f-aea9-7dfe64162504/download",
+      "parent_output_id": null,
+      "root_output_id": "a731a4aa-ba18-471c-ab47-ae407f1d5d55",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "eefe2b24-529a-427f-8814-dd09a5dfcf42",
+      "asset_id": "8e78cb54-f44f-4011-bba8-d97a0febb2c2",
+      "job_id": "0829bc83-1450-4a45-a1ce-9e97bc9c6903",
+      "run_id": "460f8f03-6c31-4b7b-8086-8454e5253123",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+        "slot_id": "block3",
+        "module_id": "mod4_facts",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "detail_truth",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "commercial_lighting"
+          ],
+          "art_direction": {
+            "framing": "三槽位分别：箱内中景、碗架中景、桌面俯拍，主体居中偏上",
+            "lighting": "统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感",
+            "hierarchy": "每槽第一焦点为杯子与设备关系，底部为原生文字区",
+            "integration": "杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致"
+          }
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "block3",
+          "body": "A generous size for your daily coffee or tea.",
+          "headline": "About 13 oz",
+          "composition": "600x600：俯视桌面，灰绿马克杯注满深色饮品，旁放咖啡豆与小勺体现13 oz容量感，柔和顶光，底部留文案区，无文字",
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+          ]
+        },
+        "spec_snapshot": {
+          "id": "block3",
+          "type": "basic",
+          "field": "block3.image",
+          "label": "Basic 三图文组合",
+          "slots": [
+            {
+              "id": "block1",
+              "field": "block1.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            },
+            {
+              "id": "block2",
+              "field": "block2.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            },
+            {
+              "id": "block3",
+              "field": "block3.image",
+              "width": 600,
+              "height": 600,
+              "minimum_width": 300,
+              "minimum_height": 300
+            }
+          ],
+          "width": 600,
+          "height": 600,
+          "layout": "three_columns",
+          "body_max": 1000,
+          "headline_max": 200,
+          "minimum_width": 300,
+          "minimum_height": 300,
+          "native_text_fields": {
+            "headline": "headline.value",
+            "slot_body": "blockN.body.textList",
+            "slot_headline": "blockN.headline.value"
+          },
+          "official_module_type": "STANDARD_THREE_IMAGE_TEXT",
+          "official_payload_field": "standardThreeImageText"
+        },
+        "module_snapshot": {
+          "id": "mod4_facts",
+          "body": "Three everyday facts, built in.",
+          "title": "三图文 · 易打理三事实",
+          "spec_id": "basic_three_image_text",
+          "headline": "Made for Real Life",
+          "user_need": "分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。",
+          "prohibited": [],
+          "composition": "三栏并列：block1为马克杯置于微波炉内微开的场景；block2为洗碗机碗架中倒置的杯子；block3为俯拍杯中注满饮品、旁有量感参照。三槽位分别中景、中景、俯拍，构图各异。",
+          "image_slots": [
+            {
+              "id": "block1",
+              "body": "Warm up your drink right in the mug.",
+              "headline": "Microwave-Safe",
+              "composition": "600x600：灰绿马克杯置于微波炉转盘中央、炉门微开视角，厨房暖光，底部留文案区，无文字无品牌标识",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            },
+            {
+              "id": "block2",
+              "body": "Easy cleanup, cycle after cycle.",
+              "headline": "Dishwasher-Safe",
+              "composition": "600x600：灰绿马克杯倒扣在洗碗机碗架格栅上，喷淋臂背景虚化，水珠细节，底部留文案区，无文字",
+              "reference_asset_ids": [
+                "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+              ]
+            },
+            {
+              "id": "block3",
+              "body": "A generous size for your daily coffee or tea.",
+              "headline": "About 13 oz",
+              "composition": "600x600：俯视桌面，灰绿马克杯注满深色饮品，旁放咖啡豆与小勺体现13 oz容量感，柔和顶光，底部留文案区，无文字",
+              "reference_asset_ids": [
+                "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_micro",
+            "e_dish",
+            "e_size"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 分槽位逐一给出已确认事实：微波炉适用 / 洗碗机适用 / 13 oz容量。\nModel-authored scene and camera direction: 三栏并列：block1为马克杯置于微波炉内微开的场景；block2为洗碗机碗架中倒置的杯子；block3为俯拍杯中注满饮品、旁有量感参照。三槽位分别中景、中景、俯拍，构图各异。\nCopy zone: bottom. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "三槽位分别：箱内中景、碗架中景、桌面俯拍，主体居中偏上",
+            "lighting": "统一左前柔光体系，金属/箱体高光克制，保持哑光杯体质感",
+            "hierarchy": "每槽第一焦点为杯子与设备关系，底部为原生文字区",
+            "integration": "杯与微波炉转盘、碗架格栅接触真实，透视与尺度一致"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "detail_truth",
+            "multi_slot_storytelling",
+            "visual_hierarchy",
+            "commercial_lighting"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        }
+      },
+      "number": 6,
+      "sequence_number": 0,
+      "filename": "generated-1-600x600.png",
+      "width": 600,
+      "height": 600,
+      "size": 554339,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/8e78cb54-f44f-4011-bba8-d97a0febb2c2/content",
+      "download_url": "/api/v1/assets/8e78cb54-f44f-4011-bba8-d97a0febb2c2/download",
+      "parent_output_id": null,
+      "root_output_id": "eefe2b24-529a-427f-8814-dd09a5dfcf42",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    },
+    {
+      "id": "04896ddf-afc6-45c2-89b4-a0065da3aee6",
+      "asset_id": "0c2402ac-c411-4b4b-ad87-0c6d2369cd94",
+      "job_id": "6b331be7-d648-4b54-81b3-7f5c85038638",
+      "run_id": "460f8f03-6c31-4b7b-8086-8454e5253123",
+      "review_item_id": null,
+      "review_version_id": null,
+      "review_status": null,
+      "batch_tryon": null,
+      "amazon_module": {
+        "plan_id": "a041cfd6-cc88-4ad3-8815-d09a479bdc23",
+        "slot_id": "main",
+        "module_id": "mod5_close",
+        "design_trace": {
+          "skills": [
+            {
+              "id": "amazon-aplus-planner",
+              "version": "2",
+              "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+            },
+            {
+              "id": "amazon-market-insight",
+              "version": "1",
+              "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+            },
+            {
+              "id": "image-creation",
+              "version": "1",
+              "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+            }
+          ],
+          "principles": [
+            "campaign_consistency",
+            "emotional_story",
+            "copy_separation",
+            "visual_hierarchy"
+          ],
+          "art_direction": {
+            "framing": "横幅局部特写，杯身与把手曲线居右，左半幅为柔和虚化背景",
+            "lighting": "与整套一致的左前柔光，低反差，哑光表面细腻过渡",
+            "hierarchy": "第一焦点把手与杯身曲线质感，第二焦点同色系环境氛围",
+            "integration": "杯体与背景色调统一但有明暗分离，无贴图感"
+          }
+        },
+        "plan_revision": 1,
+        "rules_version": "amazon-aplus-2026-11-05-r4",
+        "slot_snapshot": {
+          "id": "main",
+          "body": "One calm color that fits right in — from morning coffee to a quiet evening tea.",
+          "headline": "Simple Color, Easy Living",
+          "composition": "970x300横幅：灰绿哑光杯身与把手曲线特写居右，左侧同色系虚化厨房背景，柔和左前光，左侧为文字叠放区，无文字无Logo臆造",
+          "reference_asset_ids": [
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        },
+        "spec_snapshot": {
+          "id": "main",
+          "type": "basic",
+          "label": "Basic 图片与文字覆盖",
+          "width": 970,
+          "height": 300,
+          "layout": "overlay",
+          "mobile": "responsive_operator_review",
+          "spec_status": "Official legacy layout guide confirms 970x300; current account text limits and mobile rendering unverified",
+          "minimum_width": 970,
+          "minimum_height": 300,
+          "native_text_fields": {
+            "body": "block.body.textList",
+            "headline": "block.headline.value"
+          },
+          "native_image_fields": {
+            "desktop": "block.image"
+          },
+          "official_module_type": "STANDARD_IMAGE_TEXT_OVERLAY",
+          "official_payload_field": "standardImageTextOverlay",
+          "required_operator_fields": [
+            "overlayColorType",
+            "image.altText"
+          ]
+        },
+        "module_snapshot": {
+          "id": "mod5_close",
+          "body": "One calm color that fits right in — from morning coffee to a quiet evening tea.",
+          "title": "收尾横幅 · 安静收尾",
+          "spec_id": "basic_image_text_overlay",
+          "headline": "Simple Color, Easy Living",
+          "user_need": "情感收束：哑光灰绿与中性环境融合，强化低调纯色搭配价值（策划假设）。",
+          "acceptance": [
+            "商品颜色/图案/Logo/结构",
+            "实际卖点与事实",
+            "英文拼写和可读性",
+            "移动端完整性",
+            "素材商业使用权",
+            "球队/品牌/赛事授权",
+            "无价格/促销/竞品比较"
+          ],
+          "main_point": "情感收束：哑光灰绿与中性环境融合，强化低调纯色搭配价值（策划假设）。",
+          "prohibited": [],
+          "composition": "970x300横幅：杯身局部特写与把手曲线占据画面右侧，背景为同色系虚化厨房环境形成色调层次，左侧为叠字区，整体安静克制。",
+          "image_slots": [
+            {
+              "id": "main",
+              "body": "One calm color that fits right in — from morning coffee to a quiet evening tea.",
+              "headline": "Simple Color, Easy Living",
+              "composition": "970x300横幅：灰绿哑光杯身与把手曲线特写居右，左侧同色系虚化厨房背景，柔和左前光，左侧为文字叠放区，无文字无Logo臆造",
+              "reference_asset_ids": [
+                "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+              ]
+            }
+          ],
+          "evidence_ids": [
+            "e_color",
+            "e_material"
+          ],
+          "image_prompt": "Produce one photographic image for this module; never a grid of outputs.\nVisual objective: 情感收束：哑光灰绿与中性环境融合，强化低调纯色搭配价值（策划假设）。\nModel-authored scene and camera direction: 970x300横幅：杯身局部特写与把手曲线占据画面右侧，背景为同色系虚化厨房环境形成色调层次，左侧为叠字区，整体安静克制。\nCopy zone: left. Typeset new marketing copy separately; preserve the product's original print.\nUse the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.",
+          "art_direction": {
+            "framing": "横幅局部特写，杯身与把手曲线居右，左半幅为柔和虚化背景",
+            "lighting": "与整套一致的左前柔光，低反差，哑光表面细腻过渡",
+            "hierarchy": "第一焦点把手与杯身曲线质感，第二焦点同色系环境氛围",
+            "integration": "杯体与背景色调统一但有明暗分离，无贴图感"
+          },
+          "mobile_layout": "保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。",
+          "desktop_layout": "保留left侧安静文案区；商品与关键设计不进入文字区。",
+          "requested_width": null,
+          "design_direction": null,
+          "requested_height": null,
+          "design_principles": [
+            "campaign_consistency",
+            "emotional_story",
+            "copy_separation",
+            "visual_hierarchy"
+          ],
+          "reference_asset_ids": [
+            "13af86ef-b8d9-43d3-9c4f-2ebeafff8a52",
+            "00d38ec1-5c2e-4227-a11f-d9f51096b412"
+          ]
+        }
+      },
+      "number": 7,
+      "sequence_number": 0,
+      "filename": "generated-1-970x300.png",
+      "width": 970,
+      "height": 300,
+      "size": 290284,
+      "mime_type": "image/png",
+      "content_url": "/api/v1/assets/0c2402ac-c411-4b4b-ad87-0c6d2369cd94/content",
+      "download_url": "/api/v1/assets/0c2402ac-c411-4b4b-ad87-0c6d2369cd94/download",
+      "parent_output_id": null,
+      "root_output_id": "04896ddf-afc6-45c2-89b4-a0065da3aee6",
+      "source_asset_id": null,
+      "source_filename": null,
+      "source_index": null,
+      "version": 1
+    }
+  ]
+}

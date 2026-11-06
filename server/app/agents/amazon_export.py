@@ -2,6 +2,7 @@
 import html
 import io
 import json
+import re
 from tempfile import SpooledTemporaryFile
 from zipfile import ZipFile, ZIP_DEFLATED
 
@@ -81,6 +82,12 @@ def preview_html(data):
     esc=lambda value:html.escape(str(value or ''),quote=True)
     sections=[]
     specs=data['brief'].get('module_specs') or {}
+    concept=(data['brief']['plan'].get('creative_strategy') or {}).get('concept') or {}
+    fonts={'editorial_serif':'Georgia, serif','clean_sans':'Arial, sans-serif','technical_mono':'Consolas, monospace'}
+    theme=''
+    if concept:
+        color=lambda k,d:concept[k] if re.fullmatch(r'#[0-9a-fA-F]{6}',concept.get(k,'')) else d
+        theme=f"background:{color('canvas_color','#ffffff')};color:{color('ink_color','#17202a')};border-color:{color('accent_color','#e7e5e4')};font-family:{fonts.get(concept.get('native_type_style'),'Arial, sans-serif')}"
     for module in data['brief']['plan']['modules']:
         spec=specs.get(module['id']) or {};layout=spec.get('layout','header')
         authored={s['id']:s for s in module.get('image_slots',[])}
@@ -99,7 +106,7 @@ def preview_html(data):
         elif layout=='overlay':
             content=f'<div class="overlay">{pictures[0][1]}{text}</div>'
         else:content=pictures[0][1]+text
-        sections.append(f'<section data-module="{esc(module["id"])}" data-layout="{esc(layout)}">{content}</section>')
+        sections.append(f'<section data-module="{esc(module["id"])}" data-layout="{esc(layout)}" style="{esc(theme)}">{content}</section>')
     return '''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'">
 <title>A+ module handoff preview</title><style>

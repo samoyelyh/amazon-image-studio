@@ -153,6 +153,8 @@ class OpenAICompatibleProvider(BaseImageProvider):
         # the session to a single prompt. Only trusted server Jobs set this field.
         if payload.get('agent_messages') is not None:
             import copy
+            if request_body['stream'] and config.get('preserve_reasoning'):
+                request_body['stream_options']={'include_usage':True}
             request_body['messages'] = copy.deepcopy(payload['agent_messages'])
             if references:
                 last_user=next((m for m in reversed(request_body['messages']) if m['role']=='user'),None)

@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 from app.agents.contracts import StrictModel
+from app.agents.creative_strategy import CreativeStrategy,ModuleNarrative,validate_mapping
 from app.agents.amazon_contracts import APlusPlan, APlusModule, Evidence, MarketInsight,ArtDirection,ImageSlot,DesignPrinciple
 
 VERSION='amazon-design-decisions-v1'
@@ -39,6 +40,7 @@ class ModuleDecision(StrictModel):
     design_principles:list[DesignPrinciple]=Field(default_factory=list,max_length=9)
     art_direction:ArtDirection|None=None
     image_slots:list[ImageSlot]=Field(default_factory=list,max_length=4)
+    narrative:ModuleNarrative|None=None
 
 
 class DesignBrief(StrictModel):
@@ -54,6 +56,7 @@ class DesignBrief(StrictModel):
     market_basis:str=Field(default='',max_length=400)
     risks:list[str]=Field(default_factory=list,max_length=10)
     modules:list[ModuleDecision]=Field(min_length=1,max_length=7)
+    creative_strategy:CreativeStrategy|None=None
 
     @model_validator(mode='after')
     def stable_ids_and_evidence(self):
@@ -61,6 +64,7 @@ class DesignBrief(StrictModel):
             if len({v.id for v in values})!=len(values):raise ValueError('ids must be unique')
         evidence={e.id for e in self.evidence}
         if any(set(m.evidence_ids)-evidence for m in self.modules):raise ValueError('module evidence must exist')
+        if self.creative_strategy:validate_mapping(self.creative_strategy,self.modules,evidence,compiled=False)
         return self
 
 
@@ -82,6 +86,23 @@ class ProfessionalDesignBrief(DesignBrief):
 
 class SaveProfessionalBrief(StrictModel):
     brief:ProfessionalDesignBrief
+
+class DirectorModuleDecision(ProfessionalModuleDecision):
+    narrative:ModuleNarrative
+
+class DirectorAPlusBrief(ProfessionalDesignBrief):
+    creative_strategy:CreativeStrategy
+    modules:list[DirectorModuleDecision]=Field(min_length=1,max_length=7)
+
+class DirectorListingBrief(DesignBrief):
+    creative_strategy:CreativeStrategy
+    modules:list[DirectorModuleDecision]=Field(min_length=1,max_length=7)
+
+class SaveDirectorAPlus(StrictModel):
+    brief:DirectorAPlusBrief
+
+class SaveDirectorListing(StrictModel):
+    brief:DirectorListingBrief
 
 
 class BriefPatch(StrictModel):
@@ -111,10 +132,12 @@ def expand(brief:DesignBrief, *, collected_at=None):
     """No LLM/HTTP call: compile to the unchanged, owner-checked SavePlan."""
     from app.agents import amazon, professional_prompts
     timestamp=collected_at or datetime.now(timezone.utc)
-    evidence=[Evidence(id=e.id,statement=e.statement,source=('用户确认引文：'+e.source_quote) if e.basis=='user_confirmed' else '本会话已授权商品参考图',
+    evidence=[Evidence(id=e.id,statement=e.source_quote if brief.creative_strategy and e.basis=='user_confirmed' else e.statement,source=('用户确认引文：'+e.source_quote) if e.basis=='user_confirmed' else '本会话已授权商品参考图',
         collected_at=timestamp,scope='own_product',status='fact') for e in brief.evidence]
     modules=[]
     for m in brief.modules:
+        linked=[e for r in brief.creative_strategy.purchase_reasons if m.narrative and r.id in m.narrative.reason_ids for e in r.evidence_ids] if brief.creative_strategy else []
+        module_evidence=list(dict.fromkeys([*m.evidence_ids,*linked]))
         spec_id=m.spec_id
         if not spec_id:
             if brief.deliverable=='listing':spec_id='listing_square'
@@ -133,19 +156,20 @@ def expand(brief:DesignBrief, *, collected_at=None):
             if spec.get('layout') in {'header','image_left','image_right','three_columns','sidebar'}:
                 desktop='英文标题与正文位于Amazon原生图文区域；摄影图片完整利用自身画幅，不在图片内部重复预留空白文字面板。'
         module=APlusModule(id=m.id,title=m.title,spec_id=spec_id,main_point=m.main_point,
-            user_need=m.main_point,evidence_ids=m.evidence_ids,composition=m.composition,
+            user_need=('；'.join(r.consumer_benefit for r in brief.creative_strategy.purchase_reasons if m.narrative and r.id in m.narrative.reason_ids) if brief.creative_strategy else m.main_point),evidence_ids=module_evidence,composition=m.composition,
             image_prompt=professional_prompts.module_decision(m),
             reference_asset_ids=m.reference_asset_ids or brief.reference_asset_ids,
             headline=m.headline,body=m.body,desktop_layout=desktop,
             mobile_layout='保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。',
             acceptance=amazon.rules()['manual_checks'],design_direction=m.design_direction,
             requested_width=m.requested_width,requested_height=m.requested_height,
-            design_principles=m.design_principles,art_direction=m.art_direction,image_slots=m.image_slots)
+            design_principles=m.design_principles,art_direction=m.art_direction,image_slots=m.image_slots,narrative=m.narrative)
         modules.append(module)
     return APlusPlan(deliverable=brief.deliverable,marketplace=brief.marketplace,aplus_type=brief.aplus_type,
         rules_version=amazon.rules()['version'],product_identity_lock=brief.product_identity_lock,
         campaign_style_lock=brief.campaign_style_lock,
         design_version=getattr(brief,'design_version','legacy'),suite_rationale=getattr(brief,'suite_rationale',''),
+        creative_strategy=brief.creative_strategy,
         insight=MarketInsight(visual_opportunities=[brief.market_basis] if brief.market_basis else [],
             limitations=brief.risks,evidence=evidence),modules=modules)
 

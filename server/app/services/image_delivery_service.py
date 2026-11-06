@@ -44,14 +44,16 @@ def delivery_prompt_contract(payload: dict[str, object]) -> str:
     if not width or not height:
         return ""
 
+    director=(payload.get('metadata') or {}).get('amazon_module',{}).get('design_trace',{}).get('creative_strategy_version')=='creative-director-v1'
+    framing=("follow the approved slot's exact camera framing. For an intentional close-up, show ONLY the requested product region; the rest of the product may remain outside the frame. Preserve the target region's critical features. Do not add inset bubbles, collages, duplicate views or a full-product overview to satisfy a detail shot. "
+        if director else "keep the entire product, face, garment, text-free focal details, and all critical edges visible. Nothing may be cropped out. Leave sufficient natural background around the subject. ")
+
     return (
         f"{DELIVERY_PROMPT_MARKER}: The final delivery canvas is exactly {width}x{height} "
         f"pixels with a {target_ratio} aspect ratio. The upstream working canvas uses the verified "
         f"{provider_ratio} aspect ratio. Requested rendering quality is {quality.upper()}; produce "
         f"{_quality_instruction(quality)}. The delivery format is {output_format} with quality/compression "
-        f"value {compression}. Compose natively for the complete final {target_ratio} canvas and keep the "
-        "entire product, face, garment, text-free focal details, and all critical edges visible. Nothing "
-        "may be cropped out. Leave sufficient natural background around the subject. Do not add borders, "
+        f"value {compression}. Compose natively for the complete final {target_ratio} canvas and {framing}Do not add borders, "
         "letterboxing, pillarboxing, frames, or artificial blank margins. Preserve natural perspective "
         "and avoid stretching."
     )

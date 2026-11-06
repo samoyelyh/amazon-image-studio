@@ -43,6 +43,14 @@ def test_worker_delivery_render_has_exact_requested_dimensions_and_format():
     assert rendered.filename.endswith("-640x360.jpg")
     assert image_dimensions(rendered.content) == (640, 360)
 
+def test_approved_director_detail_framing_is_not_overridden_by_legacy_whole_product_rule():
+    p={'prompt':'A single close-up of the mug rim.','requested_width':600,'requested_height':600,
+       'metadata':{'amazon_module':{'design_trace':{'creative_strategy_version':'creative-director-v1'}}}}
+    result=reinforce_delivery_prompt(p)['prompt']
+    assert 'show ONLY the requested product region' in result
+    assert 'Nothing may be cropped out' not in result
+    assert 'collages' in result
+
 
 def test_ratio_mismatch_preserves_both_outer_edges_instead_of_cropping():
     source = Image.new("RGB", (300, 100), "green")

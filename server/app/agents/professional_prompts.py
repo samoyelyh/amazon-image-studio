@@ -1,14 +1,14 @@
 """Deterministic execution envelope for model-authored art direction, not a second planner."""
 import re
 
-VERSION='professional-art-direction-v4'
+VERSION='professional-art-direction-v5'
 PRINCIPLES={
  'product_identity':'Preserve reference-grounded product contour, exact color placement and printed identity.',
  'campaign_consistency':'Keep the campaign palette and lighting language consistent without repeating layouts.',
  'visual_hierarchy':'Make the intended product feature the first focal point and keep supporting information subordinate.',
  'commercial_lighting':'Use deliberate key/fill separation, coherent highlights and contact shadows, not generic glow.',
  'scale_context':'Use credible human/environment scale and camera perspective.',
- 'detail_truth':'Show only details visible in original references; do not invent microscopic fabric or performance.',
+ 'detail_truth':'Show only details visible in original references; do not invent microscopic material structure or performance.',
  'emotional_story':'Communicate the specified human occasion through purposeful action and environment.',
  'copy_separation':'Keep native marketing copy outside the generated artwork; preserve inherent product print.',
  'multi_slot_storytelling':'This is one distinct image slot; other independently generated slots complete the native module.'}
@@ -21,7 +21,7 @@ def module_decision(module):
         'Visual objective: '+module.main_point,
         'Model-authored scene and camera direction: '+module.composition,
         'Copy zone: '+module.copy_space+'. Typeset new marketing copy separately; preserve the product\'s original print.',
-        'Use the supplied original product references. Integrate the product with coherent perspective, scale, lighting, fabric folds and contact shadows.',
+        'Use the supplied original product references. Integrate the product with coherent perspective, scale, lighting, surface geometry and contact shadows.',
     ])
 
 
@@ -39,21 +39,39 @@ def aplus(plan,module,*,editing=False,slot=None):
         if image_prompt.startswith('Produce one photographic image for this module; never a grid of outputs.\n'):
             image_prompt='\n'.join(line for line in image_prompt.splitlines()
                 if line!='Model-authored scene and camera direction: '+module.composition
+                and not line.startswith('Visual objective: ')
                 and not re.fullmatch(r"Copy zone: (left|right|top|bottom|none)\. Typeset new marketing copy separately; preserve the product's original print\.",line))
     geometry=slot['direction'].composition if multi and slot else module.composition
     copy_layout=('Native headline/body are OUTSIDE this photographic image, in the Amazon module text fields. '
         'Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.'
         if external_copy else 'Reserve the specified quiet copy area for separate platform text; preserve inherent product print.')
+    strategy=plan.creative_strategy
+    creative=[]
+    if strategy:
+        c=strategy.concept
+        creative=['CREATIVE DIRECTOR THEME: '+c.theme,
+            'AUDIENCE / MOTIVATION (creative interpretation, not new product claims): '+c.audience+' / '+c.buying_motivation,
+            'MEMORABLE VISUAL DEVICE: '+c.distinctive_device,
+            'PALETTE ROLES: '+c.palette,'PHOTOGRAPHIC LANGUAGE: '+c.photographic_language,
+            'EMOTIONAL TONE: '+c.emotional_tone,
+            'NATIVE TYPE / LAYOUT DIRECTION (typeset outside artwork): '+c.typography_and_layout]
+        if module.narrative:
+            creative+=['THIS STORY BEAT: '+module.narrative.story_beat,
+                'SHOT PURPOSE / TREATMENT: '+module.narrative.shot_purpose+' / '+module.narrative.treatment]
+            creative+=['MAPPED PURCHASE REASON '+r.id+f' (priority {r.priority}, {r.confidence}): '+r.reason+'; consumer value: '+r.consumer_benefit+'; scene: '+r.need_or_scene
+                for r in strategy.purchase_reasons if r.id in module.narrative.reason_ids]
     return '\n'.join([
         'Create ONE independent Amazon Listing product image, not a collage of outputs.' if plan.deliverable=='listing' else 'Create the photographic artwork for ONE Amazon A+ module, not a complete page or a collage of modules.',
-        ('COMPANY DESIGN DIRECTION: '+visual_rules()['directions'][module.design_direction]['composition']) if module.design_direction else '',
-        'REFERENCE AND CUSTOM VALUES: '+visual_rules()['reference_contract']+' '+visual_rules()['customization'],
+        ('COMPANY DESIGN DIRECTION: '+visual_rules()['directions'][module.design_direction]['composition']) if module.design_direction and not strategy else '',
+        ('REFERENCE AND CUSTOM VALUES: '+visual_rules()['reference_contract']+' '+visual_rules()['customization']) if not strategy else 'REFERENCE CONTRACT: Preserve the actual product geometry, material appearance, color, inherent lettering and logo. Source photos define product identity; scene references do not supply product features.',
         'PRODUCT IDENTITY LOCK: '+plan.product_identity_lock,
         'Reference order: the first image is the previous output to edit; use subsequent original product references for product facts, not defects in that prior output.' if editing else 'Use the original product reference as the product source; follow any explicit scene/style reference roles in the module brief.',
-        'The actual product references are the visual ground truth for color placement, silhouette, seams, collar, cuffs, printed text, numbers and logos. Do not borrow a different product from scene/style references.',
+        'The actual product references are the visual ground truth for color placement, silhouette, component geometry, printed text, numbers and logos. Do not borrow a different product from scene/style references.',
         'CAMPAIGN STYLE LOCK: '+plan.campaign_style_lock,
         'Keep this shared palette, lighting character, contrast and material treatment consistent with the campaign; vary the composition to suit THIS module instead of repeating one poster.',
-        'SINGLE VISUAL MESSAGE: '+module.main_point,
+        *creative,
+        'SINGLE VISUAL MESSAGE: '+(geometry if multi else module.main_point),
+        'PARENT MODULE CONTEXT (not additional views to draw): '+module.main_point if multi else '',
         'CUSTOMER NEED: '+module.user_need,
         'CONFIRMED PRODUCT EVIDENCE: '+'; '.join(facts),
         'MODULE ART DIRECTION: '+geometry,
@@ -69,14 +87,14 @@ def aplus(plan,module,*,editing=False,slot=None):
         'DESKTOP COMPOSITION / COPY SPACE: '+(copy_layout if external_copy else module.desktop_layout),
         'MOBILE SAFE CONTENT: '+module.mobile_layout,
         'Establish one clear focal hierarchy: product first, supporting scene second. Use deliberate depth separation, believable key/fill light and clean edge contrast, without generic glow or fake effects.',
-        'Integrate the product physically: coherent scale and perspective, contact shadows, matching light direction, natural fabric folds and correct foreground occlusion. No floating cutout or pasted flat decal.',
+        'Integrate the product physically: coherent scale and perspective, contact shadows, matching light direction, faithful surface shape and correct foreground occlusion. No floating cutout or pasted flat decal.',
         copy_layout,
         'Do not render NEW headlines, body copy, labels, captions or watermarks. These are typeset separately. This does NOT remove or rewrite the product\'s inherent printed words, numbers or logos.',
-        'Do not invent material, size, certification, performance benefits, brand/team authorization or unprovided garment faces.',
+        'Do not invent material, size, certification, performance benefits, brand authorization or unseen product surfaces. Market hypotheses are creative reasoning, never proven feature claims.',
         'Forbidden: '+'; '.join(module.prohibited),
         'ACCEPTANCE: '+'; '.join(module.acceptance),
         ('FINAL IMAGE SLOT CONTRACT: '+geometry+'. This request creates ONLY this independent slot, not its neighbouring views or the whole multi-image module. '
-         'Do not substitute a front/back garment pair or a full-garment overview for a requested close-up. '
+         'Do not substitute a multi-view product pair or full-product overview for a requested close-up. '
          'For a detail view, tightly frame the actual visible region without inventing unseen microstructure. '+copy_layout) if professional and slot else '',
     ])
 

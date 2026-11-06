@@ -3,6 +3,8 @@ name: amazon-market-insight
 description: Amazon ASIN、关键词、站点的竞品、VOC和视觉机会研究。资料足够时直接使用已有证据，不强制查询。
 ---
 
+全品类购买理由：将真实产品事实与市场购买动机分开。creative_strategy.research_basis=verified_mcp必须引用本会话已取得数据的回执；超时、unknown、空数据不算研究成功。没有MCP证据可用market_hypothesis规划消费场景，不能冒充VOC、市场共识或自有功能。五点主题根据品类动态取舍，不能固定套用服装定制五点。市场结果复用一次，不为创意总监重新查询同一ASIN。
+
 使用当前能力目录中获准的卖家精灵只读工具，遵循服务端本次参数及调用/条数预算。目录未就绪、认证失败或数据缺失时明确说明，不编造调研结果。优先复用已有真实回执，禁止自动分页或重试未知计费结果。data_available只说明有真实数据，不代表费用已核实；保留计费未知状态，不阻断不依赖更多调研的图片策划。
 
 只允许 asin.list、asin.detail、asin.content.list、keyword.asin.list、asin.review.list、category.ai.feature.list；按本次目录的实际 Schema 传参，不猜工具名或接口。不使用其他数据服务或外部生图 API。

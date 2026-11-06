@@ -124,8 +124,9 @@ export class PlatformController {
     if (b.conversation && b.conversation!==conversation) throw new Error('Conversation binding is immutable')
     this.repo.put('binding',id,{...b,conversation});return {...b,conversation}
   }
-  report(owner: Owner, id: string, state: 'progress'|'waiting'|'ready'|'failed'|'blocked', summary: string) {
+  report(owner: Owner, id: string, state: 'progress'|'waiting'|'ready'|'failed'|'blocked', summary: string, assignment?:string) {
     this.owned(owner,id); const t=this.repo.tickets.get(id)!
+    if(assignment&&latestAssignment(t)?.id!==assignment)return t
     if (t.ended) return t
     const result=this.engine.report(id,{state,summary});this.settle();return result
   }

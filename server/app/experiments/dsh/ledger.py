@@ -31,13 +31,15 @@ def unpack_native_transcript(payload):
 
 
 class Ledger:
-    def __init__(self, root, limit=50):
+    def __init__(self, root, limit=50, window=None):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.path = self.root / 'budget.sqlite'
         self.limit = limit
+        self.window = window if window is not None else os.environ.get('DSH_BUDGET_WINDOW','')
         with self.connection() as db:
             db.execute('CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY, kind TEXT, model TEXT, state TEXT, started REAL, finished REAL, details TEXT)')
+            db.execute('CREATE TABLE IF NOT EXISTS call_windows(id TEXT PRIMARY KEY, window TEXT NOT NULL)')
 
     def connection(self):
         return sqlite3.connect(self.path, timeout=30)
@@ -53,10 +55,14 @@ class Ledger:
                 if (kind=='mcp' and old[0]=='not_sent' and known.get('actual_requests')==0
                     and not db.execute('SELECT 1 FROM calls WHERE id=?',(id+':unsent-preflight',)).fetchone()):
                     db.execute('UPDATE calls SET id=? WHERE id=?',(id+':unsent-preflight',id))
+                    db.execute('UPDATE call_windows SET id=? WHERE id=?',(id+':unsent-preflight',id))
                 else:raise ProviderError('agent.remote_unknown', 'Previous API request may have been charged; automatic resend refused', retryable=False)
-            if db.execute("SELECT count(*) FROM calls WHERE kind=? AND state!='not_sent'", (kind,)).fetchone()[0] >= self.limit:
+            count = (db.execute("SELECT count(*) FROM calls c JOIN call_windows w ON w.id=c.id WHERE c.kind=? AND c.state!='not_sent' AND w.window=?",(kind,self.window)).fetchone()[0]
+                if self.window else db.execute("SELECT count(*) FROM calls WHERE kind=? AND state!='not_sent'",(kind,)).fetchone()[0])
+            if count >= self.limit:
                 raise ProviderError('experiment.budget_exhausted', 'Experiment call ceiling reached', retryable=False)
             db.execute('INSERT INTO calls VALUES(?,?,?,?,?,?,?)', (id, kind, model, 'started', time(), None, '{}'))
+            db.execute('INSERT INTO call_windows VALUES(?,?)',(id,self.window))
         return None
 
     def finish(self, id, state, details):
@@ -66,7 +72,7 @@ class Ledger:
     def summary(self):
         with self.connection() as db:
             db.row_factory = sqlite3.Row
-            return {'limit_per_kind': self.limit, 'calls': [dict(r) for r in db.execute('SELECT * FROM calls ORDER BY started')],
+            return {'limit_per_kind': self.limit, 'window':self.window, 'calls': [dict(r) for r in db.execute('SELECT c.*,w.window FROM calls c LEFT JOIN call_windows w ON w.id=c.id ORDER BY started')],
                     'cost_note': 'API cost is unknown unless returned by the provider; quota credits are not currency.'}
 
 

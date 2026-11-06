@@ -25,7 +25,7 @@ const server=createServer(async(req,res)=>{
     if(route==='/intake') {const result=controller.intake(x);if(result.route==='stopped')native.stop(x,result.ticket);return respond(200,result)}
     if(route==='/tickets') return respond(200,controller.list(x,x.session))
     if(route==='/bind') return respond(200,controller.bind(x,x.ticket,x.conversation))
-    if(route==='/report') return respond(200,controller.report(x,x.ticket,x.state,x.summary))
+    if(route==='/report') return respond(200,controller.report(x,x.ticket,x.state,x.summary,x.assignment))
     return respond(404,{error:'not_found'})
   }catch(e:any){respond(e.status||400,{error:e.message})}
 })
