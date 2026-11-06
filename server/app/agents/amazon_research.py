@@ -53,6 +53,7 @@ async def execute(db, settings, conv, permissions, args, action_key):
     fingerprint=digest([ctx.organization_id,ctx.user_id,server.id,server.version,cap.id,cap.input_schema,args.arguments])
     for row in rows:
         result=row.result_json
+        if result.get('status')=='not_sent' and result.get('actual_requests')==0:continue
         if result.get('request_key')==action_key:
             if row.status=='succeeded' or usable_data(result):return {**result,'data_available':usable_data(result)}
             raise AppError('agent.research_unknown','本次调用已发送或状态未知，禁止重复计费重发。',409)
@@ -85,5 +86,7 @@ async def execute(db, settings, conv, permissions, args, action_key):
         row.status=receipt_status
     except AppError as error:
         result={**result,'status':'unknown','error_code':error.code,'receipt_status':'unknown'};row.status='unknown'
+        if getattr(error,'requests_sent',None)==0:
+            result={**result,'status':'not_sent','receipt_status':'not_sent','actual_requests':0};row.status='not_sent'
     row.result_json=result;await db.commit()
     return result

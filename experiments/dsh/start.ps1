@@ -1,4 +1,6 @@
-param([switch]$ReuseAuthorizedProvider, [switch]$ControllersOnly, [int]$Workers=4)
+param([switch]$ReuseAuthorizedProvider, [switch]$ControllersOnly, [int]$Workers=4,
+    [ValidateSet('gpt-6.1-terra','gpt-6.1-sol')][string]$MainModel='gpt-6.1-terra',
+    [ValidateSet('gpt-6.1-terra','gpt-6.1-sol')][string]$ExecutorModel='gpt-6.1-terra')
 $ErrorActionPreference='Stop'
 $env:PYTHONUTF8='1'
 $experimentRoot=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
@@ -22,9 +24,13 @@ try {
     if($ControllersOnly){$processes=@($recorded | Where-Object role -like 'worker-*')}
     $env:DSH_INTERNAL_TOKEN=(Get-Content -LiteralPath (Join-Path $state 'sidecar.token') -Raw).Trim()
     $env:DSH_STATE_DIR=Join-Path $state 'core'
+    $env:DSH_MAIN_MODEL=$MainModel
+    $env:DSH_EXECUTOR_MODEL=$ExecutorModel
     $sidecar=Start-Process -FilePath (Get-Command node.exe).Source -ArgumentList @('--experimental-transform-types',('"'+(Join-Path $PSScriptRoot 'sidecar.ts')+'"')) -WorkingDirectory $experimentRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $state 'sidecar.log') -RedirectStandardError (Join-Path $state 'sidecar.err.log')
     Remove-Item Env:DSH_INTERNAL_TOKEN
     Remove-Item Env:DSH_STATE_DIR
+    Remove-Item Env:DSH_MAIN_MODEL
+    Remove-Item Env:DSH_EXECUTOR_MODEL
     $processes+=@{id=$sidecar.Id;role='sidecar'}
     $api=Start-Process -FilePath $python -ArgumentList @('-m','uvicorn','app.experiments.dsh.api:create_app','--factory','--host','127.0.0.1','--port','18870') -WorkingDirectory (Join-Path $experimentRoot 'server') -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $state 'api.log') -RedirectStandardError (Join-Path $state 'api.err.log')
     $processes+=@{id=$api.Id;role='api'}

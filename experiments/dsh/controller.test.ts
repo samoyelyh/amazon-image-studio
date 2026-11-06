@@ -7,6 +7,15 @@ import { PlatformController } from './controller.ts'
 
 const alice={org:'org1',user:'alice',session:'main'}
 const input=(request:string,text='生成一张商品图',other={})=>({...alice,request,text,mode:'task' as const,...other})
+
+test('native Assignment waits for a real Harness Session publication acknowledgement',()=>{
+  const c=new PlatformController(':memory:',true);const r=c.intake(input('native-1'));
+  assert.equal(c.list(alice)[0].assignments.at(-1)!.state,'pending');
+  const receipt=c.sessionStarted(alice,r.ticket,'native-executor-1');
+  assert.equal(c.list(alice)[0].assignments.at(-1)!.state,'running');
+  assert.equal(c.repo.get<any>('native-session','native-executor-1').assignment,receipt.assignment);
+  assert.throws(()=>c.sessionStarted({org:'other',user:'other'},r.ticket,'forged'),/not found/);
+})
 test('ordinary chat cannot create a Ticket or an execution effect',()=>{
   const c=new PlatformController(':memory:')
   const r=c.intake(input('chat','如何生成商品图？',{mode:'chat'}))

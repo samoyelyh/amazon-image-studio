@@ -1,5 +1,8 @@
 """Durable per-call ceilings, independent of user quotas and controller restarts."""
 import base64
+import gzip
+import io
+import os
 from contextvars import ContextVar
 import json
 from pathlib import Path
@@ -11,6 +14,20 @@ from app.providers.base import ProviderError, ProviderOutput, ProviderResult
 
 current_job = ContextVar('dsh_experiment_job', default=None)
 mcp_call = ContextVar('dsh_experiment_mcp', default=None)
+
+def unpack_native_transcript(payload):
+    """Job keeps its 128 KiB limit; owned Session data has a bounded encoding."""
+    payload=dict(payload)
+    packed=payload.pop('native_transcript_gzip',None)
+    if packed is None:return payload
+    try:
+        with gzip.GzipFile(fileobj=io.BytesIO(base64.b64decode(packed,validate=True))) as stream:
+            raw=stream.read(524289)
+        if len(raw)>524288:raise ValueError('context limit')
+        value=json.loads(raw)
+        if set(value)!={'agent_messages','agent_tools'} or not all(isinstance(v,list) for v in value.values()):raise ValueError('transcript contract')
+    except (ValueError,TypeError,OSError):raise ProviderError('dsh.transcript_invalid','Invalid or oversized native Session transcript',retryable=False) from None
+    return {**payload,**value}
 
 
 class Ledger:
@@ -32,7 +49,11 @@ class Ledger:
             if old:
                 if old[0] == 'succeeded':
                     return json.loads(old[1])
-                raise ProviderError('agent.remote_unknown', 'Previous API request may have been charged; automatic resend refused', retryable=False)
+                known=json.loads(old[1])
+                if (kind=='mcp' and old[0]=='not_sent' and known.get('actual_requests')==0
+                    and not db.execute('SELECT 1 FROM calls WHERE id=?',(id+':unsent-preflight',)).fetchone()):
+                    db.execute('UPDATE calls SET id=? WHERE id=?',(id+':unsent-preflight',id))
+                else:raise ProviderError('agent.remote_unknown', 'Previous API request may have been charged; automatic resend refused', retryable=False)
             if db.execute("SELECT count(*) FROM calls WHERE kind=? AND state!='not_sent'", (kind,)).fetchone()[0] >= self.limit:
                 raise ProviderError('experiment.budget_exhausted', 'Experiment call ceiling reached', retryable=False)
             db.execute('INSERT INTO calls VALUES(?,?,?,?,?,?,?)', (id, kind, model, 'started', time(), None, '{}'))
@@ -58,6 +79,19 @@ def install_guards(root):
     original_execute = jobs._execute_job
     original_adapter = jobs.get_provider_adapter
     original_mcp = MCPGateway.call
+    original_connection=MCPGateway.connection
+    def connection(self,server):
+        result=original_connection(self,server)
+        proxy=os.environ.get('DSH_MCP_PROXY_URL')
+        if proxy:
+            from urllib.parse import urlparse
+            parsed=urlparse(proxy)
+            if parsed.scheme!='http' or parsed.hostname not in {'127.0.0.1','localhost'} or parsed.username or parsed.password or parsed.path not in {'','/'}:
+                raise ValueError('Experiment MCP proxy must be an explicit local HTTP proxy')
+            import httpx
+            result['httpx_client_factory']=lambda **kwargs:httpx.AsyncClient(**kwargs,trust_env=False,follow_redirects=False,proxy=proxy)
+        return result
+    MCPGateway.connection=connection
     from mcp import ClientSession
     original_call_tool=ClientSession.call_tool
     async def call_tool(self,name,arguments=None,*args,**kwargs):
@@ -92,6 +126,7 @@ def install_guards(root):
             id = current_job.get()
             if not id:
                 raise ProviderError('experiment.unscoped_call', 'Only an existing Job may invoke a Provider')
+            kwargs['payload']=unpack_native_transcript(kwargs['payload'])
             kind = 'text' if kwargs['capability'] == 'text_generation' else 'image'
             receipt_path = ledger.root / 'receipts' / (id + '.json')
             replay = ledger.reserve(id, kind, kwargs['upstream_model'])
@@ -128,7 +163,8 @@ def install_guards(root):
             ledger.finish(id, 'succeeded', {'result': result, 'api_cost': None,**marker})
             return result
         except Exception as error:
-            ledger.finish(id, 'failed_or_unknown' if marker['actual_requests'] else 'not_sent', {'code': getattr(error, 'code', type(error).__name__),**marker})
+            ledger.finish(id, 'failed_or_unknown' if marker['actual_requests'] else 'not_sent', {'code': getattr(error, 'code', type(error).__name__),**marker,**getattr(error,'mcp_diagnostics',{})})
+            error.requests_sent=marker['actual_requests']
             raise
         finally:
             mcp_call.reset(token)

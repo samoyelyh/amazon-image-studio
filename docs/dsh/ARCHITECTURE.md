@@ -1,5 +1,7 @@
 # DSH 实验盘点与接入边界
 
+> 原生 Session 迁移后的架构与验收见 [NATIVE_MIGRATION.md](NATIVE_MIGRATION.md)。本文件以下保留第一阶段盘点历史，包含当时仍调用 LangGraph 规划器的旧 Adapter，不代表当前 DSH 主路径。
+
 日期：2026-11-06，北京时间。原工作目录 `C:\Users\Woda\Documents\AI生图`。
 
 原分支为 `codex/agent-control-v2`，起点 `b838c7cf80db2d46665375ba29dda7b836163d6a`。盘点时有 79 个已跟踪文件发生变化、382 个未跟踪路径；其中 214 个未跟踪源码/配置/测试/素材文件随 79 个改动复制到独立 Worktree，形成快照提交 `502d3601073bbbee0c963215b01c5cb48f2f0246`。未使用 stash、reset、restore，也未切换或提交原工作目录。未复制原 `.env`、诊断目录、虚拟环境或生产数据。

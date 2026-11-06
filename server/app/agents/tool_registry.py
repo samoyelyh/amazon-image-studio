@@ -135,7 +135,7 @@ async def execute(db, settings, redis, *, org, user, permissions, action, action
         from app.agents.adapters import chat
         conv = await db.scalar(select(HermesConversation).where(HermesConversation.id == conversation_id,
             HermesConversation.organization_id == org, HermesConversation.user_id == user,
-            HermesConversation.controller_type == "langgraph", HermesConversation.mode == "chat"))
+            HermesConversation.controller_type.in_(["langgraph", "dsh"]), HermesConversation.mode == "chat"))
         if conv is None:
             raise AppError("agent.conversation_not_found", "会话不存在或无权访问。", 404)
         if action.tool == "generate_chat_images":

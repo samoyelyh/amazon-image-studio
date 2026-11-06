@@ -1,5 +1,11 @@
 # 本地 DSH 实验使用
 
+当前运行真实官方 Harness Sessions，具体架构和验收见 [原生迁移报告](../../docs/dsh/NATIVE_MIGRATION.md)。旧 `verify_live.py` 中的 DSH 结果属于上一版 Ticket 包装实验，不能当作本次原生迁移证据。本次使用 `verify_native*.py`。
+
+依赖安装：`./experiments/dsh/install-native.ps1`；启动：`./experiments/dsh/start.ps1`。默认 Main/业务 Executor 使用已实测的 Terra，视觉 Session 使用 Sol；可用 `-ExecutorModel gpt-6.1-sol` 评估 Sol 策划。依赖锁固定 Harness `0.2.1-rc.3`，不启动 GitHub 编码 Executor。
+
+当前累计文本调用 **50/50**，图片 **28/50**；文本额度不会重置。现环境适合查看、恢复已完成任务和下载。新的模型测试需要另行增加已授权额度。MCP 有一次真实请求超时且计费状态未知，禁止重发该查询。
+
 本目录属于 `experiment/dsh-superagent` Worktree，不修改原工作目录。入口是 `http://127.0.0.1:18870/experiment`，内部 DSH 核心在 18871。原平台 18000/18080、Redis 16379 和生产数据库不变。
 
 ## 启停

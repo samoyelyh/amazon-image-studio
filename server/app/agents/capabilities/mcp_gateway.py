@@ -112,13 +112,17 @@ class MCPGateway:
             raise AppError("agent.mcp_budget_exhausted", "本次Run的MCP调用预算已用完，不会继续请求。", 409)
         self.check_arguments(current, arguments)
         connection = self.connection(server)
+        stage='connect'
 
         async def invoke():
+            nonlocal stage
             from langchain_mcp_adapters.client import MultiServerMCPClient
             from langchain_mcp_adapters.tools import load_mcp_tools
             client = MultiServerMCPClient({server.id: connection}, handle_tool_errors=False)
             async with client.session(server.id) as session:
+                stage='tools_list'
                 tools = await load_mcp_tools(session, handle_tool_errors=False)
+                stage='schema_validation'
                 name = current.id.split(".", 2)[2]
                 tool = next((t for t in tools if t.name == name), None)
                 if tool is None:
@@ -127,6 +131,7 @@ class MCPGateway:
                 if digest(schema) != digest(current.input_schema):
                     raise AppError("agent.mcp_schema_changed", "MCP输入协议已变化，需管理员重新审核，未调用工具。", 409)
                 if server.profile=='sellersprite':
+                    stage='tool_call'
                     raw=await session.call_tool(name,arguments)
                     if raw.isError:raise AppError('agent.mcp_tool_failed','卖家精灵返回工具错误，费用状态需要核对。',503)
                     from app.services.hermes_agent_service import audit_safe_snapshot
@@ -154,4 +159,6 @@ class MCPGateway:
             raise AppError("agent.mcp_dependency_missing", "当前环境未安装可选MCP适配器。", 503) from None
         except Exception as error:
             code = safe_error(error)
-            raise AppError(code, "MCP连接、认证或调用失败；未自动切换至未批准服务。", 503) from None
+            failure=AppError(code, "MCP连接、认证或调用失败；未自动切换至未批准服务。", 503)
+            failure.mcp_diagnostics={'stage':stage,'exception_type':type(error).__name__}
+            raise failure from None

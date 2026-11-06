@@ -137,6 +137,8 @@ class OpenAICompatibleProvider(BaseImageProvider):
                     raise ProviderError("provider.invalid_reference", "Reference image payload is invalid", http_status=422)
                 mime = str(image.get("mime_type") or "image/png")
                 encoded = base64.b64encode(image["content"]).decode("ascii")
+                if payload.get('agent_messages') is not None:
+                    parts.append({'type':'text','text':'Reference file: '+str(image.get('filename','image'))})
                 parts.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{encoded}"}})
             user_content = parts
         request_body: dict[str, object] = {
@@ -147,6 +149,20 @@ class OpenAICompatibleProvider(BaseImageProvider):
             ],
             "stream": payload.get('stream') is True,
         }
+        # Native agent transcripts retain tool calls/results instead of flattening
+        # the session to a single prompt. Only trusted server Jobs set this field.
+        if payload.get('agent_messages') is not None:
+            import copy
+            request_body['messages'] = copy.deepcopy(payload['agent_messages'])
+            if references:
+                last_user=next((m for m in reversed(request_body['messages']) if m['role']=='user'),None)
+                if last_user is not None:
+                    original=last_user.get('content') or ''
+                    last_user['content']=([{'type':'text','text':original}] if isinstance(original,str) else original)+parts[1:]
+            if payload.get('agent_tools'):
+                request_body['tools'] = payload['agent_tools']
+            if isinstance(payload.get('max_tokens'),int) and 1<=payload['max_tokens']<=12000:
+                request_body['max_tokens']=payload['max_tokens']
         response_format = payload.get("response_format", "json_object")
         if response_format == "json_object":
             request_body["response_format"] = {"type": "json_object"}
@@ -198,10 +214,11 @@ class OpenAICompatibleProvider(BaseImageProvider):
             content = body["choices"][0]["message"]["content"]
             if isinstance(content, list):
                 content = "\n".join(str(item.get("text", "")) for item in content if isinstance(item, dict))
-            text = str(content).strip()
+            text = str(content or '').strip()
+            tool_calls = body['choices'][0]['message'].get('tool_calls') or []
         except (ValueError, KeyError, IndexError, TypeError) as error:
             raise ProviderError("provider.invalid_response", "Upstream provider returned an invalid text response") from error
-        if not text:
+        if not text and not tool_calls:
             raise ProviderError("provider.empty_result", "Upstream provider returned empty text")
         usage = body.get("usage")
         usage = {key: value for key, value in usage.items()
@@ -212,6 +229,7 @@ class OpenAICompatibleProvider(BaseImageProvider):
             usage={**(usage or {}),'reasoning_tokens':details['reasoning_tokens']}
         return ProviderResult([], response.headers.get("x-request-id"), {
             "text": text, "created": body.get("created"), "usage": usage,
+            **({'tool_calls': tool_calls} if tool_calls else {}),
             'finish_reason':body['choices'][0].get('finish_reason'),
             'transport':{**_text_response_diagnostics(response,perf_counter()-started,request_body['stream']),**stream_metrics},
         })
@@ -253,7 +271,7 @@ def _text_response_diagnostics(response,seconds,stream=False):
 async def _collect_text_stream(response,started,metrics):
     """Collect one chat completion, never retry a truncated/unknown stream."""
     import json
-    pieces=[];characters=0;usage=None;created=None;finish=None;done=False;events=0
+    pieces=[];characters=0;usage=None;created=None;finish=None;done=False;events=0;calls={}
     async for line in response.aiter_lines():
         if line and 'first_event_seconds' not in metrics:
             metrics['first_event_seconds']=round(perf_counter()-started,3)
@@ -272,6 +290,11 @@ async def _collect_text_stream(response,started,metrics):
         for choice in item.get('choices') or []:
             if choice.get('index',0)!=0:continue
             if choice.get('finish_reason') is not None:finish=choice['finish_reason']
+            for call in (choice.get('delta') or {}).get('tool_calls') or []:
+                current=calls.setdefault(call.get('index',0),{'id':'','type':'function','function':{'name':'','arguments':''}})
+                if call.get('id'):current['id']+=call['id']
+                for key in ('name','arguments'):
+                    current['function'][key]+=(call.get('function') or {}).get(key) or ''
             content=(choice.get('delta') or {}).get('content')
             if isinstance(content,list):content=''.join(str(p.get('text','')) for p in content if isinstance(p,dict))
             if not isinstance(content,str) or not content:continue
@@ -283,7 +306,7 @@ async def _collect_text_stream(response,started,metrics):
     if not done and finish is None:
         raise ProviderError('provider.network_error','Upstream text stream ended before completion; outcome unknown',retryable=True)
     metrics['events']=events
-    return {'choices':[{'message':{'content':''.join(pieces)},'finish_reason':finish}],
+    return {'choices':[{'message':{'content':''.join(pieces),'tool_calls':[calls[k] for k in sorted(calls)]},'finish_reason':finish}],
         'usage':usage,'created':created},metrics
 
 

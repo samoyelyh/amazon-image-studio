@@ -22,4 +22,6 @@ def configure():
         raise RuntimeError('Refusing non-experiment broker')
     if settings.redis_url.get_secret_value()!='redis://127.0.0.1:16489/0' or settings.resolved_celery_result_backend!='redis://127.0.0.1:16489/2':
         raise RuntimeError('Refusing shared Redis resource/result state')
+    from app.experiments.dsh.quota_lock import install
+    install(STATE)
     return settings

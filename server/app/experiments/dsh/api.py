@@ -107,6 +107,9 @@ async def ensure_conversation(db, who, id, title):
 @router.post('/messages')
 async def message(payload: Request, db: AsyncSession = Depends(get_db_session),
                   principal: Principal = Depends(require_permissions('jobs.read', 'projects.read', 'assets.read'))):
+    if payload.controller=='dsh':
+        from app.experiments.dsh.native import intake
+        return await intake(payload,principal)
     started = perf_counter(); who = owner(principal)
     id = str(uuid5(NAMESPACE_URL, json.dumps([who, payload.session, payload.request], sort_keys=True)))
     value=payload.model_dump(mode='json')
@@ -145,9 +148,6 @@ async def message(payload: Request, db: AsyncSession = Depends(get_db_session),
             conv = await ensure_conversation(db, who, conv_id, payload.text)
             if ticket:
                 await sidecar('/bind', {**who, 'ticket': ticket, 'conversation': conv.id})
-            if re.search(r'\bB[0-9A-Z]{9}\b',payload.text,re.I):
-                db.add(HermesMessage(conversation_id=conv.id,organization_id=who['org'],user_id=who['user'],role='dsh_fact_gate',content='Research evidence is not product fact confirmation',metadata_json={'confirmed':False},created_at=datetime.now(timezone.utc)))
-                await db.commit()
             if payload.confirmed_facts:
                 db.add(HermesMessage(conversation_id=conv.id,organization_id=who['org'],user_id=who['user'],role='dsh_fact_gate',content=json.dumps(payload.confirmed_facts,ensure_ascii=False),metadata_json={'confirmed':True,'source':'authenticated_user'},created_at=datetime.now(timezone.utc)))
                 # The original planner verifies quotations only against user
@@ -237,6 +237,13 @@ async def _read_turn(request,session,db,principal):
 
 @router.get('/turns/{request}')
 async def read_turn(request: str, session: str, db: AsyncSession=Depends(get_db_session), principal: Principal=Depends(require_permissions('jobs.read'))):
+    from app.experiments.dsh import native
+    try:
+        native.get_turn(native.digest([owner(principal),session,request]))
+    except AppError as error:
+        if error.code!='dsh.turn_missing':raise
+    else:
+        return await native.status(native.digest([owner(principal),session,request]),principal)
     who=owner(principal)
     with control_db() as c:
         row=c.execute('SELECT conversation FROM turns WHERE request=? AND session=? AND org=? AND user=?',(request,session,who['org'],who['user'])).fetchone()
@@ -263,6 +270,8 @@ async def scheduler():
             factory=async_sessionmaker(get_engine(),expire_on_commit=False)
             async with factory() as db:
                 pending=await due_jobs(db,get_settings());await dispatch_jobs(db,pending)
+                from app.experiments.dsh.native import reconcile_jobs
+                await reconcile_jobs(db)
             with control_db() as c:
                 rows=c.execute('SELECT * FROM turns WHERE run IS NOT NULL').fetchall()
             for row in rows:
@@ -300,6 +309,8 @@ def create_app():
     from app.api import agent_control
     app.dependency_overrides[agent_control.get_storage_service]=lambda:storage
     app.include_router(router)
+    from app.experiments.dsh.native import router as native_router
+    app.include_router(native_router)
 
     @app.get('/experiment',include_in_schema=False)
     async def ui():

@@ -53,6 +53,46 @@ def test_storage_rejects_traversal_and_keeps_exact_content(tmp_path):
     assert storage.download('org/user/a.png')==b'content'
     assert storage.get_metadata('org/user/a.png').size==7
 
+def test_native_transcript_encoding_has_a_hard_decoded_size_limit():
+    import base64,gzip,json
+    from app.experiments.dsh.ledger import unpack_native_transcript
+    encode=lambda b:base64.b64encode(gzip.compress(b)).decode()
+    value={'agent_messages':[{'role':'user','content':'连续对话'}],'agent_tools':[]}
+    assert unpack_native_transcript({'native_transcript_gzip':encode(json.dumps(value).encode())})==value
+    with pytest.raises(ProviderError):unpack_native_transcript({'native_transcript_gzip':encode(b' '*(524288+1))})
+
+def test_one_proven_unsent_mcp_preflight_retry_preserves_both_receipts(tmp_path):
+    ledger=Ledger(tmp_path);ledger.reserve('mcp:id','mcp','read-tool')
+    ledger.finish('mcp:id','not_sent',{'actual_requests':0})
+    assert ledger.reserve('mcp:id','mcp','read-tool') is None
+    ledger.finish('mcp:id','not_sent',{'actual_requests':0})
+    with pytest.raises(ProviderError):ledger.reserve('mcp:id','mcp','read-tool')
+    assert len(ledger.summary()['calls'])==2
+
+async def test_sqlite_quota_account_reads_and_commits_serialize_without_blocking_provider_work(tmp_path):
+    import asyncio
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import create_async_engine,async_sessionmaker
+    from app.db.base import Base
+    from app.models.identity import Organization
+    from app.models.quota import QuotaAccount
+    from app.experiments.dsh.quota_lock import install
+    install(tmp_path)
+    engine=create_async_engine('sqlite+aiosqlite:///'+(tmp_path/'platform.sqlite').as_posix())
+    async with engine.begin() as c:await c.run_sync(Base.metadata.create_all)
+    factory=async_sessionmaker(engine,expire_on_commit=False)
+    async with factory() as db:
+        org=Organization(name='quota concurrency test',slug='quota-lock-test');db.add(org);await db.flush()
+        account=QuotaAccount(organization_id=org.id,balance=10,reserved_balance=0);db.add(account);await db.commit();id=account.id
+    async def reserve():
+        async with factory() as db:
+            row=await db.scalar(select(QuotaAccount).where(QuotaAccount.id==id))
+            current=row.reserved_balance;await asyncio.sleep(.01)
+            row.reserved_balance=current+1;await db.commit()
+    await asyncio.wait_for(asyncio.gather(*[reserve() for _ in range(10)]),10)
+    async with factory() as db:assert (await db.get(QuotaAccount,id)).reserved_balance==10
+    await engine.dispose()
+
 
 @pytest.fixture
 async def experiment_context(chat_context,tmp_path,monkeypatch):
@@ -61,6 +101,7 @@ async def experiment_context(chat_context,tmp_path,monkeypatch):
     from pathlib import Path
     import httpx
     from app.experiments.dsh import api
+    from app.experiments.dsh import native
     ctx=chat_context
     listener=socket.socket();listener.bind(('127.0.0.1',0));port=listener.getsockname()[1];listener.close()
     root=Path(__file__).resolve().parents[2]
@@ -82,6 +123,11 @@ async def experiment_context(chat_context,tmp_path,monkeypatch):
                 raise AppError('experiment.rejected',response.json()['error'],response.status_code)
             return response.json()
         monkeypatch.setattr(api,'STATE',tmp_path)
+        monkeypatch.setattr(native,'STATE',tmp_path)
+        monkeypatch.setattr(native,'get_engine',lambda:ctx['engine'])
+        async def no_native_network(*args,**kwargs):
+            raise AssertionError('Unit fixtures must never contact a live native Session or Provider')
+        monkeypatch.setattr(native,'rpc',no_native_network)
         monkeypatch.setattr(api,'sidecar',call)
         monkeypatch.setattr(api,'get_settings',lambda:ctx['settings'])
         ctx['settings'].agent_control_text_model='workflow-text'
@@ -91,12 +137,12 @@ async def experiment_context(chat_context,tmp_path,monkeypatch):
         finally:proc.terminate();proc.wait(timeout=5)
 
 
-async def test_http_chat_is_text_only_and_replay_has_no_extra_job(experiment_context):
+async def test_legacy_fallback_chat_is_text_only_and_replay_has_no_extra_job(experiment_context):
     from sqlalchemy import select,func
     from app.models.tasks import Job
     from app.models.agent_control import AgentRun
     ctx=experiment_context
-    body={'session':'main','request':'chat-request-001','text':'A+图片有什么用途？','mode':'chat'}
+    body={'session':'main','request':'chat-request-001','text':'A+图片有什么用途？','mode':'chat','controller':'langgraph'}
     first=await ctx['client'].post('/api/v1/experiment/messages',headers=ctx['headers'],json=body)
     assert first.status_code==200,first.text
     assert first.json()['route']=='chat' and first.json()['ticket'] is None and first.json()['answer'] is None
@@ -107,12 +153,12 @@ async def test_http_chat_is_text_only_and_replay_has_no_extra_job(experiment_con
         assert await db.scalar(select(func.count()).select_from(AgentRun))==0
 
 
-async def test_new_task_attaches_owned_asset_in_its_own_conversation(experiment_context):
+async def test_legacy_fallback_attaches_owned_asset_in_its_own_conversation(experiment_context):
     ctx=experiment_context
-    body={'session':'main','request':'task-request-001','text':'生成一张商品展示图','mode':'task','new_task':True,'asset_ids':[ctx['garment']['id']],'confirmed_facts':{'statement':'仅测试商品外观'}}
+    body={'session':'main','request':'task-request-001','text':'生成一张商品展示图','mode':'task','controller':'langgraph','new_task':True,'asset_ids':[ctx['garment']['id']],'confirmed_facts':{'statement':'仅测试商品外观'}}
     response=await ctx['client'].post('/api/v1/experiment/messages',headers=ctx['headers'],json=body)
     assert response.status_code==200,response.text
-    first=response.json();assert first['ticket'] and first['run']['id']
+    first=response.json();assert first['ticket'] is None and first['run']['id']
     history=await ctx['client'].get('/api/v1/agent/conversations/'+first['conversation'],headers=ctx['headers'])
     assert history.status_code==200
     assert any(a['asset_id']==ctx['garment']['id'] for a in history.json()['attachments'])

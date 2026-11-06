@@ -116,6 +116,22 @@ async def test_scoped_stream_collects_one_json_reply_and_usage(monkeypatch):
     assert len(calls)==1 and value.metadata['usage']['total_tokens']==15
     assert value.metadata['transport']['response_streamed'] and 'first_text_seconds' in value.metadata['transport']
 
+async def test_native_tool_call_fragments_keep_assistant_and_tool_history(monkeypatch):
+    calls=[]
+    def handler(request):
+        body=json.loads(request.content);calls.append(body)
+        assert body['messages'][1]['role']=='tool' and body['messages'][1]['tool_call_id']=='previous'
+        assert body['tools'][0]['function']['name']=='produce_aplus'
+        chunks=[{'choices':[{'index':0,'delta':{'tool_calls':[{'index':0,'id':'native-call','function':{'name':'produce_aplus','arguments':'{"brief":'}}]}}]},
+            {'choices':[{'index':0,'delta':{'tool_calls':[{'index':0,'function':{'arguments':'{}}'}}]},'finish_reason':'tool_calls'}]}]
+        return httpx.Response(200,text=''.join('data: '+json.dumps(x)+'\n\n' for x in chunks)+'data: [DONE]\n\n',headers={'content-type':'text/event-stream'})
+    install_transport(monkeypatch,handler)
+    value=await OpenAICompatibleProvider(Settings(_env_file=None)).execute(base_url='https://relay.example/v1',api_key='server-secret',upstream_model='test-model',capability='text_generation',
+        payload={'stream':True,'response_format':None,'agent_messages':[{'role':'assistant','content':None,'tool_calls':[]},{'role':'tool','tool_call_id':'previous','content':'{}'}],
+            'agent_tools':[{'type':'function','function':{'name':'produce_aplus','parameters':{'type':'object'}}}]},config={})
+    assert len(calls)==1 and value.metadata['text']==''
+    assert json.loads(value.metadata['tool_calls'][0]['function']['arguments'])=={'brief':{}}
+
 
 async def test_truncated_stream_is_unknown_without_retry(monkeypatch):
     import pytest

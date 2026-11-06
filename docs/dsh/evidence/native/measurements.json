@@ -1,0 +1,1165 @@
+{
+  "collected_at": "2026-11-06T02:53:07.965819+00:00",
+  "upstream_core": "8c32a9dc5d72c033816c6a8110b37f40cf94fba4",
+  "harness": "0.2.1-rc.3",
+  "native_decisions": true,
+  "legacy_planners_in_native_path": false,
+  "production_cutover_ready": false,
+  "call_counts": {
+    "text": 50,
+    "image": 28,
+    "mcp": 3
+  },
+  "known_token_total": 587672,
+  "currency_cost": null,
+  "cost_limitation": "The relay supplies token usage but no monetary amount. Unknown calls have no usage receipt.",
+  "clean_aplus_peak_provider_concurrency": 4,
+  "clean_aplus_image_seconds": 68.403,
+  "cases": {
+    "native-chat-03": {
+      "state": "completed",
+      "ticket": null,
+      "route_decision": {
+        "action": "chat",
+        "executor": "none",
+        "message": "A+图片用于详情页内容增强，侧重品牌故事、卖点讲解和场景展示；Listing图片用于商品主图与辅图，侧重展示产品本身、核心功能、尺寸及使用方式，并直接影响点击与转化。",
+        "ticket": null
+      },
+      "sessions": [
+        "main-4004e32d8fb7ede1a98ce90427ed48784b9f817e29085fdca4c472a387a29980"
+      ],
+      "main_seconds": 12.153105799999999,
+      "planning_seconds": 12.159287399999998,
+      "calls": [
+        {
+          "job": "2ae4ba62-4304-498b-b1df-cc5123703304",
+          "session": "main-4004e32d8fb7ede1a98ce90427ed48784b9f817e29085fdca4c472a387a29980",
+          "role": "main",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 11.207,
+          "usage": {
+            "completion_tokens": 104,
+            "total_tokens": 805,
+            "prompt_tokens": 701,
+            "reasoning_tokens": 18
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 11.198,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a56060ea7d7357b1-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 10.035,
+            "first_event_seconds": 10.036,
+            "events": 73
+          },
+          "api_cost": null
+        }
+      ],
+      "native_events": [
+        {
+          "type": "main.decision",
+          "at": "2026-11-06T01:38:45.912Z",
+          "name": null
+        }
+      ]
+    },
+    "native-clarify-03": {
+      "state": "awaiting_clarification",
+      "ticket": null,
+      "route_decision": {
+        "action": "clarify",
+        "executor": "none",
+        "message": "请问要制作亚马逊A+页面配图，还是Listing主图/辅图套图？",
+        "ticket": null
+      },
+      "sessions": [
+        "main-97f6cd43cba11489296c19166b170aec7da42b4bbc794d1194f1100d08075117"
+      ],
+      "main_seconds": 13.570282500000001,
+      "planning_seconds": 13.575858,
+      "calls": [
+        {
+          "job": "e24c59b8-8726-4b41-b48f-94c6d6c33676",
+          "session": "main-97f6cd43cba11489296c19166b170aec7da42b4bbc794d1194f1100d08075117",
+          "role": "main",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 12.434,
+          "usage": {
+            "completion_tokens": 76,
+            "total_tokens": 774,
+            "prompt_tokens": 698,
+            "reasoning_tokens": 21
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 12.424,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a56060eb5be4e81d-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 12.179,
+            "first_event_seconds": 12.179,
+            "events": 44
+          },
+          "api_cost": null
+        }
+      ],
+      "native_events": [
+        {
+          "type": "main.decision",
+          "at": "2026-11-06T01:38:47.474Z",
+          "name": null
+        }
+      ]
+    },
+    "native-real-aplus-v2": {
+      "state": "submitted",
+      "ticket": "7d805119a852e823dfa08a01a1a4051a",
+      "route_decision": {
+        "action": "task",
+        "executor": "amazon_aplus",
+        "message": "已收到。将先按需真实调研竞品ASIN B0H2DF4KTQ，再基于上传真实商品素材自行选款，为美国站自动制作并发五个不同模块、至少三种布局及不同规格的Basic A+独立图片；严格保持Logo、图案、字样、颜色及背面姓名号码原样，不编造未提供的材质、功能、定制服务或授权信息。",
+        "ticket": null
+      },
+      "sessions": [
+        "executor-a132b95ddde0c1c5441958dfdbff609926b65784c724c8cdf9a2265a9d7f127e",
+        "main-c774ca07d1dd715e74ec390ff0437bbe8ab1c197170702be4aea650198f35623",
+        "vision-a132b95ddde0c1c5441958dfdbff609926b65784c724c8cdf9a2265a9d7f127e"
+      ],
+      "main_seconds": 18.549006500000004,
+      "planning_seconds": 131.2676215,
+      "calls": [
+        {
+          "job": "9ceb5794-2058-44cd-88cd-593e5a108545",
+          "session": "main-c774ca07d1dd715e74ec390ff0437bbe8ab1c197170702be4aea650198f35623",
+          "role": "main",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 17.698,
+          "usage": {
+            "completion_tokens": 209,
+            "total_tokens": 1351,
+            "prompt_tokens": 1142,
+            "reasoning_tokens": 81
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 17.69,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a5606d8f1902108c-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 17.092,
+            "first_event_seconds": 17.093,
+            "events": 117
+          },
+          "api_cost": null
+        },
+        {
+          "job": "c62996c1-45e0-4ef6-af15-65e6520c8e71",
+          "session": "executor-a132b95ddde0c1c5441958dfdbff609926b65784c724c8cdf9a2265a9d7f127e",
+          "role": "executor",
+          "model": "gpt-6.1-sol",
+          "state": "failed_or_unknown",
+          "seconds": 120.418,
+          "usage": null,
+          "transport": null,
+          "api_cost": null
+        },
+        {
+          "job": "9ae503b8-4d72-4251-acb1-5e5829a4897d",
+          "session": "vision-a132b95ddde0c1c5441958dfdbff609926b65784c724c8cdf9a2265a9d7f127e",
+          "role": "vision",
+          "model": "gpt-6.1-sol",
+          "state": "succeeded",
+          "seconds": 38.162,
+          "usage": {
+            "completion_tokens": 448,
+            "total_tokens": 7340,
+            "prompt_tokens": 6892,
+            "reasoning_tokens": 33
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 38.144,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a5607c2b48df6183-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 23.776,
+            "first_event_seconds": 23.776,
+            "events": 399
+          },
+          "api_cost": null
+        },
+        {
+          "job": "749dad84-5ef2-4bdc-bc5a-40549a465b29",
+          "session": "executor-a132b95ddde0c1c5441958dfdbff609926b65784c724c8cdf9a2265a9d7f127e",
+          "role": "executor",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 18.302,
+          "usage": {
+            "completion_tokens": 312,
+            "total_tokens": 35889,
+            "prompt_tokens": 35577,
+            "reasoning_tokens": 230
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 18.293,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a5607d1dca17e82e-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 17.851,
+            "first_event_seconds": 17.851,
+            "events": 63
+          },
+          "api_cost": null
+        },
+        {
+          "job": "dc946d22-071e-4ae1-a52d-3924a33ba6e7",
+          "session": "vision-a132b95ddde0c1c5441958dfdbff609926b65784c724c8cdf9a2265a9d7f127e",
+          "role": "vision",
+          "model": "gpt-6.1-sol",
+          "state": "succeeded",
+          "seconds": 32.57,
+          "usage": {
+            "completion_tokens": 312,
+            "total_tokens": 11061,
+            "prompt_tokens": 10749,
+            "reasoning_tokens": 85
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 32.55,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a56083ad5cd35da7-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 26.711,
+            "first_event_seconds": 26.713,
+            "first_text_seconds": 26.727,
+            "events": 222
+          },
+          "api_cost": null
+        },
+        {
+          "job": "135d7919-19bd-4693-99e1-e0181bf4c6a1",
+          "session": "executor-a132b95ddde0c1c5441958dfdbff609926b65784c724c8cdf9a2265a9d7f127e",
+          "role": "executor",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 128.917,
+          "usage": {
+            "completion_tokens": 3235,
+            "total_tokens": 41951,
+            "prompt_tokens": 38716,
+            "reasoning_tokens": 165
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 128.908,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a56087452a50aa25-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 23.264,
+            "first_event_seconds": 23.264,
+            "events": 3054
+          },
+          "api_cost": null
+        },
+        {
+          "job": "41d7fa89-fadc-4ee7-bfce-cbafdb1e55b4",
+          "session": "main-c774ca07d1dd715e74ec390ff0437bbe8ab1c197170702be4aea650198f35623",
+          "role": "main",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 14.206,
+          "usage": {
+            "completion_tokens": 128,
+            "total_tokens": 3229,
+            "prompt_tokens": 3101,
+            "reasoning_tokens": 18
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 14.195,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a560931249814c35-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 12.489,
+            "first_event_seconds": 12.489,
+            "events": 99
+          },
+          "api_cost": null
+        },
+        {
+          "job": "36ee1fd8-c314-46c9-bed9-3b205642f11c",
+          "session": "main-c774ca07d1dd715e74ec390ff0437bbe8ab1c197170702be4aea650198f35623",
+          "role": "main",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 13.474,
+          "usage": {
+            "completion_tokens": 127,
+            "total_tokens": 5615,
+            "prompt_tokens": 5488,
+            "reasoning_tokens": 13
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 13.466,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a5609c70ac4deb65-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 12.211,
+            "first_event_seconds": 12.211,
+            "events": 103
+          },
+          "api_cost": null
+        }
+      ],
+      "native_events": [
+        {
+          "type": "main.decision",
+          "at": "2026-11-06T01:47:30.298Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T01:47:30.948Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T01:47:30.951Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T01:47:30.955Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T01:51:34.668Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T01:51:34.671Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T01:51:34.674Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T01:57:09.815Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T01:57:09.819Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T01:57:09.823Z",
+          "name": null
+        },
+        {
+          "type": "vision.facts",
+          "at": "2026-11-06T01:57:49.121Z",
+          "name": null
+        },
+        {
+          "type": "tool.start",
+          "at": "2026-11-06T01:58:08.302Z",
+          "name": "mcp_mcp_ss_mcp_asin_detail"
+        },
+        {
+          "type": "tool.result",
+          "at": "2026-11-06T01:58:25.856Z",
+          "name": "mcp_mcp_ss_mcp_asin_detail"
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:02:17.522Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:02:17.526Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:02:17.530Z",
+          "name": null
+        },
+        {
+          "type": "engine.assignment",
+          "at": "2026-11-06T02:02:17.597Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:04:44.903Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:04:44.909Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:04:44.913Z",
+          "name": null
+        },
+        {
+          "type": "engine.assignment",
+          "at": "2026-11-06T02:04:44.980Z",
+          "name": null
+        },
+        {
+          "type": "tool.start",
+          "at": "2026-11-06T02:06:54.631Z",
+          "name": "produce_aplus"
+        },
+        {
+          "type": "tool.result",
+          "at": "2026-11-06T02:06:55.373Z",
+          "name": "produce_aplus"
+        }
+      ]
+    },
+    "native-real-edit-v3": {
+      "state": "submitted",
+      "ticket": "7d805119a852e823dfa08a01a1a4051a",
+      "route_decision": {
+        "action": "continue",
+        "executor": "image_edit",
+        "message": "收到。基于现有A+方案的模块版本能力，仅修改第三个模块图片：替换为室内更衣室商业摄影场景，重点展示商品背面，姓名和号码保持原样；其他模块、尺寸、图片及所有文案保持不变，直接生成修改结果。",
+        "ticket": "7d805119a852e823dfa08a01a1a4051a"
+      },
+      "sessions": [
+        "executor-45e720ef6f93ffbd6ee6afa25453f60a631d050324110f89d29599bff2aa13bc",
+        "main-c774ca07d1dd715e74ec390ff0437bbe8ab1c197170702be4aea650198f35623"
+      ],
+      "main_seconds": 14.086915300000001,
+      "planning_seconds": 59.06792539999999,
+      "calls": [
+        {
+          "job": "9ceb5794-2058-44cd-88cd-593e5a108545",
+          "session": "main-c774ca07d1dd715e74ec390ff0437bbe8ab1c197170702be4aea650198f35623",
+          "role": "main",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 17.698,
+          "usage": {
+            "completion_tokens": 209,
+            "total_tokens": 1351,
+            "prompt_tokens": 1142,
+            "reasoning_tokens": 81
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 17.69,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a5606d8f1902108c-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 17.092,
+            "first_event_seconds": 17.093,
+            "events": 117
+          },
+          "api_cost": null
+        },
+        {
+          "job": "41d7fa89-fadc-4ee7-bfce-cbafdb1e55b4",
+          "session": "main-c774ca07d1dd715e74ec390ff0437bbe8ab1c197170702be4aea650198f35623",
+          "role": "main",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 14.206,
+          "usage": {
+            "completion_tokens": 128,
+            "total_tokens": 3229,
+            "prompt_tokens": 3101,
+            "reasoning_tokens": 18
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 14.195,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a560931249814c35-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 12.489,
+            "first_event_seconds": 12.489,
+            "events": 99
+          },
+          "api_cost": null
+        },
+        {
+          "job": "36ee1fd8-c314-46c9-bed9-3b205642f11c",
+          "session": "main-c774ca07d1dd715e74ec390ff0437bbe8ab1c197170702be4aea650198f35623",
+          "role": "main",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 13.474,
+          "usage": {
+            "completion_tokens": 127,
+            "total_tokens": 5615,
+            "prompt_tokens": 5488,
+            "reasoning_tokens": 13
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 13.466,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a5609c70ac4deb65-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 12.211,
+            "first_event_seconds": 12.211,
+            "events": 103
+          },
+          "api_cost": null
+        },
+        {
+          "job": "2c925d98-522c-4c1e-a08d-24c819a84d54",
+          "session": "executor-45e720ef6f93ffbd6ee6afa25453f60a631d050324110f89d29599bff2aa13bc",
+          "role": "executor",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 43.558,
+          "usage": {
+            "completion_tokens": 786,
+            "total_tokens": 34841,
+            "prompt_tokens": 34055,
+            "reasoning_tokens": 68
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 43.546,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a5609ccadf593f2a-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 18.176,
+            "first_event_seconds": 18.176,
+            "events": 706
+          },
+          "api_cost": null
+        }
+      ],
+      "native_events": [
+        {
+          "type": "main.decision",
+          "at": "2026-11-06T02:19:26.311Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:19:26.943Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:19:26.947Z",
+          "name": null
+        },
+        {
+          "type": "engine.assignment",
+          "at": "2026-11-06T02:19:26.967Z",
+          "name": null
+        },
+        {
+          "type": "tool.start",
+          "at": "2026-11-06T02:20:10.928Z",
+          "name": "revise_visual"
+        },
+        {
+          "type": "tool.result",
+          "at": "2026-11-06T02:20:11.280Z",
+          "name": "revise_visual"
+        }
+      ]
+    },
+    "native-ab-dsh-v1": {
+      "state": "submitted",
+      "ticket": "b7104c8f779984b9179b932c99cf57fc",
+      "route_decision": {
+        "action": "task",
+        "executor": "amazon_aplus",
+        "message": "已收到。请基于全部上传素材自主选款，为美国站直接执行整套五模块Basic A+并发生成：至少三种真实布局、不同规格独立图片；保真原图Logo/图案/字样/颜色及背面姓名号码，模板仅借鉴设计。各模块分别解决不同购买问题，主视觉、人物实景、背面展示、真实局部近拍和细节槽位改变摄影与构图，避免重复正面全身图。按需真实调研竞品ASIN B0H2DF4KTQ；未知材质、功能、定制服务、品牌授权全部不写不推断。无需费用或逐张确认。",
+        "ticket": null
+      },
+      "sessions": [
+        "executor-da73613a85164303c99f58701253bc2a1373b9fd8e7bfb00b70ce3c6c8a3e7fa",
+        "main-6d1f059eed81ea088f96cdf3a0f95c6338be149cb0422820eec7d95548b6a7e4",
+        "vision-9bd0cb9ad7ffc27337e1af48d0ad32b45e570790df0128d748262a435b6110e9"
+      ],
+      "main_seconds": 19.8763037,
+      "planning_seconds": 297.3311592,
+      "calls": [
+        {
+          "job": "1bb013e5-a926-4cb5-95a9-b374c08bb0d9",
+          "session": "main-6d1f059eed81ea088f96cdf3a0f95c6338be149cb0422820eec7d95548b6a7e4",
+          "role": "main",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 18.035,
+          "usage": {
+            "completion_tokens": 245,
+            "total_tokens": 1437,
+            "prompt_tokens": 1192,
+            "reasoning_tokens": 60
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 18.026,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a56092210b3c9602-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 14.066,
+            "first_event_seconds": 14.067,
+            "events": 174
+          },
+          "api_cost": null
+        },
+        {
+          "job": "d7578e37-49ae-4594-9895-048496979a68",
+          "session": "vision-9bd0cb9ad7ffc27337e1af48d0ad32b45e570790df0128d748262a435b6110e9",
+          "role": "vision",
+          "model": "gpt-6.1-sol",
+          "state": "succeeded",
+          "seconds": 39.103,
+          "usage": {
+            "completion_tokens": 497,
+            "total_tokens": 7441,
+            "prompt_tokens": 6944,
+            "reasoning_tokens": 110
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 39.083,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a56092a27d500b74-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 25.745,
+            "first_event_seconds": 25.746,
+            "events": 370
+          },
+          "api_cost": null
+        },
+        {
+          "job": "2c850fcf-03a9-4992-85f0-592e0d94f518",
+          "session": "executor-da73613a85164303c99f58701253bc2a1373b9fd8e7bfb00b70ce3c6c8a3e7fa",
+          "role": "executor",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 17.441,
+          "usage": {
+            "completion_tokens": 183,
+            "total_tokens": 14624,
+            "prompt_tokens": 14441,
+            "reasoning_tokens": 110
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 17.423,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a5609398cd691891-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 16.883,
+            "first_event_seconds": 16.884,
+            "events": 54
+          },
+          "api_cost": null
+        },
+        {
+          "job": "736dfcfd-af15-4710-b9d2-56849f60e6a1",
+          "session": "executor-da73613a85164303c99f58701253bc2a1373b9fd8e7bfb00b70ce3c6c8a3e7fa",
+          "role": "executor",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 136.055,
+          "usage": {
+            "completion_tokens": 3588,
+            "total_tokens": 18346,
+            "prompt_tokens": 14758,
+            "reasoning_tokens": 159
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 136.048,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a5609604dc81da16-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 18.927,
+            "first_event_seconds": 18.927,
+            "events": 3387
+          },
+          "api_cost": null
+        }
+      ],
+      "native_events": [
+        {
+          "type": "main.decision",
+          "at": "2026-11-06T02:12:28.983Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:12:30.378Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:12:30.382Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:12:30.386Z",
+          "name": null
+        },
+        {
+          "type": "engine.assignment",
+          "at": "2026-11-06T02:12:30.424Z",
+          "name": null
+        },
+        {
+          "type": "vision.facts",
+          "at": "2026-11-06T02:13:10.192Z",
+          "name": null
+        },
+        {
+          "type": "engine.assignment",
+          "at": "2026-11-06T02:13:10.213Z",
+          "name": null
+        },
+        {
+          "type": "tool.start",
+          "at": "2026-11-06T02:13:28.362Z",
+          "name": "mcp_mcp_ss_mcp_asin_detail"
+        },
+        {
+          "type": "tool.result",
+          "at": "2026-11-06T02:14:49.564Z",
+          "name": "mcp_mcp_ss_mcp_asin_detail"
+        },
+        {
+          "type": "tool.start",
+          "at": "2026-11-06T02:17:05.909Z",
+          "name": "produce_aplus"
+        },
+        {
+          "type": "tool.result",
+          "at": "2026-11-06T02:17:06.435Z",
+          "name": "produce_aplus"
+        }
+      ]
+    },
+    "native-listing-v1": {
+      "state": "submitted",
+      "ticket": "9bf5acb80bd84d7042bb8e96734f5837",
+      "route_decision": {
+        "action": "task",
+        "executor": "listing",
+        "message": "已收到。使用提供的Seattle商品图制作美国站三张独立Listing附图并直接生成：城市主题商品展示、日常人物场景、背面图案近景；保持图案字样、颜色及姓名号码原样，基于可见事实，不添加未知材质/性能/定制服务/授权内容。",
+        "ticket": null
+      },
+      "sessions": [
+        "executor-61b7b25c900549338acffe3b8324c7739f5152b02e854760654e3d1a31108c82",
+        "main-bde340cce81a7bb3febdfe1d814e682d5822a04958e1c9350cd851756b481e29"
+      ],
+      "main_seconds": 17.7383378,
+      "planning_seconds": 1.7679688999999998,
+      "calls": [
+        {
+          "job": "65221855-550c-4697-88f7-22c4046111d4",
+          "session": "main-bde340cce81a7bb3febdfe1d814e682d5822a04958e1c9350cd851756b481e29",
+          "role": "main",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 17.211,
+          "usage": {
+            "completion_tokens": 122,
+            "total_tokens": 926,
+            "prompt_tokens": 804,
+            "reasoning_tokens": 17
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 17.202,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a560a0ec2cf0e120-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 16.743,
+            "first_event_seconds": 16.744,
+            "events": 94
+          },
+          "api_cost": null
+        }
+      ],
+      "native_events": [
+        {
+          "type": "main.decision",
+          "at": "2026-11-06T02:22:33.703Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:22:34.934Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:22:34.937Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:22:34.941Z",
+          "name": null
+        },
+        {
+          "type": "engine.assignment",
+          "at": "2026-11-06T02:22:34.954Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:33:33.092Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:33:33.096Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:33:33.100Z",
+          "name": null
+        },
+        {
+          "type": "engine.assignment",
+          "at": "2026-11-06T02:33:33.140Z",
+          "name": null
+        },
+        {
+          "type": "tool.start",
+          "at": "2026-11-06T02:33:33.214Z",
+          "name": "produce_listing"
+        },
+        {
+          "type": "tool.result",
+          "at": "2026-11-06T02:33:33.774Z",
+          "name": "produce_listing"
+        }
+      ]
+    },
+    "native-research-v1": {
+      "state": "needs_input",
+      "ticket": "3f777d934f56d3e1a1ab176b0148ef68",
+      "route_decision": {
+        "action": "task",
+        "executor": "research",
+        "message": "收到。请通过真实卖家精灵MCP研究美国站竞品ASIN B0H2DF4KTQ的商品内容与关键卖点；仅整理竞品信息，不生图，不将竞品属性视为我方商品事实。",
+        "ticket": null
+      },
+      "sessions": [
+        "executor-0ca69dc87bda6ab912744078d4c13945d16800fc82fa92437720e2917ff4b314",
+        "main-3dee94f5dc572e3da346db907e94458a03c131251d6b6325264eb8083a4a5e3f"
+      ],
+      "main_seconds": 23.9275832,
+      "planning_seconds": 152.81278110000002,
+      "calls": [
+        {
+          "job": "e35474a4-46a0-4f53-abb7-7a64a58ceb66",
+          "session": "main-3dee94f5dc572e3da346db907e94458a03c131251d6b6325264eb8083a4a5e3f",
+          "role": "main",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 23.057,
+          "usage": {
+            "completion_tokens": 113,
+            "total_tokens": 854,
+            "prompt_tokens": 741,
+            "reasoning_tokens": 28
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 23.047,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a560a0ec7d218721-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 22.147,
+            "first_event_seconds": 22.148,
+            "events": 72
+          },
+          "api_cost": null
+        },
+        {
+          "job": "ad8a9107-d905-40cd-a011-565e63a70a0b",
+          "session": "executor-0ca69dc87bda6ab912744078d4c13945d16800fc82fa92437720e2917ff4b314",
+          "role": "executor",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 20.259,
+          "usage": {
+            "completion_tokens": 246,
+            "total_tokens": 9005,
+            "prompt_tokens": 8759,
+            "reasoning_tokens": 116
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 20.25,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a560a184c98c0558-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 20.224,
+            "first_event_seconds": 20.225,
+            "events": 7
+          },
+          "api_cost": null
+        },
+        {
+          "job": "d1b93950-1761-433a-9212-c3ff71157646",
+          "session": "executor-0ca69dc87bda6ab912744078d4c13945d16800fc82fa92437720e2917ff4b314",
+          "role": "executor",
+          "model": "gpt-6.1-terra",
+          "state": "succeeded",
+          "seconds": 46.437,
+          "usage": {
+            "completion_tokens": 235,
+            "total_tokens": 9573,
+            "prompt_tokens": 9338,
+            "reasoning_tokens": 30
+          },
+          "transport": {
+            "http_status": 200,
+            "seconds": 46.426,
+            "server": "cloudflare",
+            "content_type": "text/event-stream",
+            "edge_request_id": "a560a38209f7d825-ORD",
+            "upstream_request_id": "",
+            "stream": true,
+            "response_streamed": true,
+            "headers_seconds": 42.643,
+            "first_event_seconds": 42.643,
+            "events": 193
+          },
+          "api_cost": null
+        }
+      ],
+      "native_events": [
+        {
+          "type": "main.decision",
+          "at": "2026-11-06T02:22:39.970Z",
+          "name": null
+        },
+        {
+          "type": "skill.bound",
+          "at": "2026-11-06T02:22:40.486Z",
+          "name": null
+        },
+        {
+          "type": "engine.assignment",
+          "at": "2026-11-06T02:22:40.502Z",
+          "name": null
+        },
+        {
+          "type": "tool.start",
+          "at": "2026-11-06T02:23:01.075Z",
+          "name": "mcp_mcp_ss_mcp_asin_content_list"
+        },
+        {
+          "type": "tool.result",
+          "at": "2026-11-06T02:23:31.687Z",
+          "name": "mcp_mcp_ss_mcp_asin_content_list"
+        },
+        {
+          "type": "tool.start",
+          "at": "2026-11-06T02:23:31.692Z",
+          "name": "mcp_mcp_ss_mcp_asin_detail"
+        },
+        {
+          "type": "tool.result",
+          "at": "2026-11-06T02:24:02.064Z",
+          "name": "mcp_mcp_ss_mcp_asin_detail"
+        },
+        {
+          "type": "tool.start",
+          "at": "2026-11-06T02:24:48.747Z",
+          "name": "complete"
+        },
+        {
+          "type": "tool.result",
+          "at": "2026-11-06T02:24:48.853Z",
+          "name": "complete"
+        }
+      ]
+    }
+  },
+  "acceptance": {
+    "passed_business_loop": true,
+    "production_cutover_ready": false,
+    "unknown_mcp_outcome": true,
+    "only_changed_module": "m3_back_detail",
+    "case_states": {
+      "native-real-aplus-v2": "completed",
+      "native-real-edit-v3": "completed",
+      "native-ab-dsh-v1": "completed",
+      "native-ab-langgraph-v1": "blocked",
+      "native-listing-v1": "completed",
+      "native-research-v1": "needs_input"
+    },
+    "call_counts": {
+      "text": 50,
+      "image": 28,
+      "mcp": 3
+    },
+    "quota_consistency": [
+      {
+        "account": "8b6aa8ab-9641-41af-862f-7e9cb1da9fb1",
+        "balanced": true,
+        "balance": 9250,
+        "reserved": 0
+      },
+      {
+        "account": "511636e3-e45e-4b20-8f2a-9fdbafd2a054",
+        "balanced": true,
+        "balance": 0,
+        "reserved": 0
+      }
+    ],
+    "limitations": [
+      "MCP actual tool request timed out with unknown charge state; do not resend.",
+      "Baseline LangGraph blocked on unverified research; no matched image quality comparison.",
+      "Native clean A+ planning takes about five minutes; latency acceptance failed.",
+      "Image identity and detailed crops still require visual review.",
+      "Existing production React Agent UI and 18080 default have not been migrated."
+    ]
+  },
+  "call_attribution_note": "Calls are grouped by persistent Session. A shared Main Session appears in more than one case; do not sum across case lists. The dedicated A/B DSH Session lists exactly its four model calls.",
+  "browser": {
+    "refresh_login_restored": true,
+    "refresh_session_restored": true,
+    "image_count": 8,
+    "state": "completed",
+    "zip": "C:\\Users\\Woda\\Downloads\\aplus-a488aa0b-2a6e-4744-bf13-32407f2eb55c.zip",
+    "zip_crc_ok": true
+  },
+  "isolation": {
+    "passed": true,
+    "provider_calls": 0,
+    "checks": [
+      {
+        "account": "dsh-isolation-1",
+        "checks": {
+          "native_turn": 404,
+          "asset": 404,
+          "output": 404,
+          "zip": 404,
+          "foreign_ticket": 404,
+          "foreign_asset": 404
+        }
+      },
+      {
+        "account": "dsh-isolation-2",
+        "checks": {
+          "native_turn": 404,
+          "asset": 404,
+          "output": 404,
+          "zip": 404,
+          "foreign_ticket": 404,
+          "foreign_asset": 404
+        }
+      }
+    ]
+  },
+  "receipt_recovery": {
+    "job": "3169cb17-63aa-426f-ad2a-466653569f6f",
+    "backup": "C:\\Users\\Woda\\Documents\\AI生图-dsh-superagent\\experiments\\dsh\\.state\\backups\\before-receipt-recovery-20261106103215.sqlite",
+    "corrections": [
+      {
+        "account": "8b6aa8ab-9641-41af-862f-7e9cb1da9fb1",
+        "before": 0,
+        "after": 10
+      }
+    ],
+    "result": {
+      "job_id": "3169cb17-63aa-426f-ad2a-466653569f6f",
+      "status": "succeeded",
+      "outputs": 0
+    },
+    "new_provider_requests": 0,
+    "basis": "existing successful Worker receipt"
+  }
+}

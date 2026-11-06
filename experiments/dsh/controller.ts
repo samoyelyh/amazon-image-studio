@@ -4,7 +4,7 @@ import type { Assignment, Ticket, Trigger, DomainEvent, Policy } from './upstrea
 import { SqliteRepositories } from './repositories.ts'
 
 export type Owner = { org: string; user: string }
-export type Intake = Owner & { session: string; request: string; text: string; mode: 'chat' | 'task' | 'continue' | 'status' | 'stop'; ticket?: string; new_task?: boolean }
+export type Intake = Owner & { session: string; request: string; text: string; mode: 'chat' | 'task' | 'continue' | 'status' | 'stop'; ticket?: string; new_task?: boolean; semantic?: boolean }
 const hash = (s: unknown) => createHash('sha256').update(JSON.stringify(s)).digest('hex')
 type Binding = Owner & { session: string; conversation?: string }
 
@@ -12,7 +12,7 @@ type Binding = Owner & { session: string; conversation?: string }
 export class PlatformController {
   repo: SqliteRepositories
   engine: Engine
-  constructor(path: string) {
+  constructor(path: string, readonly nativeSessions = false) {
     this.repo = new SqliteRepositories(path)
     const policy: Policy = {
       version: 'image-platform-explicit-v1', paused: false, evalTimeoutMs: 30000,
@@ -45,6 +45,7 @@ export class PlatformController {
     // These are durable port effects, never shell commands or model/tool calls.
     for (const e of this.repo.list<any>('effect')) {
       if (e.done) continue
+      if (this.nativeSessions && ['start','deliver'].includes(e.kind)) continue
       const t = this.repo.tickets.get(e.ticket); const a = t && latestAssignment(t)
       if (a?.id === e.assignment && e.kind === 'start' && a.state === 'pending') this.engine.assignmentStarted(t!.id,a.id)
       if (a?.id === e.assignment && e.kind === 'deliver' && a.state === 'running') {
@@ -55,8 +56,21 @@ export class PlatformController {
       this.repo.put('effect',`${e.kind}:${e.assignment}`,{...e,done:true})
     }
     // A start callback may enqueue delivery in the same pass.
-    const left = this.repo.list<any>('effect').some(e => !e.done)
+    const left = this.repo.list<any>('effect').some(e => !e.done && !(this.nativeSessions && ['start','deliver'].includes(e.kind)))
     if (left) this.settle()
+  }
+  /** Harness publication/input commit acknowledges the actual Executor port. */
+  sessionStarted(owner: Owner, id: string, session: string) {
+    const binding=this.owned(owner,id),ticket=this.repo.tickets.get(id)!,a=latestAssignment(ticket)
+    if (!a || !['pending','running'].includes(a.state)) throw new Error('No authorized DSH Assignment for this Session')
+    if (a.state==='pending') this.engine.assignmentStarted(id,a.id)
+    this.repo.put('native-session',session,{ticket:id,assignment:a.id,org:owner.org,user:owner.user})
+    const current=this.repo.tickets.get(id)!,ids=current.undelivered
+    if(ids.length){this.engine.inputsDelivered(id,a.id,ids);this.engine.inputsRead(id,ids)}
+    for(const e of this.repo.list<any>('effect')){
+      if(e.assignment===a.id&&['start','deliver'].includes(e.kind))this.repo.put('effect',`${e.kind}:${e.assignment}`,{...e,done:true})
+    }
+    return {ticket:id,assignment:a.id,session,mandate:ticket.mandate,binding}
   }
   intake(x: Intake) {
     const started = performance.now()
@@ -80,7 +94,7 @@ export class PlatformController {
       if (x.mode === 'status') return finish({route:'status',ticket:target,execute:false})
       if (x.mode === 'stop') { this.engine.stopTicket(target!,'Stopped by owner'); this.settle(); return finish({route:'stopped',ticket:target,execute:false}) }
       // The browser selects Task/Continue explicitly. A question is never promoted by a model.
-      if (/^(你好|谢谢|hi\b|hello\b)/i.test(x.text.trim()) || /^(什么是|怎么|如何|为什么)/.test(x.text.trim()))
+      if (!x.semantic && (/^(你好|谢谢|hi\b|hello\b)/i.test(x.text.trim()) || /^(什么是|怎么|如何|为什么)/.test(x.text.trim())))
         return finish({route:'chat',ticket:null,execute:false})
       if (target && this.repo.tickets.get(target)?.ended?.by === 'human')
         throw Object.assign(new Error('Stopped task requires a new authorization'),{status:409})

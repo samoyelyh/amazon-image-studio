@@ -55,7 +55,7 @@ async def checkpoint_store(settings, *, setup=False):
 async def conversation(db, org, user, conversation_id, *, lock=False):
     statement = select(HermesConversation).where(HermesConversation.id == conversation_id,
         HermesConversation.organization_id == org, HermesConversation.user_id == user,
-        HermesConversation.controller_type == "langgraph")
+        HermesConversation.controller_type.in_(["langgraph", "dsh"]))
     row = await db.scalar(statement.with_for_update().execution_options(populate_existing=True) if lock else statement)
     if row is None:
         raise AppError("agent.conversation_not_found", "会话不存在或无权访问。", 404)
@@ -630,6 +630,8 @@ async def cancel(db, run):
 
 
 async def reconcile(db, settings, redis, run, permissions):
+    if run.graph_version.startswith('dsh-'):
+        return  # DSH alone owns its decisions and recovery; Jobs remain shared.
     if run.status == 'completed' and run.graph_version == 'capabilities-v1':
         from app.agents.capabilities.orchestrator import continue_after_jobs
         if await continue_after_jobs(db, settings, redis, run, permissions):

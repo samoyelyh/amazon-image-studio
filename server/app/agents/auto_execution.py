@@ -147,6 +147,8 @@ async def estimate(db, redis, settings, org, operation, model_code, count):
 
 async def drive(db, settings, redis, run, permissions):
     """Called after human send / owner polling. Never grants authority to old Runs."""
+    if run.graph_version.startswith('dsh-'):
+        return
     if (run.result_json.get('auto_execution') or {}).get('version') == 2:
         from app.agents.autonomous_execution import drive as autonomous_drive
         return await autonomous_drive(db,settings,redis,run,permissions)
