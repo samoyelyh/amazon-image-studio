@@ -26,6 +26,11 @@ async def main():
         ledger=sqlite3.connect(STATE/'worker/budget.sqlite');ledger.row_factory=sqlite3.Row
         calls=[dict(r) for r in ledger.execute('SELECT * FROM calls ORDER BY started')]
         for call in calls:call['details']=json.loads(call['details'])
+        # The later Kimi-only benchmark has a separately authorized six-call
+        # window; preserve the original native acceptance's 50-call boundary.
+        kimi_calls=[c for c in calls if c['id'].startswith('kimi-main:')]
+        assert len(kimi_calls)<=6
+        calls=[c for c in calls if not c['id'].startswith('kimi-main:')]
         counts={kind:sum(c['kind']==kind and c['state']!='not_sent' for c in calls) for kind in ['text','image','mcp']}
         assert counts['text']<=50 and counts['image']<=50 and counts['mcp']<=50
         quota=[]

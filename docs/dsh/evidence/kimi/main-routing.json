@@ -1,0 +1,296 @@
+{
+  "scope": "Real Kimi API calls using the current DSH Main prompt and route_task schema; no business tools executed; not a full DSH Session or A+ benchmark.",
+  "request_ceiling": 6,
+  "models": [
+    {
+      "model": "k3.1-pro",
+      "reasoning_effort": "low",
+      "main_prompt_sha256": "19f63ec042931579fe7b726fcecb5b7678b3a8e0374b935c149fddd55e0a3fa4",
+      "requests": 3,
+      "correct": 3,
+      "mean_seconds": 7.6316,
+      "total_tokens": 2060,
+      "results": [
+        {
+          "requested_model": "k3.1-pro",
+          "stream": true,
+          "http_status": 200,
+          "headers_seconds": 1.2077,
+          "content_type": "text/event-stream;charset=utf-8",
+          "first_event_seconds": 1.2081,
+          "reported_model": "k3.1-pro",
+          "first_reasoning_seconds": 1.2081,
+          "first_decision_delta_seconds": 5.7946,
+          "seconds": 5.874,
+          "usage": {
+            "prompt_tokens": 502,
+            "completion_tokens": 205,
+            "total_tokens": 707,
+            "completion_tokens_details": {
+              "reasoning_tokens": 27
+            }
+          },
+          "finish_reason": "tool_calls",
+          "complete": true,
+          "reasoning_characters": 147,
+          "text": "",
+          "tool_calls": [
+            {
+              "id": "tool_EMaSUpWkpq7orqTgpK9ybEkT",
+              "name": "route_task",
+              "arguments": "{\"action\":\"chat\",\"executor\":\"none\",\"message\":\"A+图片用于商品详情页的品牌故事与深度卖点展示，偏场景化、模块化，帮助建立信任并促进转化；Listing图片是搜索结果和详情页顶部的商品主图及副图，主图通常要求纯白底、真实展示产品，副图补充卖点、尺寸、细节和使用场景。简单说：Listing负责让顾客快速看懂并点击，A+负责让顾客充分了解后下单。\",\"ticket\":null}"
+            }
+          ],
+          "case": "chat",
+          "expected": "chat",
+          "decisions": [
+            {
+              "action": "chat",
+              "executor": "none",
+              "message": "A+图片用于商品详情页的品牌故事与深度卖点展示，偏场景化、模块化，帮助建立信任并促进转化；Listing图片是搜索结果和详情页顶部的商品主图及副图，主图通常要求纯白底、真实展示产品，副图补充卖点、尺寸、细节和使用场景。简单说：Listing负责让顾客快速看懂并点击，A+负责让顾客充分了解后下单。",
+              "ticket": null
+            }
+          ],
+          "correct": true
+        },
+        {
+          "requested_model": "k3.1-pro",
+          "stream": true,
+          "http_status": 200,
+          "headers_seconds": 3.7263,
+          "content_type": "text/event-stream;charset=utf-8",
+          "first_event_seconds": 3.7266,
+          "reported_model": "k3.1-pro",
+          "first_reasoning_seconds": 3.7267,
+          "first_decision_delta_seconds": 7.5108,
+          "seconds": 7.5561,
+          "usage": {
+            "prompt_tokens": 500,
+            "completion_tokens": 165,
+            "total_tokens": 665,
+            "cached_tokens": 256,
+            "completion_tokens_details": {
+              "reasoning_tokens": 36
+            },
+            "prompt_tokens_details": {
+              "cached_tokens": 256
+            }
+          },
+          "finish_reason": "tool_calls",
+          "complete": true,
+          "reasoning_characters": 165,
+          "text": "",
+          "tool_calls": [
+            {
+              "id": "tool_1s4neOGO64LcMvg18xZ8OqHs",
+              "name": "route_task",
+              "arguments": "{\"action\":\"clarify\",\"executor\":\"none\",\"message\":\"请问要做亚马逊 A+ 套图，还是 Listing 主图/副图套图？也可以直接发产品素材和 ASIN，我来安排。\",\"ticket\":null}"
+            }
+          ],
+          "case": "clarify",
+          "expected": "clarify",
+          "decisions": [
+            {
+              "action": "clarify",
+              "executor": "none",
+              "message": "请问要做亚马逊 A+ 套图，还是 Listing 主图/副图套图？也可以直接发产品素材和 ASIN，我来安排。",
+              "ticket": null
+            }
+          ],
+          "correct": true
+        },
+        {
+          "requested_model": "k3.1-pro",
+          "stream": true,
+          "http_status": 200,
+          "headers_seconds": 7.0622,
+          "content_type": "text/event-stream;charset=utf-8",
+          "first_event_seconds": 7.0624,
+          "reported_model": "k3.1-pro",
+          "first_reasoning_seconds": 7.0624,
+          "first_decision_delta_seconds": 9.4034,
+          "seconds": 9.4647,
+          "usage": {
+            "prompt_tokens": 526,
+            "completion_tokens": 162,
+            "total_tokens": 688,
+            "cached_tokens": 256,
+            "completion_tokens_details": {
+              "reasoning_tokens": 36
+            },
+            "prompt_tokens_details": {
+              "cached_tokens": 256
+            }
+          },
+          "finish_reason": "tool_calls",
+          "complete": true,
+          "reasoning_characters": 169,
+          "text": "",
+          "tool_calls": [
+            {
+              "id": "tool_fqjuHu4UKCpTexU6ULzpaPYQ",
+              "name": "route_task",
+              "arguments": "{\"action\": \"task\", \"executor\": \"amazon_aplus\", \"message\": \"收到，将基于已上传商品图为美国站制作整套 Basic A+ 并直接生成；不编写未知材质、性能或定制服务信息。\", \"ticket\": null}"
+            }
+          ],
+          "case": "aplus",
+          "expected": "task",
+          "decisions": [
+            {
+              "action": "task",
+              "executor": "amazon_aplus",
+              "message": "收到，将基于已上传商品图为美国站制作整套 Basic A+ 并直接生成；不编写未知材质、性能或定制服务信息。",
+              "ticket": null
+            }
+          ],
+          "correct": true
+        }
+      ]
+    },
+    {
+      "model": "k3.1-pro-highspeed",
+      "reasoning_effort": "low",
+      "main_prompt_sha256": "19f63ec042931579fe7b726fcecb5b7678b3a8e0374b935c149fddd55e0a3fa4",
+      "requests": 3,
+      "correct": 3,
+      "mean_seconds": 3.9538,
+      "total_tokens": 2101,
+      "results": [
+        {
+          "requested_model": "k3.1-pro-highspeed",
+          "stream": true,
+          "http_status": 200,
+          "headers_seconds": 0.9995,
+          "content_type": "text/event-stream;charset=utf-8",
+          "first_event_seconds": 0.9999,
+          "reported_model": "k3.1-pro-highspeed",
+          "first_reasoning_seconds": 0.9999,
+          "first_decision_delta_seconds": 4.709,
+          "seconds": 5.0646,
+          "usage": {
+            "prompt_tokens": 502,
+            "completion_tokens": 279,
+            "total_tokens": 781,
+            "completion_tokens_details": {
+              "reasoning_tokens": 43
+            }
+          },
+          "finish_reason": "tool_calls",
+          "complete": true,
+          "reasoning_characters": 248,
+          "text": "",
+          "tool_calls": [
+            {
+              "id": "tool_gRRkuBEkINhZDWIEEjVbqxxD",
+              "name": "route_task",
+              "arguments": "{\"action\":\"chat\",\"executor\":\"none\",\"message\":\"A+图片和Listing图片的核心区别在于展示位置与目的：\\n\\n- **Listing图片**：位于商品详情页顶部图片区，是用户搜索和初步了解商品时最先看到的内容。主要包括主图、多角度图、细节图、尺寸图、场景图等，重点吸引点击并快速说明卖点；主图通常要求纯白背景。\\n- **A+图片**：位于详情页下方的品牌图文版块，通过横幅、对比模块、场景图和参数模块深入介绍产品，重点强化品牌感、解答疑虑并促进转化。\\n\\n简单说：**Listing负责让用户看懂并想买，A+负责让用户更信任、更坚定地购买。** 两者通常会统一风格，但内容分工不同。\",\"ticket\":null}"
+            }
+          ],
+          "case": "chat",
+          "expected": "chat",
+          "decisions": [
+            {
+              "action": "chat",
+              "executor": "none",
+              "message": "A+图片和Listing图片的核心区别在于展示位置与目的：\n\n- **Listing图片**：位于商品详情页顶部图片区，是用户搜索和初步了解商品时最先看到的内容。主要包括主图、多角度图、细节图、尺寸图、场景图等，重点吸引点击并快速说明卖点；主图通常要求纯白背景。\n- **A+图片**：位于详情页下方的品牌图文版块，通过横幅、对比模块、场景图和参数模块深入介绍产品，重点强化品牌感、解答疑虑并促进转化。\n\n简单说：**Listing负责让用户看懂并想买，A+负责让用户更信任、更坚定地购买。** 两者通常会统一风格，但内容分工不同。",
+              "ticket": null
+            }
+          ],
+          "correct": true
+        },
+        {
+          "requested_model": "k3.1-pro-highspeed",
+          "stream": true,
+          "http_status": 200,
+          "headers_seconds": 2.5236,
+          "content_type": "text/event-stream;charset=utf-8",
+          "first_event_seconds": 2.524,
+          "reported_model": "k3.1-pro-highspeed",
+          "first_reasoning_seconds": 2.524,
+          "first_decision_delta_seconds": 4.1014,
+          "seconds": 4.1434,
+          "usage": {
+            "prompt_tokens": 500,
+            "completion_tokens": 154,
+            "total_tokens": 654,
+            "cached_tokens": 256,
+            "completion_tokens_details": {
+              "reasoning_tokens": 32
+            },
+            "prompt_tokens_details": {
+              "cached_tokens": 256
+            }
+          },
+          "finish_reason": "tool_calls",
+          "complete": true,
+          "reasoning_characters": 145,
+          "text": "",
+          "tool_calls": [
+            {
+              "id": "tool_88KnBalVXXhDzY85FVq3ACtQ",
+              "name": "route_task",
+              "arguments": "{\"action\":\"clarify\",\"message\":\"可以，请问您要做的是 Amazon A+ 页面套图，还是 Listing 主图与副图套图？\",\"executor\":\"none\",\"ticket\":null}"
+            }
+          ],
+          "case": "clarify",
+          "expected": "clarify",
+          "decisions": [
+            {
+              "action": "clarify",
+              "message": "可以，请问您要做的是 Amazon A+ 页面套图，还是 Listing 主图与副图套图？",
+              "executor": "none",
+              "ticket": null
+            }
+          ],
+          "correct": true
+        },
+        {
+          "requested_model": "k3.1-pro-highspeed",
+          "stream": true,
+          "http_status": 200,
+          "headers_seconds": 1.4927,
+          "content_type": "text/event-stream;charset=utf-8",
+          "first_event_seconds": 1.4929,
+          "reported_model": "k3.1-pro-highspeed",
+          "first_reasoning_seconds": 1.4929,
+          "first_decision_delta_seconds": 2.1302,
+          "seconds": 2.6535,
+          "usage": {
+            "prompt_tokens": 526,
+            "completion_tokens": 140,
+            "total_tokens": 666,
+            "cached_tokens": 256,
+            "completion_tokens_details": {
+              "reasoning_tokens": 14
+            },
+            "prompt_tokens_details": {
+              "cached_tokens": 256
+            }
+          },
+          "finish_reason": "tool_calls",
+          "complete": true,
+          "reasoning_characters": 59,
+          "text": "",
+          "tool_calls": [
+            {
+              "id": "tool_WrJMm4p2Wsl8IoF5dWbPYcmQ",
+              "name": "route_task",
+              "arguments": "{\"action\":\"task\",\"executor\":\"amazon_aplus\",\"message\":\"收到，将使用已上传商品图为美国站制作并直接生成整套 Basic A+，不描述未知材质、性能或定制服务。\",\"ticket\":null}"
+            }
+          ],
+          "case": "aplus",
+          "expected": "task",
+          "decisions": [
+            {
+              "action": "task",
+              "executor": "amazon_aplus",
+              "message": "收到，将使用已上传商品图为美国站制作并直接生成整套 Basic A+，不描述未知材质、性能或定制服务。",
+              "ticket": null
+            }
+          ],
+          "correct": true
+        }
+      ]
+    }
+  ]
+}
