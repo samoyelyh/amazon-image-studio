@@ -23,7 +23,8 @@ export async function createNativeController(root,core,token){
   const call=async(path,value)=>{
     const signals=[AbortSignal.timeout(650000)];if(value.options?.signal)signals.push(value.options.signal);
     const res=await fetch((process.env.DSH_BUSINESS_URL||'http://127.0.0.1:18870/api/v1/experiment/native/')+path,{method:'POST',headers:{'content-type':'application/json','x-dsh-token':token},body:JSON.stringify(value),signal:AbortSignal.any(signals)});
-    const raw=await res.text();let result;try{result=JSON.parse(raw)}catch{throw Error(`Business bridge returned HTTP ${res.status} without JSON`)}if(!res.ok)throw new Error(JSON.stringify(result));return result;
+    const raw=await res.text();let result;try{result=JSON.parse(raw)}catch{throw Error(`Business bridge returned HTTP ${res.status} without JSON`)}
+    if(!res.ok){const detail=result.error;throw Object.assign(new Error(typeof detail==='object'?detail.message:String(detail||'业务调用失败')),{code:detail?.code||'dsh.runtime_error'});}return result;
   };
   const runtime=await createNativeRuntime(resolve(root,'native'),async(_,o)=>{
     const c=current.get(o.sessionId);if(!c)throw Error('Session has no authenticated turn');
@@ -47,7 +48,7 @@ export async function createNativeController(root,core,token){
     running.add(x.id);const started=performance.now();
     let releaseExecutor=()=>{};
     try{
-      save(x.id,{error:null});
+      save(x.id,{error:null,error_code:null});
       if(!read(x.id).decision){
       const sid='main-'+hash([x.org,x.user,x.session,modelForRole('main'),'creative-director-v1']);
       current.set(sid,{x,role:'main'});terminal.delete(sid);counts.set(sid,0);
@@ -141,7 +142,7 @@ export async function createNativeController(root,core,token){
         ticket:core.list(x,x.session).find(t=>t.id===intake.ticket),authorization:'authenticated_user_requested_business_task'}));
       if(!terminal.has(eid))throw Error('Executor ended without complete; inspect native session log');
       const value=read(x.id);save(x.id,{state:value.events?.some(e=>e.type==='tool.result'&&['generate','create_images','produce_aplus','produce_listing','revise_and_generate','revise_visual'].includes(e.name))?'submitted':'needs_input',executor_calls:counts.get(eid)});
-    }catch(error){save(x.id,{state:'failed',error:String(error)});runtime.trace('turn.error',{turn:x.id,error:String(error)});}
+    }catch(error){save(x.id,{state:'failed',error:String(error),error_code:error.code||null});runtime.trace('turn.error',{turn:x.id,error:String(error),code:error.code||null});}
     finally{releaseMain();releaseExecutor();save(x.id,{seconds:(performance.now()-started)/1000});running.delete(x.id);}
   }
   function intake(x){

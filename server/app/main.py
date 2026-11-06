@@ -18,8 +18,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     from app.agents import dsh_settings
     if dsh_settings.enabled():
         from app.experiments.dsh.ledger import install_guards
-        import os
-        install_guards(dsh_settings.state()/'worker',limit=int(os.environ.get('DSH_CALL_LIMIT','50')),native_only=True)
+        install_guards(dsh_settings.state()/'worker',limit=dsh_settings.call_limit(),native_only=True)
     yield
 
 

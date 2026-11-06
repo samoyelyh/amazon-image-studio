@@ -1,0 +1,52 @@
+{
+  "date": "2026-11-06",
+  "timezone": "Asia/Shanghai",
+  "deployment": "18080",
+  "DSH_CALL_LIMIT": 0,
+  "effective_limit_per_kind": null,
+  "ceiling_enabled": false,
+  "controller": "dsh",
+  "real_probe": {
+    "controller": "dsh",
+    "conversation": "b6e478d9-4eb1-4b43-8604-c0cde3707279",
+    "run": "e5080f8c-3909-43bf-bdc9-9a8829fcf623",
+    "status": "completed",
+    "jobs": [
+      {
+        "id": "c5834429-691d-4cf3-bc77-73fb8aedfa8b",
+        "status": "succeeded",
+        "capability": "text_generation",
+        "error_code": null
+      }
+    ],
+    "image_jobs": 0
+  },
+  "historical_receipts_preserved": 122,
+  "window_counts": [
+    [
+      "image",
+      "succeeded",
+      40
+    ],
+    [
+      "text",
+      "succeeded",
+      41
+    ]
+  ],
+  "paid_verification_calls": {
+    "text": 1,
+    "image": 0,
+    "mcp": 0
+  },
+  "checks": {
+    "backend": 42,
+    "native_harness": 13
+  },
+  "retained_controls": [
+    "durable paid receipts",
+    "unknown result resend block",
+    "user and organization quota",
+    "per-turn model-call bounds"
+  ]
+}

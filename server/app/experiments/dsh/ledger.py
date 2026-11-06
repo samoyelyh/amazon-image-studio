@@ -57,10 +57,11 @@ class Ledger:
                     db.execute('UPDATE calls SET id=? WHERE id=?',(id+':unsent-preflight',id))
                     db.execute('UPDATE call_windows SET id=? WHERE id=?',(id+':unsent-preflight',id))
                 else:raise ProviderError('agent.remote_unknown', 'Previous API request may have been charged; automatic resend refused', retryable=False)
-            count = (db.execute("SELECT count(*) FROM calls c JOIN call_windows w ON w.id=c.id WHERE c.kind=? AND c.state!='not_sent' AND w.window=?",(kind,self.window)).fetchone()[0]
-                if self.window else db.execute("SELECT count(*) FROM calls WHERE kind=? AND state!='not_sent'",(kind,)).fetchone()[0])
-            if count >= self.limit:
-                raise ProviderError('experiment.budget_exhausted', 'Experiment call ceiling reached', retryable=False)
+            if self.limit is not None:
+                count = (db.execute("SELECT count(*) FROM calls c JOIN call_windows w ON w.id=c.id WHERE c.kind=? AND c.state!='not_sent' AND w.window=?",(kind,self.window)).fetchone()[0]
+                    if self.window else db.execute("SELECT count(*) FROM calls WHERE kind=? AND state!='not_sent'",(kind,)).fetchone()[0])
+                if count >= self.limit:
+                    raise ProviderError('experiment.budget_exhausted', 'Experiment call ceiling reached', retryable=False)
             db.execute('INSERT INTO calls VALUES(?,?,?,?,?,?,?)', (id, kind, model, 'started', time(), None, '{}'))
             db.execute('INSERT INTO call_windows VALUES(?,?)',(id,self.window))
         return None
@@ -72,12 +73,12 @@ class Ledger:
     def summary(self):
         with self.connection() as db:
             db.row_factory = sqlite3.Row
-            return {'limit_per_kind': self.limit, 'window':self.window, 'calls': [dict(r) for r in db.execute('SELECT c.*,w.window FROM calls c LEFT JOIN call_windows w ON w.id=c.id ORDER BY started')],
+            return {'limit_per_kind': self.limit, 'ceiling_enabled':self.limit is not None, 'window':self.window, 'calls': [dict(r) for r in db.execute('SELECT c.*,w.window FROM calls c LEFT JOIN call_windows w ON w.id=c.id ORDER BY started')],
                     'cost_note': 'API cost is unknown unless returned by the provider; quota credits are not currency.'}
 
 
 def install_guards(root,limit=50,native_only=False):
-    """Installed in experiment processes only. No model, shell or new image engine."""
+    """Durable request guards; limit=None removes only the experiment ceiling."""
     from app.workers.tasks import jobs
     from app.agents.capabilities.mcp_gateway import MCPGateway
     from app.agents import runtime

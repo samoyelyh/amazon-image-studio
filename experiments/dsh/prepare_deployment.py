@@ -15,8 +15,8 @@ def main():
     runtime=dict(x.split('=',1) for x in prior['backend']['Config']['Env'])
     for name in ['backend','worker','maintenance-worker','queue-retention-worker','celery-beat','flower']:
         env=dict(x.split('=',1) for x in prior[name]['Config']['Env'])
-        env.update(DSH_ENABLED='true',DSH_PLATFORM_STATE_DIR='/state',DSH_SIDECAR_URL='http://dsh-sidecar:18871',DSH_APPROVED_PROXY_HOSTS='host.docker.internal',DSH_CALL_LIMIT='20')
-        # A fresh bounded acceptance window: max20 calls per kind, original experiment receipts untouched.
+        env.update(DSH_ENABLED='true',DSH_PLATFORM_STATE_DIR='/state',DSH_SIDECAR_URL='http://dsh-sidecar:18871',DSH_APPROVED_PROXY_HOSTS='host.docker.internal',DSH_CALL_LIMIT='0')
+        # Formal operation keeps durable guards without an experiment lifetime ceiling.
         (STATE/(name+'.env')).write_text('\n'.join(k+'='+v for k,v in env.items()),encoding='utf-8')
     token_file=STATE/'token'
     if not token_file.exists():token_file.write_text(secrets.token_urlsafe(48),encoding='utf-8')
@@ -44,5 +44,5 @@ def main():
     if not dump.exists():
         with dump.open('wb') as out:
             subprocess.run(['docker','exec','amazon-image-studio-mysql-1','sh','-c','MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --single-transaction --routines --triggers --set-gtid-purged=OFF "$MYSQL_DATABASE"'],stdout=out,check=True)
-    print(json.dumps({'snapshot':True,'mysql_backup_bytes':dump.stat().st_size,'active_task_mutations':0,'default':'dsh','model':'kimi-for-coding','acceptance_call_limit':20}))
+    print(json.dumps({'snapshot':True,'mysql_backup_bytes':dump.stat().st_size,'active_task_mutations':0,'default':'dsh','model':'kimi-for-coding','acceptance_call_limit':None}))
 if __name__=='__main__':main()

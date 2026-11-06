@@ -35,6 +35,33 @@ def test_conservative_explicit_routing(text,route):
 def test_owner_cannot_be_forged_in_request():
     with pytest.raises(ValidationError):Request(session='s',request='request-id',text='生成图',user='forged')
 
+def test_disabling_acceptance_ceiling_preserves_paid_history_and_unknown_guards(tmp_path):
+    old=Ledger(tmp_path,limit=40,window='existing')
+    for kind in ['text','image']:
+        for i in range(40):
+            id=f'{kind}-{i}';old.reserve(id,kind,'model');old.finish(id,'succeeded',{'original':id})
+        with pytest.raises(ProviderError,match='ceiling'):old.reserve(kind+'-41',kind,'model')
+    formal=Ledger(tmp_path,limit=None,window='existing')
+    assert formal.summary()['ceiling_enabled'] is False
+    for kind in ['text','image']:
+        assert formal.reserve(kind+'-41',kind,'model') is None
+        assert formal.reserve(kind+'-0',kind,'model')=={'original':kind+'-0'}
+        with pytest.raises(ProviderError,match='resend'):formal.reserve(kind+'-41',kind,'model')
+    assert len(formal.summary()['calls'])==82
+    with pytest.raises(ProviderError,match='ceiling'):old.reserve('text-42','text','model')
+
+@pytest.mark.parametrize('value,expected',[(None,None),('',None),('0',None),('50',50)])
+def test_formal_call_limit_is_opt_in(monkeypatch,value,expected):
+    from app.agents.dsh_settings import call_limit
+    if value is None:monkeypatch.delenv('DSH_CALL_LIMIT',raising=False)
+    else:monkeypatch.setenv('DSH_CALL_LIMIT',value)
+    assert call_limit()==expected
+
+def test_invalid_limit_is_not_silently_treated_as_unrestricted(monkeypatch):
+    from app.agents.dsh_settings import call_limit
+    monkeypatch.setenv('DSH_CALL_LIMIT','-1')
+    with pytest.raises(ValueError):call_limit()
+
 
 def test_parallel_call_reservations_cannot_overspend(tmp_path):
     from concurrent.futures import ThreadPoolExecutor

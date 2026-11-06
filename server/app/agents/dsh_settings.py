@@ -3,6 +3,11 @@ import os
 from pathlib import Path
 
 def enabled():return os.environ.get('DSH_ENABLED','false').lower()=='true'
+def call_limit():
+    """Formal platform has no experiment lifetime ceiling; positive opts in."""
+    value=int(os.environ.get('DSH_CALL_LIMIT') or '0')
+    if value<0:raise ValueError('DSH_CALL_LIMIT must be zero (disabled) or positive')
+    return value or None
 def state():
     from app.experiments.dsh.environment import STATE
     root=Path(os.environ.get('DSH_PLATFORM_STATE_DIR',str(STATE)))

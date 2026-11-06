@@ -30,5 +30,13 @@ test('a failed later turn cannot reuse the previous model answer',async()=>{
   const runtime=await createNativeRuntime(root,async()=>{if(++calls===1)return {text:'first answer'};throw Error('synthetic unknown transport');});
   const agent=await runtime.ensure('no-stale-session','contract-model','Answer normally.',[]);
   await runtime.run(agent,'first','first');assert.equal(runtime.result(agent.id).text,'first answer');
-  await runtime.run(agent,'second','second');assert.equal(runtime.result(agent.id),undefined);
+  await assert.rejects(runtime.run(agent,'second','second'),/synthetic unknown transport/);assert.equal(runtime.result(agent.id),undefined);
+});
+
+test('a provider failure retains its real code instead of looking like an empty routing decision',async()=>{
+  const root=mkdtempSync(join(tmpdir(),'dsh-native-error-code-'));let calls=0;
+  const runtime=await createNativeRuntime(root,async()=>{calls++;throw Object.assign(Error('验收调用次数已达上限'),{code:'experiment.budget_exhausted'});});
+  const agent=await runtime.ensure('failure-session','contract-model','Answer normally.',[]);
+  await assert.rejects(runtime.run(agent,'request','hello'),error=>error.code==='experiment.budget_exhausted'&&error.message==='验收调用次数已达上限');
+  assert.equal(calls,1);assert.equal(runtime.result(agent.id),undefined);
 });

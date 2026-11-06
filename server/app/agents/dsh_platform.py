@@ -105,20 +105,30 @@ async def sync(db,run,principal):
         for a in await chat.attachments(db,conv):
             if a['id'] in run.selection_json.get('attachment_ids',[]):
                 m=await db.get(HermesMessage,a['id']);m.metadata_json={**m.metadata_json,'submitted':True}
-    if detail.get('error'):run.result_json={**run.result_json,'error':detail['error']};run.error_code='dsh.session_failed'
-    else:run.error_code=None;run.result_json={k:v for k,v in run.result_json.items() if k!='error'}
+    with native.connection() as c:model_jobs=c.execute('SELECT job FROM model_jobs WHERE turn_id=? ORDER BY created DESC',(turn,)).fetchall()
+    if state=='failed' and not detail.get('error_code'):
+        from app.models.tasks import Job
+        for value in model_jobs:
+            failed=await db.get(Job,value['job'])
+            if failed and failed.status=='failed' and failed.error_code:
+                detail['error_code']=failed.error_code
+                if failed.error_code=='experiment.budget_exhausted':detail['error']='该轮曾被本地验收次数上限拦截，未向上游发送请求。'
+                break
+    if detail.get('error'):
+        message=detail['error'].removeprefix('Error: ')
+        run.result_json={**run.result_json,'error':detail['error'],'execution_error':message};run.error_code=detail.get('error_code') or 'dsh.session_failed'
+    else:run.error_code=None;run.result_json={k:v for k,v in run.result_json.items() if k not in {'error','execution_error'}}
     for e in detail.get('events',[]):
         key='dsh:'+native.digest(e)
         if not await db.scalar(select(AgentEvent.id).where(AgentEvent.run_id==run.id,AgentEvent.event_key==key)):
             db.add(AgentEvent(run_id=run.id,event_key=key,event_type=e['type'],payload=e,created_at=datetime.now(timezone.utc)))
-    with native.connection() as c:model_jobs=c.execute('SELECT job FROM model_jobs WHERE turn_id=?',(turn,)).fetchall()
     for j in model_jobs:
         if not await db.scalar(select(AgentJobLink.id).where(AgentJobLink.run_id==run.id,AgentJobLink.job_id==j['job'])):
             db.add(AgentJobLink(run_id=run.id,job_id=j['job'],role='decision'))
     reply=await db.scalar(select(HermesMessage).where(HermesMessage.conversation_id==run.conversation_id,HermesMessage.role=='assistant',HermesMessage.metadata_json['dsh_turn'].as_string()==turn))
     if reply:
         answer=result.get('answer')
-        stage={'main_session':'正在理解需求','vision_session':'正在核对商品原图','executor_session':'正在应用专业 Skill 策划模块','interrupted':'会话已中断，保留原任务和付费回执，可恢复','failed':'任务中断，请查看调用记录'}
+        stage={'main_session':'正在理解需求','vision_session':'正在核对商品原图','executor_session':'正在应用专业 Skill 策划模块','interrupted':'会话已中断，保留原任务和付费回执，可恢复','failed':run.result_json.get('execution_error') or '任务中断，请查看调用记录'}
         reply.content=answer if state not in {'main_session','vision_session','executor_session','accepted'} and answer else stage.get(state,answer or 'DSH 正在处理任务…')
     await db.commit()
 

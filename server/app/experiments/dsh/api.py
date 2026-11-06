@@ -260,7 +260,8 @@ async def tickets(session: str | None=None, principal:Principal=Depends(require_
 @router.get('/metrics')
 async def metrics(principal:Principal=Depends(require_permissions('platform.admin'))):
     from app.experiments.dsh.ledger import Ledger
-    return Ledger(STATE/'worker').summary()
+    from app.agents import dsh_settings
+    return Ledger(dsh_settings.state()/'worker',limit=dsh_settings.call_limit()).summary() if dsh_settings.enabled() else Ledger(STATE/'worker').summary()
 
 
 async def scheduler():

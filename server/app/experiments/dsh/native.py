@@ -334,7 +334,10 @@ async def model(value:dict,db:AsyncSession=Depends(get_db_session)):
         await db.commit()  # MySQL repeatable-read must see Worker commits on each poll.
         await db.refresh(job)
         if job.status=='succeeded':return job.result_json.get('metadata') or {}
-        if job.status in {'failed','cancelled'}:raise AppError(job.error_code or 'dsh.model_failed','Native Session model Job failed; inspect Job receipt',409)
+        if job.status in {'failed','cancelled'}:
+            code=job.error_code or 'dsh.model_failed'
+            message='验收调用次数已达上限，本次未发送上游请求。请检查 DSH_CALL_LIMIT 配置。' if code=='experiment.budget_exhausted' else f'模型调用未完成（{code}），请查看本任务调用记录。'
+            raise AppError(code,message,409)
         await asyncio.sleep(.5)
     raise AppError('dsh.model_unknown','Model request still pending; never automatically repeat',409)
 

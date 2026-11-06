@@ -9,9 +9,9 @@ if os.environ.get('DSH_ENABLED','false').lower()=='true':
     from celery.signals import worker_process_init
     @worker_process_init.connect
     def install_native_guards(**kwargs):
-        from app.agents.dsh_settings import state
+        from app.agents.dsh_settings import state,call_limit
         from app.experiments.dsh.ledger import install_guards
-        install_guards(state()/'worker',limit=int(os.environ.get('DSH_CALL_LIMIT','50')),native_only=True)
+        install_guards(state()/'worker',limit=call_limit(),native_only=True)
 celery_app = Celery(
     "amazon_image_studio",
     broker=settings.resolved_celery_broker_url,
