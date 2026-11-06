@@ -109,3 +109,4 @@ __all__ = [
     "HermesConversation", "HermesMessage", "HermesProposal", "HermesToolAudit",
     "AgentRun", "AgentEvent", "AgentJobLink",
 ]
+from app.models.agent_controller import AgentControllerSetting

@@ -181,7 +181,9 @@ class OpenAICompatibleProvider(BaseImageProvider):
         proxy=config.get('http_proxy')
         if proxy:
             parsed=urlparse(str(proxy))
-            if parsed.scheme!='http' or parsed.hostname not in {'127.0.0.1','localhost'} or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in {'','/'}:
+            import os
+            approved={'127.0.0.1','localhost',*os.environ.get('DSH_APPROVED_PROXY_HOSTS','').split(',')}
+            if parsed.scheme!='http' or parsed.hostname not in approved or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in {'','/'}:
                 raise ProviderError('provider.invalid_config','Only an approved loopback HTTP proxy is supported',http_status=422)
         try:
             client_options={'proxy':proxy,'trust_env':False} if proxy else {}

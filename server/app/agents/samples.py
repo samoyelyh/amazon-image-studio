@@ -10,6 +10,11 @@ from app.models.tasks import Job,BatchTryOnVersion,JobAttempt
 
 
 async def upstream_unknown(db,job):
+    meta=(job.input_json or {}).get('metadata') or {}
+    if (meta.get('dsh_native') or meta.get('workflow')=='dsh_native_session') and job.status=='failed' and job.error_code in {'job.worker_lost','job.timeout'}:
+        # A lost process can have sent a paid request. Receipt-only recovery is
+        # separate from creating/retrying another generation Job.
+        return True
     if any(w in str(job.error_code).lower() for w in ('timeout','524','network','remote_unknown')):return True
     attempt=await db.scalar(select(JobAttempt).where(JobAttempt.job_id==job.id,JobAttempt.organization_id==job.organization_id)
         .order_by(JobAttempt.attempt_number.desc()).limit(1))

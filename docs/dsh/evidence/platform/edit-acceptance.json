@@ -1,0 +1,9 @@
+{
+  "status": "completed",
+  "new_images": 1,
+  "same_ticket": true,
+  "target_slot": "block2",
+  "version": 2,
+  "original_asset_hashes_unchanged": 8,
+  "other_slot_designs_unchanged": true
+}

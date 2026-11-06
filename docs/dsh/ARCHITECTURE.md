@@ -1,5 +1,7 @@
 # DSH 实验盘点与接入边界
 
+> **正式部署更新**：当前 18080 默认 DSH，使用现有 React/FastAPI/MySQL，见 [PLATFORM_18080.md](PLATFORM_18080.md)。下文为原始盘点历史。
+
 > 原生 Session 迁移后的架构与验收见 [NATIVE_MIGRATION.md](NATIVE_MIGRATION.md)。本文件以下保留第一阶段盘点历史，包含当时仍调用 LangGraph 规划器的旧 Adapter，不代表当前 DSH 主路径。
 
 日期：2026-11-06，北京时间。原工作目录 `C:\Users\Woda\Documents\AI生图`。

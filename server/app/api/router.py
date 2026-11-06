@@ -44,9 +44,11 @@ from app.api.attachment_reference_library import admin_router as attachment_refe
 from app.api.attachment_materials import router as attachment_materials_router
 from app.api.creative_presets import admin_router as creative_presets_admin_router, router as creative_presets_router
 from app.core.config import get_settings
+from app.experiments.dsh.native import router as dsh_native_router
 
 
 api_router = APIRouter()
+api_router.include_router(dsh_native_router)
 api_router.include_router(health_router)
 api_router.include_router(auth_router)
 api_router.include_router(users_router)

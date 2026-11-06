@@ -28,7 +28,7 @@ beforeEach(() => { vi.mocked(unzip).mockClear() })
 const MiB = 1024 * 1024
 const image = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3])
 function file(name: string, bytes: Uint8Array = image, path = ''): File {
-  const output = new File([bytes], name, { type: 'application/octet-stream', lastModified: 123 })
+  const output = new File([Uint8Array.from(bytes)], name, { type: 'application/octet-stream', lastModified: 123 })
   if (path) Object.defineProperty(output, 'webkitRelativePath', { value: path })
   return output
 }

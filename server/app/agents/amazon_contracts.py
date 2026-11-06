@@ -122,3 +122,4 @@ class GenerateAPlus(StrictModel):
     expected_revision: int = Field(ge=1)
     module_ids: list[str] = Field(min_length=1, max_length=7)
     retry_failed: bool = False
+    slot_ids:dict[str,list[str]]|None=None

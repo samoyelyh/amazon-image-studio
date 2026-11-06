@@ -194,13 +194,7 @@ async def _execute_committed(db, settings, redis, run, plan, permissions, author
     if submitted_inputs:result['submitted_import_keys']=list(dict.fromkeys(submitted_inputs))
     conv = await conversation(db, run.organization_id, run.user_id, run.conversation_id)
     if conv.mode == "chat":
-        prior_runs = list((await db.scalars(select(AgentRun).where(AgentRun.conversation_id == conv.id)
-            .with_for_update().execution_options(populate_existing=True))).all())
-        last_number = max((s["number"] for r in prior_runs for s in r.result_json.get("gallery_slots", [])), default=0)
-        images = list((await db.scalars(select(Job).where(Job.id.in_(ids), Job.capability != "text_generation")
-            .order_by(Job.created_at, Job.client_item_id, Job.id))).all())
-        result["gallery_slots"] = list(run.result_json.get("gallery_slots", [])) + [
-            {"job_id": j.id, "number": last_number+i+1} for i, j in enumerate(images)]
+        result['gallery_slots'] = await assign_gallery_slots(db,conv,run,ids)
     for item in results:
         if item["result"].get("batch_id"):
             result["batch_id"] = item["result"]["batch_id"]
@@ -779,3 +773,12 @@ async def response(db, settings, run):
         events=[{"id": e.id, "type": e.event_type, "payload": e.payload, "created_at": e.created_at.isoformat()} for e in events],
         jobs=jobs, outputs=gallery,verification=verification,execution_notice=run.result_json.get('execution_notice'),prompts=prompt_records(run,records),
         workspace_url=f"/tasks?batch_id={run.result_json['batch_id']}" if run.result_json.get("batch_id") else None)
+
+
+async def assign_gallery_slots(db,conv,run,ids,*,ordered=False):
+    prior_runs=list((await db.scalars(select(AgentRun).where(AgentRun.conversation_id==conv.id).with_for_update().execution_options(populate_existing=True))).all())
+    last_number=max((s['number'] for r in prior_runs for s in r.result_json.get('gallery_slots',[])),default=0)
+    images=list((await db.scalars(select(Job).where(Job.id.in_(ids),Job.capability!='text_generation').order_by(Job.created_at,Job.client_item_id,Job.id))).all())
+    if ordered:images.sort(key=lambda j:ids.index(j.id))
+    previous=list(run.result_json.get('gallery_slots',[]));known={s['job_id'] for s in previous}
+    return previous+[{'job_id':j.id,'number':last_number+i+1} for i,j in enumerate(j for j in images if j.id not in known)]

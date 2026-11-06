@@ -24,3 +24,11 @@ test('official Agent Loop executes scoped native tool calls and commits durable 
   assert.ok(records.some(r=>r.event?.type==='turn/end'&&r.event.data.reason.kind==='completed'));
   assert.equal(records.filter(r=>r.type==='model.request')[0].tools.join(','),'business_probe');
 });
+
+test('a failed later turn cannot reuse the previous model answer',async()=>{
+  const root=mkdtempSync(join(tmpdir(),'dsh-native-no-stale-'));let calls=0;
+  const runtime=await createNativeRuntime(root,async()=>{if(++calls===1)return {text:'first answer'};throw Error('synthetic unknown transport');});
+  const agent=await runtime.ensure('no-stale-session','contract-model','Answer normally.',[]);
+  await runtime.run(agent,'first','first');assert.equal(runtime.result(agent.id).text,'first answer');
+  await runtime.run(agent,'second','second');assert.equal(runtime.result(agent.id),undefined);
+});

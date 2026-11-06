@@ -261,7 +261,7 @@ async def generate(db, settings, conv, action, key):
             'source_index':parent.get('source_index') if parent else i+1 if independent else 1 if source else None}
         items.append(BatchJobItemRequest(client_item_id=f'chat-{i+1:03}',
             prompt=independent_edit_prompt(action.prompt,i,action.count) if independent else action.prompt,
-            reference_asset_ids=refs,size=size,metadata={'workflow':'agent_chat','agent_image':image_meta}))
+            reference_asset_ids=refs,size=size,metadata={'workflow':'agent_chat','dsh_native':conv.controller_type=='dsh','agent_image':image_meta}))
     payload = JobBatchSubmitRequest(name=conv.title[:160], workspace_type="listing", operation_code="listing.generate",
         capability=action.capability, model_code=action.model_code, idempotency_key=key, project_id=project.id,
         concurrency=action.count if independent else min(action.count, 2),items=items)

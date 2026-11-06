@@ -1,0 +1,7 @@
+FROM amazon-image-studio-backend:release-20261105-aplus-professional-r2
+USER root
+COPY --chown=app:app server/app /app/app
+COPY --chown=app:app server/alembic/versions/0064_dsh_controller.py /app/alembic/versions/
+COPY --chown=app:app server/alembic/versions/0065_dsh_switch_defaults.py /app/alembic/versions/
+USER app
+LABEL local.release="20261106-dsh-native-k28"

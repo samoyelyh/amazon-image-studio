@@ -1,5 +1,7 @@
 # DSH 实验交付记录
 
+> **当前状态：18080 已正式接入并默认使用原生 DSH / K2.8。** 当前代码、真实八图 A+、单图修改、MySQL、React、回退及遗留问题见 [正式交付](PLATFORM_18080.md)。以下为历史阶段记录。
+
 > **原生迁移更新**：当前 DSH 路径已使用真实 Harness Main / Vision / Executor Sessions，退出旧 LangGraph 规划器。完整真实商品结果、未通过项和 18080 切换限制见 [NATIVE_MIGRATION.md](NATIVE_MIGRATION.md)。以下是之前 Ticket 包装实验的历史记录。
 
 2026-11-06，北京时间。结论：值得继续验证 **DSH Ticket 管理层**；现有证据不足以采用完整编码原型替换生产主控。独立 Adapter 已能运行真实任务，规划、Skill、Job、Worker、Provider 和图片版本继续使用原平台。

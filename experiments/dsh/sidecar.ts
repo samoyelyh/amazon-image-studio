@@ -29,5 +29,5 @@ const server=createServer(async(req,res)=>{
     return respond(404,{error:'not_found'})
   }catch(e:any){respond(e.status||400,{error:e.message})}
 })
-server.listen(Number(process.env.DSH_PORT||18871),'127.0.0.1',()=>console.log('Official DSH core Sidecar ready on loopback'))
+server.listen(Number(process.env.DSH_PORT||18871),process.env.DSH_HOST||'127.0.0.1',()=>console.log('Official DSH core Sidecar ready on private interface'))
 process.on('SIGTERM',()=>server.close(()=>{controller.repo.db.close();process.exit(0)}))

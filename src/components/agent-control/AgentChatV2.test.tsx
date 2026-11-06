@@ -2,12 +2,21 @@ import { expect,it,vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { AgentPlanCard,AgentResultGallery } from './AgentChatCards'
-import { canConfirmAgentRun,createAgentChat,sendAgentChatMessage,type AgentOutput,type AgentRun } from '../../lib/agentControlApi'
+import { canConfirmAgentRun,createAgentChat,sendAgentChatMessage,resumeAgentRun,type AgentOutput,type AgentRun } from '../../lib/agentControlApi'
 import { authenticatedFetch } from '../../lib/authApi'
 vi.mock('../../lib/authApi',()=>({authenticatedFetch:vi.fn(),authenticatedFetchResponse:vi.fn()}))
 const fixture:AgentRun={id:'run',conversation_id:'chat',status:'awaiting_confirmation',revision:1,planner_mode:'mock',
   plan:{schema_version:1,summary:'生成图片',actions:[{tool:'generate_chat_images',arguments:{}}],image_count:1,may_charge:true,cost_note:'需要确认'},
   result:{},error_code:null,state_signature:'a'.repeat(64),confirmation_token:'b'.repeat(64),events:[],jobs:[],workspace_url:null}
+
+it('offers receipt-aware recovery for an interrupted native Session in the existing card',async()=>{
+  const run={...fixture,status:'blocked',planner_mode:'dsh-native',plan:null,result:{native_state:'interrupted'}}
+  const html=renderToStaticMarkup(<MemoryRouter><AgentPlanCard run={run} status={{enabled:true,writes_enabled:true,model_calls_enabled:true,planner_mode:'existing_text',checkpoint_configured:true}} busy={false} onConfirm={vi.fn()} onStop={vi.fn()} onResume={vi.fn()}/></MemoryRouter>)
+  expect(html).toContain('读取回执并恢复');expect(html).not.toContain('这次创作需要你确认')
+  vi.mocked(authenticatedFetch).mockResolvedValue(run)
+  await resumeAgentRun('run')
+  expect(vi.mocked(authenticatedFetch).mock.lastCall).toEqual(['/agent/runs/run/resume',{method:'POST'}])
+})
 
 it('starts chat without requiring a project or form fields',async()=>{
   vi.mocked(authenticatedFetch).mockResolvedValue({id:'chat'})

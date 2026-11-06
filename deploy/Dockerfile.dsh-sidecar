@@ -1,0 +1,9 @@
+FROM node:24-bookworm-slim
+WORKDIR /opt/dsh
+COPY experiments/dsh/native-runtime-package.json ./harness/package.json
+COPY experiments/dsh/native-runtime-package-lock.json ./harness/package-lock.json
+RUN cd harness && npm ci --ignore-scripts --no-audit --no-fund
+COPY experiments/dsh/*.mjs experiments/dsh/*.ts ./
+COPY experiments/dsh/upstream ./upstream
+ENV DSH_HOST=0.0.0.0 DSH_PORT=18871 DSH_STATE_DIR=/state/core
+CMD ["node","--experimental-transform-types","sidecar.ts"]

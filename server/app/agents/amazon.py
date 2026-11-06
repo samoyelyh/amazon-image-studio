@@ -157,6 +157,19 @@ async def revise(db, conv, args):
 async def revise_many(db, conv, args):
     row,p=await record(db,conv,args.plan_id,True)
     data=dict(row.metadata_json)
+    # Upgrade native historical module signatures before editing one slot. This
+    # preserves reuse of its unchanged siblings on a later generation request.
+    if data.get('controller')=='dsh-native':
+        from app.agents.aplus_design import slots
+        submissions=[]
+        for previous in data.get('submissions',[]):
+            sigs=dict(previous.get('module_signatures',{}))
+            for old in p.modules:
+                for slot in slots(p,old):
+                    key=old.id+'::'+slot['id']
+                    if sigs.get(key)==module_signature(p,old):sigs[key]=slot_signature(p,old,slot)
+            submissions.append({**previous,'module_signatures':sigs})
+        data={**data,'submissions':submissions}
     if data['revision']!=args.expected_revision:raise AppError('agent.revision_conflict','方案已更新，请刷新后修改。',409)
     changed={m.id:m for m in args.modules}
     if set(changed)-{m.id for m in p.modules}:raise AppError('agent.module_missing','指定模块不存在。',404)
@@ -234,9 +247,10 @@ async def _slot_work(db,plan,data,args):
         if module.id not in args.module_ids:continue
         signature=module_signature(plan,module)
         for slot in slots(plan,module):
+            if args.slot_ids is not None and slot['id'] not in args.slot_ids.get(module.id,[]):continue
             pair=(module.id,slot['id']);prior=latest.get(pair)
             job=await db.get(Job,prior[0]) if prior else None
-            same=prior and prior[1]==signature
+            same=prior and prior[1] in ({signature,slot_signature(plan,module,slot)} if data.get('controller')=='dsh-native' else {signature})
             if same and job and not (job.status=='failed' and args.retry_failed):
                 reused[pair]=job;continue
             if job:
@@ -245,6 +259,10 @@ async def _slot_work(db,plan,data,args):
                 if job.status=='failed' and await upstream_unknown(db,job):
                     raise AppError('agent.remote_unknown','前次上游结果未知，不能通过重试或修改Prompt重复提交。',409)
             pending.append((module,slot))
+    if args.slot_ids is not None:
+        valid={m.id:{s['id'] for s in slots(plan,m)} for m in plan.modules if m.id in args.module_ids}
+        if set(args.slot_ids)-set(valid) or any(not values or set(values)-valid[mid] for mid,values in args.slot_ids.items()):
+            raise AppError('agent.slot_missing','指定图片槽位不存在。',404)
     return pending,reused
 
 
@@ -286,7 +304,7 @@ async def generate(db, settings, conv, args, key):
         item_id=m.id if legacy else m.id+'::'+slot['id']
         items.append(BatchJobItemRequest(client_item_id=item_id,prompt=prompt,reference_asset_ids=refs,
             size=f"{spec['width']}x{spec['height']}",requested_width=spec['width'],requested_height=spec['height'],quality='high',metadata={
-                'workflow':'agent_aplus','effective_prompt_snapshot':prompt,'prompt_recipe_version':professional_prompts.VERSION,
+                'workflow':'agent_aplus','dsh_native':conv.controller_type=='dsh','effective_prompt_snapshot':prompt,'prompt_recipe_version':professional_prompts.VERSION,
                 'personal_preference_versions':[{'id':v['id'],'revision':v['revision']} for v in preferences],
                 'amazon_module':{'plan_id':row.id,'module_id':m.id,'slot_id':slot['id'],'slot_snapshot':direction.model_dump(mode='json'),
                     'plan_revision':data['revision'],'module_snapshot':m.model_dump(mode='json'),'rules_version':p.rules_version,'spec_snapshot':spec,
@@ -301,6 +319,9 @@ async def generate(db, settings, conv, args, key):
         model_code=budget['model_code'],idempotency_key=key,concurrency=min(12,len(items)),items=items))
     result={'batch_id':batch.id,'job_ids':[j.id for j in jobs],'module_ids':[m.id for m,s in pending],
         'slot_ids':[s['id'] for m,s in pending],'request_key':key,
-        'module_signatures':{m.id+'::'+s['id']:module_signature(p,m) for m,s in pending}}
+        'module_signatures':{m.id+'::'+s['id']:slot_signature(p,m,s) if data.get('controller')=='dsh-native' else module_signature(p,m) for m,s in pending}}
     row.metadata_json={**data,'project_id':project.id,'submissions':[*data['submissions'],result]}
     await db.flush();return {**result,'amazon_plan_id':row.id,'project_id':project.id}
+
+def slot_signature(plan,module,slot):
+    return 'slot-v1:'+module_signature(plan,module.model_copy(update={'image_slots':[slot['direction']]}))

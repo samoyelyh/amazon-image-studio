@@ -16,7 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.config import get_settings
 from app.core.errors import AppError
 from app.db.session import get_db_session, get_engine
-from app.experiments.dsh.environment import STATE
+from app.agents.dsh_settings import state, token, sidecar_url
+STATE=state()
 from app.infrastructure.redis import get_redis_client
 from app.security.principal import require_permissions
 from app.models.hermes_agent import HermesConversation, HermesMessage
@@ -35,11 +36,12 @@ class VisualRevision(StrictModel):
     plan_id:str
     expected_revision:int=Field(ge=1)
     module_id:str=Field(min_length=1,max_length=50)
+    slot_id:str|None=None
     composition:str=Field(min_length=5,max_length=3000)
     image_prompt:str=Field(min_length=5,max_length=10000)
     art_direction:ArtDirection
 
-router=APIRouter(prefix='/api/v1/experiment/native')
+router=APIRouter(prefix='/experiment/native')
 
 def digest(v):return hashlib.sha256(json.dumps(v,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
 
@@ -57,12 +59,12 @@ def get_turn(id):
 
 async def internal_auth(x_dsh_token:str=Header(default='')):
     import secrets
-    if not secrets.compare_digest(x_dsh_token,(STATE/'sidecar.token').read_text().strip()):
+    if not secrets.compare_digest(x_dsh_token,token()):
         raise AppError('dsh.internal_denied','Forbidden',403)
 
 async def rpc(path,value,timeout=20):
     async with httpx.AsyncClient(timeout=timeout,trust_env=False) as client:
-        response=await client.post('http://127.0.0.1:18871'+path,json=value,headers={'x-dsh-token':(STATE/'sidecar.token').read_text().strip()})
+        response=await client.post(sidecar_url()+path,json=value,headers={'x-dsh-token':token()})
     if response.status_code!=200:raise AppError('dsh.runtime_error',response.json().get('error','Native runtime unavailable'),response.status_code)
     return response.json()
 
@@ -99,7 +101,7 @@ async def status(id,principal):
     if row['run']:
         async with async_sessionmaker(get_engine(),expire_on_commit=False)() as db:
             run=await db.get(AgentRun,row['run']);conv=await owned_conversation(db,row)
-            jobs=(await db.scalars(select(Job).join(AgentJobLink,AgentJobLink.job_id==Job.id).where(AgentJobLink.run_id==run.id))).all()
+            jobs=(await db.scalars(select(Job).join(AgentJobLink,AgentJobLink.job_id==Job.id).where(AgentJobLink.run_id==run.id,Job.capability!='text_generation'))).all()
             all_outputs=await chat.outputs(db,conv)
             job_ids={j.id for j in jobs};outputs=[o for o in all_outputs if o['job_id'] in job_ids]
             state=native['state']
@@ -146,7 +148,7 @@ async def reconcile_jobs(db):
     from app.agents.samples import upstream_unknown
     runs=(await db.scalars(select(AgentRun).where(AgentRun.graph_version=='dsh-native-v1',AgentRun.status.in_(['planning','waiting_jobs','submitted'])))).all()
     for run in runs:
-        jobs=(await db.scalars(select(Job).join(AgentJobLink,AgentJobLink.job_id==Job.id).where(AgentJobLink.run_id==run.id))).all()
+        jobs=(await db.scalars(select(Job).join(AgentJobLink,AgentJobLink.job_id==Job.id).where(AgentJobLink.run_id==run.id,Job.capability!='text_generation'))).all()
         if not jobs or any(j.status not in {'succeeded','failed','cancelled'} for j in jobs):continue
         unknown=any([await upstream_unknown(db,j) for j in jobs if j.status=='failed'])
         run.status='remote_unknown' if unknown else 'completed' if all(j.status=='succeeded' for j in jobs) else 'failed'
@@ -170,12 +172,14 @@ async def prepare(value:dict,db:AsyncSession=Depends(get_db_session)):
     tasks=await rpc('/tickets',who)
     target=next((t for t in tasks if t['id']==ticket),None)
     if not target:raise AppError('dsh.ticket_missing','Ticket not found',404)
-    conv_id=str(uuid5(NAMESPACE_URL,digest([who,ticket,'native'])))
+    ui=p.get('selection',{})
+    conv_id=ui.get('ui_conversation') or str(uuid5(NAMESPACE_URL,digest([who,ticket,'native'])))
     conv=await db.get(HermesConversation,conv_id)
+    if conv and (conv.organization_id,conv.user_id)!=(who['org'],who['user']):raise AppError('dsh.scope_denied','Conversation not found',404)
     if not conv:
         conv=HermesConversation(id=conv_id,organization_id=who['org'],user_id=who['user'],controller_type='dsh',mode='chat',title=p['text'][:80]);db.add(conv)
-    elif conv.controller_type!='dsh':conv.controller_type='dsh'
-    run=await db.scalar(select(AgentRun).where(AgentRun.conversation_id==conv_id,AgentRun.client_request_id==row['id']))
+    run=await db.get(AgentRun,ui['ui_run']) if ui.get('ui_run') else await db.scalar(select(AgentRun).where(AgentRun.conversation_id==conv_id,AgentRun.client_request_id==row['id']))
+    if run and (run.conversation_id!=conv_id or run.user_id!=who['user'] or run.organization_id!=who['org']):raise AppError('dsh.scope_denied','Run not found',404)
     if not run:
         msg=HermesMessage(conversation_id=conv_id,organization_id=who['org'],user_id=who['user'],role='user',content=p['text'],metadata_json={'dsh_native':True},created_at=datetime.now(timezone.utc));db.add(msg);await db.flush()
         run=AgentRun(conversation_id=conv_id,organization_id=who['org'],user_id=who['user'],source_message_id=msg.id,
@@ -187,6 +191,7 @@ async def prepare(value:dict,db:AsyncSession=Depends(get_db_session)):
         image=await chat.asset(db,who['org'],who['user'],aid)
         image.metadata_json={**(image.metadata_json or {}),'private_scope':'agent_chat'}
         if aid not in existing:await chat.attach(db,conv,AttachmentCreate(asset_id=aid))
+    run.result_json={**run.result_json,'dsh_ticket':ticket}
     await db.commit()
     with connection() as c:c.execute('UPDATE turns SET ticket=?,conversation=?,run=? WHERE id=?',(ticket,conv_id,run.id,row['id']))
     await rpc('/bind',{**who,'ticket':ticket,'conversation':conv_id})
@@ -217,7 +222,10 @@ def catalog(row):
             'visible_facts':{'type':'array','items':{'type':'string'},'minItems':1,'maxItems':12},'identity_lock':{'type':'string'},
             'unknown_fields':{'type':'array','items':{'type':'string'}}},'required':['selected_asset_ids','visible_facts','identity_lock','unknown_fields'],'additionalProperties':False}})
     for cap in reg.capabilities.values():
-        if cap.source=='mcp' and cap.ready:
+        blocked=STATE/'mcp-unknown.json'
+        unknown=json.loads(blocked.read_text()) if blocked.exists() else {}
+        prior_unknown=any(asin.lower() in row['payload'].lower() for asin in unknown)
+        if cap.source=='mcp' and cap.ready and not prior_unknown:
             tools.append({'name':'mcp_'+cap.id.replace('.','_'),'description':cap.description,'parameters':cap.input_schema,'capability_id':cap.id})
     tools.extend([
         {'name':'produce_aplus','description':'Design and immediately generate a complete professional A+ suite. Model supplies the full creative brief; existing approved SavePlan, Composer and concurrent JobBatch services execute it.', 'parameters':SaveProfessionalBrief.model_json_schema()},
@@ -229,14 +237,21 @@ def catalog(row):
 @router.post('/model',dependencies=[Depends(internal_auth)])
 async def model(value:dict,db:AsyncSession=Depends(get_db_session)):
     row=get_turn(value['turn']);who=json.loads(row['owner']);o=value['options'];role=value['role']
+    from app.security.principal import resolve_principal
+    current=await resolve_principal(db,who['user'],who['org'])
+    if not {'jobs.read','projects.read','assets.read'}<=set(current.permissions):raise AppError('dsh.permission_revoked','当前账号已无权继续此任务。',403)
     if o['model'] not in {'gpt-6.1-sol','gpt-6.1-terra','kimi-for-coding'}:raise AppError('dsh.model_denied','Model not allowed',403)
-    if value.get('replay_known') and role=='executor':
+    if value.get('replay_known'):
         with connection() as c:
             recorded=c.execute('SELECT job FROM model_jobs WHERE turn_id=? AND role=? AND model=? ORDER BY created DESC',(row['id'],role,o['model'])).fetchall()
         for known in recorded:
             job=await db.get(Job,known['job'])
-            if job and job.status=='succeeded' and (job.organization_id,job.created_by)==(who['org'],who['user']) and (job.result_json or {}).get('metadata',{}).get('tool_calls'):
+            if job and job.status=='succeeded' and (job.organization_id,job.created_by)==(who['org'],who['user']) and ((job.result_json or {}).get('metadata',{}).get('tool_calls') or role=='main' and (job.result_json or {}).get('metadata',{}).get('text')):
                 return {**job.result_json['metadata'],'replayed_from_job':job.id,'provider_requests_this_step':0}
+            if job:
+                from app.agents.samples import upstream_unknown
+                if job.status not in {'succeeded','cancelled'} and (job.status!='failed' or await upstream_unknown(db,job)):
+                    raise AppError('dsh.model_unknown','前次模型付费结果未知，禁止重新发送。',409)
     messages=[]
     for m in o['messages']:
         content=m.get('content') or [];texts='\n'.join(b.get('text','') for b in content if b['type']=='text')
@@ -265,6 +280,7 @@ async def model(value:dict,db:AsyncSession=Depends(get_db_session)):
     with connection() as c:c.execute('INSERT OR IGNORE INTO model_jobs VALUES(?,?,?,?,?)',(row['id'],role,job.id,o['model'],time()))
     if job.status=='queued':await dispatch_jobs(db,[job])
     for _ in range(1200):
+        await db.commit()  # MySQL repeatable-read must see Worker commits on each poll.
         await db.refresh(job)
         if job.status=='succeeded':return job.result_json.get('metadata') or {}
         if job.status in {'failed','cancelled'}:raise AppError(job.error_code or 'dsh.model_failed','Native Session model Job failed; inspect Job receipt',409)
@@ -284,6 +300,14 @@ async def tool(value:dict,db:AsyncSession=Depends(get_db_session)):
     if old and name!='read_context':
         if old['state']=='succeeded':return json.loads(old['result'])
         raise AppError('dsh.tool_unknown','Prior business tool outcome unknown; inspect receipt before retry',409)
+    if name in {'produce_aplus','produce_listing','generate','create_images','revise_visual','revise_and_generate'}:
+        # A new tool-call ID or prompt cannot bypass an unresolved paid image
+        # request on the same durable Ticket, including generic image tasks.
+        from app.agents.samples import upstream_unknown
+        pending=(await db.scalars(select(Job).join(AgentJobLink,AgentJobLink.job_id==Job.id).join(AgentRun,AgentRun.id==AgentJobLink.run_id).where(
+            AgentRun.organization_id==who['org'],AgentRun.user_id==who['user'],AgentRun.result_json['dsh_ticket'].as_string()==row['ticket'],Job.capability!='text_generation',Job.status=='failed'))).all()
+        if any([await upstream_unknown(db,j) for j in pending]):
+            raise AppError('dsh.remote_unknown','本任务存在付费结果未知的图片，请先核对或恢复原回执，不能新建请求重复生图。',409)
     if name not in {'load_skill','read_context','complete'}:
         tasks=await rpc('/tickets',who)
         ticket=next((t for t in tasks if t['id']==row['ticket']),None)
@@ -301,6 +325,8 @@ async def tool(value:dict,db:AsyncSession=Depends(get_db_session)):
             candidates=(await db.scalars(select(HermesMessage).where(HermesMessage.organization_id==who['org'],HermesMessage.user_id==who['user'],HermesMessage.role=='dsh_visual_facts').order_by(HermesMessage.created_at.desc()).limit(10))).all()
             facts=next((f for f in candidates if f.metadata_json.get('selected_asset_ids') and set(f.metadata_json['selected_asset_ids'])<=known),None)
         result['visual_facts']=facts.metadata_json if facts else None
+        blocked=STATE/'mcp-unknown.json'
+        result['unresolved_research']=json.loads(blocked.read_text()) if blocked.exists() else {}
     elif name=='record_visual_facts':
         known={a['asset_id'] for a in await chat.attachments(db,conv)}
         if not set(args['selected_asset_ids'])<=known:raise AppError('dsh.asset_denied','Vision facts must reference owned attached images',403)
@@ -343,11 +369,18 @@ async def tool(value:dict,db:AsyncSession=Depends(get_db_session)):
             action=ToolAction(tool='generate_aplus',arguments=args)
         elif name=='revise_visual':
             visual=VisualRevision.model_validate(args);_,plan=await amazon.record(db,conv,visual.plan_id)
+            target=p.get('selection',{}).get('target_image',{}).get('amazon_module')
+            if target and (visual.plan_id!=target['plan_id'] or visual.module_id!=target['module_id'] or visual.slot_id!=target.get('slot_id','main')):
+                raise AppError('dsh.image_scope_mismatch','仅可修改用户选中的图片槽位，请使用指定 plan_id、module_id 和 slot_id。',409)
             module=next((m for m in plan.modules if m.id==visual.module_id),None)
             if module is None:raise AppError('agent.module_missing','Module not found',404)
-            if len(module.image_slots)>1:raise AppError('dsh.slot_revision_required','Multi-slot modules require explicit per-slot design decisions',422)
-            updated=module.model_copy(update={'composition':visual.composition,'image_prompt':visual.image_prompt,'art_direction':visual.art_direction,
-                'image_slots':[s.model_copy(update={'composition':visual.composition}) for s in module.image_slots]})
+            if visual.slot_id:
+                from app.agents.aplus_design import slots
+                if visual.slot_id not in {s['id'] for s in slots(plan,module)}:raise AppError('agent.slot_missing','图片槽位不存在。',404)
+                updated=module.model_copy(update={'image_slots':[s.model_copy(update={'composition':visual.composition}) if s.id==visual.slot_id else s for s in module.image_slots]}) if module.image_slots else module.model_copy(update={'composition':visual.composition,'image_prompt':visual.image_prompt,'art_direction':visual.art_direction})
+            else:
+                updated=module.model_copy(update={'composition':visual.composition,'image_prompt':visual.image_prompt,'art_direction':visual.art_direction,
+                    'image_slots':[s.model_copy(update={'composition':visual.composition}) for s in module.image_slots]})
             action=ToolAction(tool='revise_amazon_modules',arguments={'plan_id':visual.plan_id,'expected_revision':visual.expected_revision,'modules':[updated.model_dump(mode='json')]})
         elif name in {'revise_modules','revise_and_generate'}:action=ToolAction(tool='revise_amazon_modules',arguments=args)
         elif name=='create_images':action=ToolAction(tool='generate_chat_images',arguments=args)
@@ -374,7 +407,7 @@ async def tool(value:dict,db:AsyncSession=Depends(get_db_session)):
         # Explicit registry allowlist; the old model planners are never callable here.
         if action.tool=='plan_intent':raise AppError('dsh.planner_denied','Legacy planner forbidden',403)
         result=await tool_registry.execute(db,get_settings(),get_redis_client(),org=who['org'],user=who['user'],permissions=json.loads(row['permissions']),
-            action=action,action_key=key,confirmed=True,conversation_id=conv.id,human_request=p['text'],run_id=run.id)
+            action=action,action_key=key,confirmed=True,conversation_id=conv.id,human_request='' if name=='revise_visual' else p['text'],run_id=run.id)
         if name in {'save_design','save_listing','produce_aplus','produce_listing'}:
             plan_record,_=await amazon.record(db,conv,result['amazon_plan_id'])
             plan_record.metadata_json={**plan_record.metadata_json,'controller':'dsh-native','skill_trace':[
@@ -384,7 +417,8 @@ async def tool(value:dict,db:AsyncSession=Depends(get_db_session)):
             plan_id=args['plan_id'] if name in {'revise_and_generate','revise_visual'} else result['amazon_plan_id']
             plan_record,plan=await amazon.record(db,conv,plan_id)
             ids=[args['module_id']] if name=='revise_visual' else [m['id'] for m in args['modules']] if name=='revise_and_generate' else [m.id for m in plan.modules]
-            generate_args=GenerateAPlus(plan_id=plan_id,expected_revision=plan_record.metadata_json['revision'],module_ids=ids,retry_failed=False)
+            generate_args=GenerateAPlus(plan_id=plan_id,expected_revision=plan_record.metadata_json['revision'],module_ids=ids,retry_failed=False,
+                slot_ids={args['module_id']:[args['slot_id']]} if name=='revise_visual' and args.get('slot_id') else None)
             await amazon.authorize_review(db,conv,generate_args,source='dsh-authenticated-task')
             generated=await tool_registry.execute(db,get_settings(),get_redis_client(),org=who['org'],user=who['user'],permissions=json.loads(row['permissions']),
                 action=ToolAction(tool='generate_aplus',arguments=generate_args.model_dump()),action_key=key+':images',confirmed=True,conversation_id=conv.id,human_request=p['text'],run_id=run.id)

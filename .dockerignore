@@ -9,3 +9,5 @@ server/**/__pycache__
 *.log
 .env
 server/.env
+experiments/dsh/.state
+experiments/dsh/harness

@@ -54,7 +54,7 @@ function ToolSchedule({ run, planning }: { run: AgentRun; planning: boolean }) {
   </div>
 }
 
-export function AgentPlanCard({ run, status, busy, onConfirm, onStop,onRetry,retriedIds }: { run: AgentRun; status: AgentStatus; busy: boolean; onConfirm: () => void; onStop: () => void;onRetry?:(id:string)=>void;retriedIds?:string[] }) {
+export function AgentPlanCard({ run, status, busy, onConfirm, onStop,onResume,onRetry,retriedIds }: { run: AgentRun; status: AgentStatus; busy: boolean; onConfirm: () => void; onStop: () => void;onResume?:()=>void;onRetry?:(id:string)=>void;retriedIds?:string[] }) {
   const imageJobs = run.jobs.filter((job) => job.capability !== 'text_generation')
   const waiting = run.status === 'awaiting_confirmation'
   const notice = run.execution_notice
@@ -123,6 +123,7 @@ export function AgentPlanCard({ run, status, busy, onConfirm, onStop,onRetry,ret
     {notice?.reason&&['ready_to_submit','submitted'].includes(run.status)&&<p role="status" className="mt-3 text-sm text-stone-600">{notice.reason}</p>}
     <AgentImageProgress run={run} busy={busy} onRetry={onRetry} retriedIds={retriedIds}/>
     <div className="mt-4 flex flex-wrap gap-2">
+      {run.planner_mode==='dsh-native'&&['interrupted','failed'].includes(run.result.native_state||'')&&onResume&&<button className={chatButton} disabled={busy} onClick={onResume} title="读取已记录结果；费用未知的请求不会重新发送">读取回执并恢复</button>}
       {!['completed', 'cancelled', 'failed', 'stale', 'needs_input','awaiting_clarification', 'blocked', 'remote_unknown'].includes(run.status) && <button className={chatButton} disabled={busy} title="已提交任务可在任务中心管理" onClick={onStop}><StopIcon className="h-3.5 w-3.5" />停止后续操作</button>}
       {workspaceLinks}
     </div>

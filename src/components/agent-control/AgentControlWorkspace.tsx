@@ -23,7 +23,7 @@ import {AuthApiError} from '../../lib/authApi'
 import {prepareImportFiles,collectDroppedFiles,type ImportSource} from '../../lib/agentImportFiles'
 import {creativeModules,automaticContext,type CreativeModule} from '../../lib/agentCreativeModules'
 import {
-  agentRequestId, attachAgentImage, detachAgentImage, createAgentChat, confirmAgentRun,setAgentCreativeContext,
+  resumeAgentRun, setAgentController, agentRequestId, attachAgentImage, detachAgentImage, createAgentChat, confirmAgentRun,setAgentCreativeContext,
   getAgentContexts, getAgentConversation, getAgentLibrary, getAgentRun, getAgentStatus, listAgentConversations,
   sendAgentChatMessage, stopAgentRun, saveAgentPrompt, type AgentPrompt, type AgentRun, type AgentStatus, type AgentConversation, type AgentAttachment,
   type AgentChatMessage, type AgentContextOption, type AgentOutput, type AttachmentRole, type AgentProductionPlan,type MaterialImportInfo,type BatchInputManifest,
@@ -61,6 +61,7 @@ const stylePresets = [
 ]
 
 function ChatPanel() {
+  const auth=useAuth()
   const navigate = useNavigate()
   const [status, setStatus] = useState<AgentStatus | null>(null)
   const [creative,setCreative]=useState(automaticContext)
@@ -132,7 +133,7 @@ function ChatPanel() {
       void Promise.all(waiting.split(',').map((id) => getAgentRun(id, controller.signal))).then(async (values) => {
         if (controller.signal.aborted) return
         setRuns((old) => old.map((run) => values.find((value) => value.id === run.id) || run))
-        if (values.some((value) => !['waiting_jobs','ready_to_submit','submitted','planning'].includes(value.status)) && activeConversation.current) await refresh(activeConversation.current.id, current)
+        if (activeConversation.current) await refresh(activeConversation.current.id, current)
       }).catch((reason) => { if (!controller.signal.aborted) setError(reason.message) }).finally(() => { fetching = false })
     }, 3000)
     return () => { controller.abort(); clearInterval(timer) }
@@ -335,12 +336,12 @@ function ChatPanel() {
       await refresh(value.id, current)
     } catch (reason) { fail(reason) } finally { if (mounted.current) setBusy(false) }
   }
-  async function runAction(run: AgentRun, stop = false) {
+  async function runAction(run: AgentRun, stop = false, resume = false) {
     setBusy(true)
     setError('')
     const current = epoch.current
     try {
-      const value = await (stop ? stopAgentRun(run.id) : confirmAgentRun(run))
+      const value = await (resume ? resumeAgentRun(run.id) : stop ? stopAgentRun(run.id) : confirmAgentRun(run))
       if (!mounted.current || current !== epoch.current) return
       setRuns((old) => old.map((item) => item.id === value.id ? value : item))
       if (conversation) await refresh(conversation.id, current)
@@ -458,6 +459,7 @@ function ChatPanel() {
   return <main className="relative flex h-full min-h-0 overflow-hidden bg-[#f8f8f6] text-[#292927] dark:bg-gray-950 dark:text-gray-100">
     <nav aria-label="创作导航" className="hidden w-16 shrink-0 flex-col items-center border-r border-black/[0.06] bg-[#f1f1ee] px-2 py-4 lg:flex dark:border-white/[0.07] dark:bg-gray-900/60">
       <div className="mb-5 flex h-9 w-9 items-center justify-center rounded-xl bg-[#292927] text-white dark:bg-white dark:text-gray-900"><SparklesIcon className="h-5 w-5" /></div>
+      <span title={status?.controller==='dsh'?'DSH SuperAgent · K2.8':'LangGraph'} className="mb-2 text-[10px] font-semibold">{status?.controller==='dsh'?'DSH':'LG'}</span>
       <button aria-label="新建创作" title="新建创作" className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white text-gray-700 shadow-sm transition hover:scale-105 disabled:opacity-40 dark:bg-white/10 dark:text-gray-200" onClick={newConversation} disabled={busy || uploads.length > 0}><PlusIcon className="h-5 w-5" /></button>
       <button aria-label="创作首页" title="创作首页" className={`flex h-10 w-10 items-center justify-center rounded-xl transition ${messages.length === 0 ? 'bg-black/[0.07] text-gray-900 dark:bg-white/10 dark:text-white' : 'text-gray-400 hover:bg-black/[0.04] hover:text-gray-800 dark:hover:bg-white/5 dark:hover:text-white'}`} onClick={newConversation} disabled={busy || uploads.length > 0}><SparklesIcon className="h-5 w-5" /></button>
       <button aria-label="历史对话" title="历史对话" className="mt-1 flex h-10 w-10 items-center justify-center rounded-xl text-gray-400 transition hover:bg-black/[0.04] hover:text-gray-800 dark:hover:bg-white/5 dark:hover:text-white" onClick={() => setHistoryOpen(true)}><HistoryIcon className="h-5 w-5" /></button>
@@ -531,7 +533,7 @@ function ChatPanel() {
             {messages.map((message) => {
               const run = message.metadata?.run_id ? runById.get(message.metadata.run_id) : null
               const latest = !run || lastMessage.get(run.id) === message.id
-              const showText = message.role === 'user' || !run || !latest
+              const showText = message.role === 'user' || !run || !latest || run.planner_mode==='dsh-native'
               if (message.role === 'user') return <article key={message.id} className="flex justify-end pl-8 sm:pl-20">
                 <div className="max-w-[760px] rounded-[20px_20px_6px_20px] bg-[#e9e9e4] px-4 py-3 text-sm leading-7 dark:bg-white/10">
                   <p className="whitespace-pre-wrap">{message.content}</p>
@@ -542,7 +544,7 @@ function ChatPanel() {
                 <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] bg-[#eae5da] text-[#806c47] dark:bg-white/10 dark:text-gray-300"><SparklesIcon className="h-4 w-4" /></div>
                 <div className="min-w-0 flex-1">
                   {showText && <div className="py-1 text-sm leading-7 text-gray-700 dark:text-gray-200"><p className="whitespace-pre-wrap">{message.content}</p></div>}
-                  {run && latest && status && <div className={showText ? 'mt-3' : ''}><AgentPlanCard run={run} status={status} busy={busy} onConfirm={() => void runAction(run)} onStop={() => void runAction(run, true)} onRetry={id=>void retryImage(id)} retriedIds={runs.flatMap(r=>r.result.retry_of_job_id?[r.result.retry_of_job_id]:[])}/><AgentPromptPanel run={run} busy={busy} onSave={(source,content)=>savePrompt(run,source,content)} onGenerate={version=>void generateSavedPrompt(run,version)} onError={setError}/><AgentResultGallery outputs={run.outputs || []} onEdit={edit} onError={setError} />{run.result.actions?.filter((action) => action.tool === 'read_shared_queue').map((action, index) => <SharedQueueView key={index} board={action.result as unknown as SharedQueueBoard} onOpen={(entry) => { if (entry.can_open && entry.navigation?.project_id) navigate(`/workspaces/batch-tryon?project_id=${entry.navigation.project_id}`) }} />)}</div>}
+                  {run && latest && status && <div className={showText ? 'mt-3' : ''}><AgentPlanCard run={run} status={status} busy={busy} onConfirm={() => void runAction(run)} onStop={() => void runAction(run, true)} onResume={() => void runAction(run,false,true)} onRetry={id=>void retryImage(id)} retriedIds={runs.flatMap(r=>r.result.retry_of_job_id?[r.result.retry_of_job_id]:[])}/><AgentPromptPanel run={run} busy={busy} onSave={(source,content)=>savePrompt(run,source,content)} onGenerate={version=>void generateSavedPrompt(run,version)} onError={setError}/><AgentResultGallery outputs={run.outputs || []} onEdit={edit} onError={setError} />{run.result.actions?.filter((action) => action.tool === 'read_shared_queue').map((action, index) => <SharedQueueView key={index} board={action.result as unknown as SharedQueueBoard} onOpen={(entry) => { if (entry.can_open && entry.navigation?.project_id) navigate(`/workspaces/batch-tryon?project_id=${entry.navigation.project_id}`) }} />)}</div>}
                   {run&&latest&&<><AgentClarificationCard run={run} busy={busy} enabled={status?.creative_assistance_enabled===true} answered={answeredRuns.has(run.id)} onReply={content=>void send('create',{run,content})} onSuggest={()=>void send('suggest',{run,content:'请结合原始需求、追问和参考图，给我几个可编辑的创作建议。'})}/><AgentSuggestionsCard run={run} busy={busy} onAdopt={content=>void send('create',{run,content})}/></>}
                   {run&&latest&&<AgentBusinessCards run={run} disabled={!status?.enabled||busy||preparingImport||uploads.length>0} onImport={(files,source)=>void uploadFiles(files,source)}/>}
                   {run && latest && conversation && productionPlans.filter((plan) => productionCardRunId(runs, plan.id) === run.id).map((plan) => <AgentProductionCard key={plan.id} plan={plan} conversationId={conversation.id} attachments={attachments} outputs={runs.flatMap((item) => item.outputs || [])} onRefresh={() => refresh(conversation.id)} onError={setError} />)}
@@ -561,6 +563,7 @@ function ChatPanel() {
     {drawer && <div className="absolute inset-0 z-40"><button aria-label="关闭素材与执行详情" className="absolute inset-0 bg-black/20 backdrop-blur-[2px]" onClick={() => setDrawer(false)} /><aside aria-label="素材与执行详情" className="absolute inset-y-0 right-0 w-full max-w-[380px] overflow-y-auto border-l border-black/[0.07] bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-gray-900">
       <div className="mb-5 flex items-center justify-between"><div><h2 className="text-sm font-semibold">素材与执行详情</h2><p className="mt-1 text-xs text-gray-400">当前会话的图片和任务信息</p></div><button aria-label="关闭素材与执行详情" className="rounded-full p-2 hover:bg-black/5 dark:hover:bg-white/5" onClick={() => setDrawer(false)}><CloseIcon className="h-4 w-4" /></button></div>
       <section><h3 className="mb-3 text-xs font-medium text-gray-400">会话素材 · {attachments.length}</h3>{attachments.map((attachment) => <button key={attachment.id} className={`mb-2 flex w-full items-center gap-3 rounded-xl border p-2.5 text-left text-sm transition dark:border-white/10 ${selected.includes(attachment.id) ? 'border-[#a89574] bg-[#f7f4ee] dark:bg-white/[0.07]' : 'hover:bg-black/[0.025] dark:hover:bg-white/5'}`} onClick={() => setSelected((old) => old.includes(attachment.id) ? old : [...old, attachment.id])}><AuthenticatedImage src={attachment.content_url} alt={attachment.filename} className="h-12 w-12 shrink-0 rounded-lg bg-[#f4f4f1] object-contain" /><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{attachment.filename}</span><span className="mt-1 block text-[11px] text-gray-400">{roles.find((role) => role[0] === attachment.role)?.[1]}</span></span><span className="text-[11px] text-gray-400">{selected.includes(attachment.id) ? '已引用' : '引用'}</span></button>)}{!attachments.length && <div className="rounded-2xl bg-[#f7f7f4] px-4 py-8 text-center text-xs text-gray-400 dark:bg-white/[0.03]">上传或从素材库选择的图片会显示在这里</div>}</section>
+      {auth.hasPermission('platform.admin')&&<section aria-label="主控切换" className="my-4 rounded-xl border p-3 text-sm"><label>默认主控 <select aria-label="默认主控" value={status?.controller||'langgraph'} onChange={event=>{const controller=event.target.value as 'dsh'|'langgraph';void setAgentController(controller).then(()=>getAgentStatus()).then(setStatus).catch(fail)}}><option value="dsh">DSH SuperAgent · K2.8</option><option value="langgraph">LangGraph 紧急回退</option></select></label><p className="mt-2 text-xs text-gray-500">新消息使用所选主控；已有任务、图片和历史记录保留。</p></section>}
       {status?.auto_execution?.mode==='autonomous'&&<p className="my-6 text-sm font-medium">自主执行 · {status.auto_execution.enabled?'已开启':'当前环境未启用'}</p>}
       {status?.auto_execution && status.auto_execution.mode!=='autonomous' && <section aria-label="自动生成阈值" className="my-6 rounded-2xl bg-[#f7f7f4] p-4 text-sm dark:bg-white/[0.04]"><h3 className="mb-3 text-xs font-semibold">自动生成阈值{!status.auto_execution.enabled && ' · 未开启'}</h3><dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs text-gray-500 dark:text-gray-400"><div><dt>图片数量</dt><dd className="mt-1 font-medium text-gray-800 dark:text-gray-200">最多 {status.auto_execution.max_images} 张</dd></div><div><dt>预计耗时</dt><dd className="mt-1 font-medium text-gray-800 dark:text-gray-200">{Math.ceil(status.auto_execution.max_seconds / 60)} 分钟内</dd></div><div><dt>单次累计额度</dt><dd className="mt-1 font-medium text-gray-800 dark:text-gray-200">{status.auto_execution.max_credits}</dd></div><div><dt>并行流程</dt><dd className="mt-1 font-medium text-gray-800 dark:text-gray-200">{status.auto_execution.max_active_runs} 个</dd></div><div><dt>自动提交</dt><dd className="mt-1 font-medium text-gray-800 dark:text-gray-200">每分钟 {status.auto_execution.submissions_per_minute} 次</dd></div></dl></section>}
       <AgentCapabilityPanel />

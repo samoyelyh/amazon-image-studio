@@ -179,7 +179,7 @@ async def _execute_job(
                 )
                 attempt.provider_responded_at = datetime.now(UTC)
                 if (job.input_json.get('metadata') or {}).get('workflow') in {
-                    'agent_chat','agent_chat_tryon','agent_asset_understanding','agent_control',
+                    'agent_chat','agent_chat_tryon','agent_asset_understanding','agent_control','agent_aplus','dsh_native_session',
                 }:
                     # Acquire the key write lock before result/FK writes take shared
                     # locks. Otherwise concurrent Agent completions can both hold S

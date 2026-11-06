@@ -20,14 +20,14 @@ export async function createNativeController(root,core,token){
   const current=new Map(),terminal=new Set(),counts=new Map(),running=new Set(),chains=new Map(),executorChains=new Map();
   const call=async(path,value)=>{
     const signals=[AbortSignal.timeout(650000)];if(value.options?.signal)signals.push(value.options.signal);
-    const res=await fetch('http://127.0.0.1:18870/api/v1/experiment/native/'+path,{method:'POST',headers:{'content-type':'application/json','x-dsh-token':token},body:JSON.stringify(value),signal:AbortSignal.any(signals)});
+    const res=await fetch((process.env.DSH_BUSINESS_URL||'http://127.0.0.1:18870/api/v1/experiment/native/')+path,{method:'POST',headers:{'content-type':'application/json','x-dsh-token':token},body:JSON.stringify(value),signal:AbortSignal.any(signals)});
     const raw=await res.text();let result;try{result=JSON.parse(raw)}catch{throw Error(`Business bridge returned HTTP ${res.status} without JSON`)}if(!res.ok)throw new Error(JSON.stringify(result));return result;
   };
   const runtime=await createNativeRuntime(resolve(root,'native'),async(_,o)=>{
     const c=current.get(o.sessionId);if(!c)throw Error('Session has no authenticated turn');
     const n=(counts.get(o.sessionId)||0)+1;counts.set(o.sessionId,n);
     if(n>(c.role==='main'?2:8))throw Error('Native Session call budget reached');
-    return call('model',{turn:c.x.id,role:c.role,options:o,replay_known:c.role==='executor'&&n===1&&(read(c.x.id).recovery_count||0)>0});
+    return call('model',{turn:c.x.id,role:c.role,options:o,replay_known:n===1&&(read(c.x.id).recovery_count||0)>0});
   });
   runtime.ctx.on('agent/pre-step',async({agent},next)=>terminal.has(agent.id)?{kind:'reject'}:next());
   runtime.ctx.on('agent/request',async({agent},next)=>{
@@ -55,14 +55,24 @@ export async function createNativeController(root,core,token){
           const {x}=current.get(sid);const owned=core.list(x,x.session);
           if(x.mode==='chat'&&!['chat','clarify','status'].includes(args.action))throw Error('This user turn is read-only');
           if(args.ticket&&!owned.some(t=>t.id===args.ticket))throw Error('Ticket ownership denied');
+          if(x.selection?.target_image&&x.ticket&&!x.new_task&&(!['chat','clarify','continue','status','stop'].includes(args.action)||['continue','status','stop'].includes(args.action)&&args.ticket!==x.ticket))throw Error('Selected image is bound to its existing Ticket; continue that Ticket or answer read-only.');
           save(x.id,{decision:args,route:args.action,answer:args.message,state:'routed'});record(x.id,'main.decision',args);
           terminal.add(sid);return {accepted:true};
         }};
       const main=await runtime.ensure(sid,modelForRole('main'),mainPrompt,[routeTool]);
       save(x.id,{state:'main_session',main_session:sid});
-      await runtime.run(main,x.id,JSON.stringify({request:x.text,mode:x.mode,selected_ticket:x.ticket,force_new_task:x.new_task,
+      await runtime.run(main,x.id+':'+(read(x.id).recovery_count||0),JSON.stringify({request:x.text,mode:x.mode,selected_ticket:x.ticket,force_new_task:x.new_task,
         asset_ids:x.asset_ids,selection:x.selection,tickets:core.list(x,x.session)}));
-      const decision=read(x.id).decision;if(!decision)throw Error('Main Session did not make a routing decision');
+      let decision=read(x.id).decision;
+      if(!decision){
+        const final=runtime.result(sid);
+        // A native Session may answer directly without a tool. This is always
+        // read-only: execution still requires an explicit model-authored route_task.
+        if(final?.text&&!final.tool_calls?.length){
+          decision={action:'chat',message:final.text,executor:'none',ticket:null};
+          save(x.id,{decision,route:'chat',answer:final.text});record(x.id,'main.decision',{...decision,source:'native-session.final-answer'});
+        }else throw Error('Main Session did not make a routing decision');
+      }
       save(x.id,{main_seconds:(performance.now()-started)/1000,main_calls:counts.get(sid)});
       }
       const decision=read(x.id).decision;
@@ -98,6 +108,7 @@ export async function createNativeController(root,core,token){
       const allowed=new Set(['load_skill','read_context','complete',
         ...(decision.executor==='research'?[]:decision.executor==='image_edit'?(prep.context.amazon_plans?.length?['revise_visual']:['create_images']):decision.executor==='batch_images'?['create_images']:
           decision.action==='continue'?['revise_visual','revise_and_generate']:[decision.executor==='listing'?'produce_listing':'produce_aplus',decision.executor==='listing'?'save_listing':'save_design'])]);
+      if(x.selection?.target_image?.amazon_module)allowed.delete('revise_and_generate');
       const tools=prep.catalog.filter(t=>allowed.has(t.name)||t.name.startsWith('mcp_')&&['amazon_aplus','listing','research'].includes(decision.executor)&&(!['amazon_aplus','listing'].includes(decision.executor)||t.name.endsWith('asin_detail')||t.name.endsWith('asin_content_list'))).map(t=>({...t,execute:async(args,execution)=>{
         const {x}=current.get(eid);
         const toolCall=String(execution.call?.id||execution.id||hash([eid,counts.get(eid),t.name,args]));
@@ -150,7 +161,7 @@ export async function createNativeController(root,core,token){
   // A restart repairs the native Session log. Recovery is explicit and never
   // blindly replays an in-flight paid model/tool call.
   for(const row of db.prepare('SELECT id,result FROM requests').all()){
-    if(['accepted','main_session','routed','executor_session'].includes(JSON.parse(row.result).state))save(row.id,{state:'interrupted',recovery:'Read durable Session/Job receipts before continuing this Ticket.'});
+    if(['accepted','main_session','vision_session','routed','executor_session'].includes(JSON.parse(row.result).state))save(row.id,{state:'interrupted',recovery:'Read durable Session/Job receipts before continuing this Ticket.'});
   }
   function stop(owner,ticket){
     core.owned(owner,ticket);

@@ -20,12 +20,14 @@ export async function createNativeRuntime(root, bridge) {
   // Plugin startup is asynchronous; reject startup rather than silently use a fake driver.
   for(let n=0;n<200 && (!ctx.get('agents')||!ctx.get('agentLoop'));n++)await new Promise(r=>setTimeout(r,20));
   const trace=(type,data)=>appendFileSync(resolve(root,'native-events.jsonl'),JSON.stringify({at:new Date().toISOString(),type,...data})+'\n');
+  const responses=new Map();
   class BusinessModel extends LlmAdapter {
     async resolveModel(provider,model){return {provider,id:model,name:model,inputModalities:['text','image'],context:{contextWindow:model==='kimi-for-coding'?1048576:128000}};}
     async *stream(options) {
       trace('model.request',{session:options.sessionId,model:options.model,tools:options.tools?.map(t=>t.name)});
       const started=performance.now();
       const response=await bridge('model',options);
+      responses.set(options.sessionId,response);
       let i=0;
       if(response.reasoning_content){yield {type:'block-start',index:i,blockType:'reasoning'};yield {type:'reasoning-delta',index:i,text:response.reasoning_content};yield {type:'block-end',index:i++,block:{type:'reasoning',text:response.reasoning_content}};}
       if(response.text){yield {type:'block-start',index:i,blockType:'text'};yield {type:'text-delta',index:i,text:response.text};yield {type:'block-end',index:i++,block:{type:'text',text:response.text}};}
@@ -58,7 +60,8 @@ export async function createNativeRuntime(root, bridge) {
       handle=await ctx.agents.create({sessionId:id,agentOptions:{provider:'platform',model,maxTokens},setup});}
     active.set(id,handle.agent);return handle.agent;
   }
-  return {ctx,trace,ensure,async run(agent,id,text){
+  return {ctx,trace,ensure,result:id=>responses.get(id),async run(agent,id,text){
+    responses.delete(agent.id);
     const before=agent.session.events?.length||0;
     agent.followup({...createUserMessage({content:[{type:'text',text}],source:{kind:'user'}}),id});
     await agent.whenIdle();await ctx.parallel('session/flush',agent.session);

@@ -1,0 +1,1133 @@
+{
+  "default_controller": "dsh",
+  "cases": {
+    "chat": {
+      "conversation": "1aebf223-61cf-4c0b-9b43-b6e4f07cad34",
+      "run": "f8c9fd69-523e-4aaa-858d-bf4b90858621",
+      "status": "completed",
+      "ticket": null,
+      "planning_seconds": 0.33886222399999677,
+      "main_seconds": 0.30108109999999577,
+      "recovery_count": 2,
+      "executor_calls": null,
+      "sessions": {
+        "main_session": "main-1db36f19cadf49f624b5e17c5910c9225694da35369e90c6fc3ba30ca5618ecd",
+        "vision_session": null,
+        "executor_session": null
+      },
+      "events": [
+        {
+          "type": "main.decision",
+          "tool": null,
+          "id": null,
+          "content_hash": null
+        }
+      ],
+      "jobs": [
+        {
+          "id": "e8e891ed-1198-481b-b770-d180341a0222",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": null,
+          "capability": "text_generation",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "图片",
+          "image_kind": "image",
+          "can_retry": false
+        }
+      ],
+      "outputs": []
+    },
+    "clarify": {
+      "conversation": "eb7c81be-94b7-459c-9801-e4911be6fc35",
+      "run": "424af710-f07e-4e56-8a53-61ca88fc1d92",
+      "status": "awaiting_clarification",
+      "ticket": null,
+      "planning_seconds": 5.637015041000001,
+      "main_seconds": 5.5999149070000005,
+      "recovery_count": 1,
+      "executor_calls": null,
+      "sessions": {
+        "main_session": "main-4f102726866305a0efd41073538ba83d986514a3274d51dbb424ddf404dadd4e",
+        "vision_session": null,
+        "executor_session": null
+      },
+      "events": [
+        {
+          "type": "main.decision",
+          "tool": null,
+          "id": null,
+          "content_hash": null
+        }
+      ],
+      "jobs": [
+        {
+          "id": "1475e288-4dca-4790-97d5-f816ba2d6155",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": null,
+          "capability": "text_generation",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "图片",
+          "image_kind": "image",
+          "can_retry": false
+        }
+      ],
+      "outputs": []
+    },
+    "aplus": {
+      "conversation": "3ca85cf7-1537-4d99-9652-1be4732f9820",
+      "run": "ad73b0af-f3bc-431d-99e5-7c94210b2bb8",
+      "status": "completed",
+      "ticket": "c581845aa1baea9b79501130a439a6a1",
+      "planning_seconds": 137.418988163,
+      "main_seconds": 6.0033341559999975,
+      "recovery_count": 0,
+      "executor_calls": 1,
+      "sessions": {
+        "main_session": "main-621f81f2d566cd9a53095e24f12c70b058feef3d4b06a4eab73e6cea3983d4bd",
+        "vision_session": "vision-6a368e74050eacb1b63e390de8ff492992ded264765a3df2f6c0a04c5c9701c9",
+        "executor_session": "executor-37516ff8719e968d987fe66eb0e7b531699e35a23d784b12e6feb11ac1b3f131"
+      },
+      "events": [
+        {
+          "type": "main.decision",
+          "tool": null,
+          "id": null,
+          "content_hash": null
+        },
+        {
+          "type": "skill.bound",
+          "tool": null,
+          "id": "amazon-aplus-planner",
+          "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+        },
+        {
+          "type": "skill.bound",
+          "tool": null,
+          "id": "amazon-market-insight",
+          "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+        },
+        {
+          "type": "skill.bound",
+          "tool": null,
+          "id": "image-creation",
+          "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+        },
+        {
+          "type": "engine.assignment",
+          "tool": null,
+          "id": null,
+          "content_hash": null
+        },
+        {
+          "type": "engine.assignment",
+          "tool": null,
+          "id": null,
+          "content_hash": null
+        },
+        {
+          "type": "tool.result",
+          "tool": "produce_aplus",
+          "id": null,
+          "content_hash": null
+        }
+      ],
+      "jobs": [
+        {
+          "id": "18f46295-d326-4eb0-82c1-46d08115c42d",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": "776aa679-9367-4333-91fc-c135273e92aa",
+          "capability": "image_edit",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "Front, Back, Details",
+          "image_kind": "aplus",
+          "can_retry": false
+        },
+        {
+          "id": "4db4906c-7207-4d53-901a-3a5d43622bd6",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": "776aa679-9367-4333-91fc-c135273e92aa",
+          "capability": "image_edit",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "A Thoughtful Fan Gift",
+          "image_kind": "aplus",
+          "can_retry": false
+        },
+        {
+          "id": "86753a30-608d-40ad-88b4-fb166404c16e",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": "776aa679-9367-4333-91fc-c135273e92aa",
+          "capability": "image_edit",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "Front, Back, Details",
+          "image_kind": "aplus",
+          "can_retry": false
+        },
+        {
+          "id": "8bd3b85d-5771-4510-8ae8-8a165ac16c6d",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": null,
+          "capability": "text_generation",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "图片",
+          "image_kind": "image",
+          "can_retry": false
+        },
+        {
+          "id": "91c1a1a6-0dc4-4d22-8fd3-3b6c101374da",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": null,
+          "capability": "text_generation",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "图片",
+          "image_kind": "image",
+          "can_retry": false
+        },
+        {
+          "id": "94118865-a0fc-4085-b31a-3e07dc839ebe",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": "776aa679-9367-4333-91fc-c135273e92aa",
+          "capability": "image_edit",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "From Tailgate to City Night",
+          "image_kind": "aplus",
+          "can_retry": false
+        },
+        {
+          "id": "948e2ce9-c652-4853-9c87-f2c5e67b9edc",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": null,
+          "capability": "text_generation",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "图片",
+          "image_kind": "image",
+          "can_retry": false
+        },
+        {
+          "id": "acc8576e-0d59-413c-ade6-9e4cb9f7dd15",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": "776aa679-9367-4333-91fc-c135273e92aa",
+          "capability": "image_edit",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "From Tailgate to City Night",
+          "image_kind": "aplus",
+          "can_retry": false
+        },
+        {
+          "id": "b2d2982b-96b0-4a48-9748-f105a2b0c3e1",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": "776aa679-9367-4333-91fc-c135273e92aa",
+          "capability": "image_edit",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "City Game-Day Fit",
+          "image_kind": "aplus",
+          "can_retry": false
+        },
+        {
+          "id": "b3d98057-6d3b-493a-8fc1-951066f02799",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": "776aa679-9367-4333-91fc-c135273e92aa",
+          "capability": "image_edit",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "Seattle Gradient Hoodie Hero",
+          "image_kind": "aplus",
+          "can_retry": false
+        },
+        {
+          "id": "efca0752-0415-46d0-8bcf-f94156ae8a03",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": "776aa679-9367-4333-91fc-c135273e92aa",
+          "capability": "image_edit",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "Front, Back, Details",
+          "image_kind": "aplus",
+          "can_retry": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "66b89bda-3a47-44cb-911a-caa775896020",
+          "asset_id": "61084c7a-79ed-4dd5-ba0c-0c11885f38fd",
+          "job_id": "b3d98057-6d3b-493a-8fc1-951066f02799",
+          "number": 1,
+          "version": 1,
+          "width": 970,
+          "height": 600,
+          "parent_output_id": null,
+          "root_output_id": "66b89bda-3a47-44cb-911a-caa775896020"
+        },
+        {
+          "id": "5dfdffad-714c-4541-b3f9-faff854acc2e",
+          "asset_id": "3556153b-3e40-428c-80f9-8a90aefbe85d",
+          "job_id": "b2d2982b-96b0-4a48-9748-f105a2b0c3e1",
+          "number": 2,
+          "version": 1,
+          "width": 600,
+          "height": 600,
+          "parent_output_id": null,
+          "root_output_id": "5dfdffad-714c-4541-b3f9-faff854acc2e"
+        },
+        {
+          "id": "96c89dd5-e1ae-4c4b-908c-e7fb57590da4",
+          "asset_id": "8d84a625-e622-4b1d-8073-1f0e777268a3",
+          "job_id": "18f46295-d326-4eb0-82c1-46d08115c42d",
+          "number": 3,
+          "version": 1,
+          "width": 600,
+          "height": 600,
+          "parent_output_id": null,
+          "root_output_id": "96c89dd5-e1ae-4c4b-908c-e7fb57590da4"
+        },
+        {
+          "id": "402931be-e4d9-4308-ac3a-d46a134e05bd",
+          "asset_id": "5af84529-fc0f-4481-942a-bb70414640f2",
+          "job_id": "86753a30-608d-40ad-88b4-fb166404c16e",
+          "number": 4,
+          "version": 1,
+          "width": 600,
+          "height": 600,
+          "parent_output_id": null,
+          "root_output_id": "402931be-e4d9-4308-ac3a-d46a134e05bd"
+        },
+        {
+          "id": "60830c99-ef5a-4bde-8a0d-199f2daa4ed6",
+          "asset_id": "b302a9ed-6d4f-48a8-b7bf-088eeeeeebd1",
+          "job_id": "efca0752-0415-46d0-8bcf-f94156ae8a03",
+          "number": 5,
+          "version": 1,
+          "width": 600,
+          "height": 600,
+          "parent_output_id": null,
+          "root_output_id": "60830c99-ef5a-4bde-8a0d-199f2daa4ed6"
+        },
+        {
+          "id": "f088a8d3-52af-4d71-8d64-388c754c2df2",
+          "asset_id": "a83755ae-d6aa-4165-9355-530d006d9be1",
+          "job_id": "acc8576e-0d59-413c-ade6-9e4cb9f7dd15",
+          "number": 6,
+          "version": 1,
+          "width": 600,
+          "height": 800,
+          "parent_output_id": null,
+          "root_output_id": "f088a8d3-52af-4d71-8d64-388c754c2df2"
+        },
+        {
+          "id": "653e4ab6-cdda-464d-8080-f01ba590735e",
+          "asset_id": "61925c15-e5d9-4dff-ace8-5ce8b9f2185b",
+          "job_id": "94118865-a0fc-4085-b31a-3e07dc839ebe",
+          "number": 7,
+          "version": 1,
+          "width": 600,
+          "height": 350,
+          "parent_output_id": null,
+          "root_output_id": "653e4ab6-cdda-464d-8080-f01ba590735e"
+        },
+        {
+          "id": "5aaeed2f-40bb-447a-9775-94617fb429fa",
+          "asset_id": "359622bd-a9b1-4343-9e54-5c2716b90a14",
+          "job_id": "4db4906c-7207-4d53-901a-3a5d43622bd6",
+          "number": 8,
+          "version": 1,
+          "width": 970,
+          "height": 300,
+          "parent_output_id": null,
+          "root_output_id": "5aaeed2f-40bb-447a-9775-94617fb429fa"
+        }
+      ]
+    },
+    "listing": {
+      "conversation": "687cddee-adc3-4888-9804-3bc9d065fa2b",
+      "run": "6c644ec0-3c34-47c7-bf9f-b4a7a8b4897a",
+      "status": "completed",
+      "ticket": "00694b826ee40ee5f185a42e5a1db09f",
+      "planning_seconds": 53.150355452999996,
+      "main_seconds": 6.563912586999999,
+      "recovery_count": 0,
+      "executor_calls": 2,
+      "sessions": {
+        "main_session": "main-8e6df3b52e04eac9e206238629a74e69a90bc7254e2e5c7dd3219d88fc4e745b",
+        "vision_session": null,
+        "executor_session": "executor-557cc0394ae82b46f323828311922b59914165603767356622ba8eb7b0cdebbc"
+      },
+      "events": [
+        {
+          "type": "main.decision",
+          "tool": null,
+          "id": null,
+          "content_hash": null
+        },
+        {
+          "type": "skill.bound",
+          "tool": null,
+          "id": "amazon-aplus-planner",
+          "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+        },
+        {
+          "type": "skill.bound",
+          "tool": null,
+          "id": "amazon-market-insight",
+          "content_hash": "81c789df07e1741ef2b9cfdd0ee69c67ea6709482091456029ee36724596449d"
+        },
+        {
+          "type": "skill.bound",
+          "tool": null,
+          "id": "image-creation",
+          "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+        },
+        {
+          "type": "engine.assignment",
+          "tool": null,
+          "id": null,
+          "content_hash": null
+        },
+        {
+          "type": "tool.result",
+          "tool": "produce_listing",
+          "id": null,
+          "content_hash": null
+        }
+      ],
+      "jobs": [
+        {
+          "id": "11b2c612-653d-4095-9ccb-12fddfed4eee",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": "56301cf6-a992-4ad0-881d-dcc0da41544c",
+          "capability": "image_edit",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "背面图案细节",
+          "image_kind": "listing",
+          "can_retry": false
+        },
+        {
+          "id": "248e5198-c481-4739-809a-75bac26542ca",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": "56301cf6-a992-4ad0-881d-dcc0da41544c",
+          "capability": "image_edit",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "白底主图",
+          "image_kind": "listing",
+          "can_retry": false
+        },
+        {
+          "id": "349bf319-8684-4b5c-9e39-5d5348323048",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": null,
+          "capability": "text_generation",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "图片",
+          "image_kind": "image",
+          "can_retry": false
+        },
+        {
+          "id": "9eed99f8-8dc9-4fb4-bc32-0255b2bb55dd",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": null,
+          "capability": "text_generation",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "图片",
+          "image_kind": "image",
+          "can_retry": false
+        },
+        {
+          "id": "adbfa749-56b8-4bad-9ad4-5a8c970144a3",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": null,
+          "capability": "text_generation",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "图片",
+          "image_kind": "image",
+          "can_retry": false
+        },
+        {
+          "id": "dff4ca24-b13a-43c4-a301-75bae7395253",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": "56301cf6-a992-4ad0-881d-dcc0da41544c",
+          "capability": "image_edit",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "户外穿搭",
+          "image_kind": "listing",
+          "can_retry": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "d423b401-d44e-41a8-b3b1-8036ce8e4b49",
+          "asset_id": "ab8a3b7c-55a3-4068-9b99-16c821f14057",
+          "job_id": "248e5198-c481-4739-809a-75bac26542ca",
+          "number": 1,
+          "version": 1,
+          "width": 1600,
+          "height": 1600,
+          "parent_output_id": null,
+          "root_output_id": "d423b401-d44e-41a8-b3b1-8036ce8e4b49"
+        },
+        {
+          "id": "9ced2c94-a626-49c1-94c0-3e9825e4acba",
+          "asset_id": "9d251fcf-83c1-4fcb-af09-958784b361a1",
+          "job_id": "dff4ca24-b13a-43c4-a301-75bae7395253",
+          "number": 2,
+          "version": 1,
+          "width": 1600,
+          "height": 1600,
+          "parent_output_id": null,
+          "root_output_id": "9ced2c94-a626-49c1-94c0-3e9825e4acba"
+        },
+        {
+          "id": "4b261528-7c52-4654-b405-31386ec3b85b",
+          "asset_id": "fb65977a-1f45-445b-a2bb-4a5e93175306",
+          "job_id": "11b2c612-653d-4095-9ccb-12fddfed4eee",
+          "number": 3,
+          "version": 1,
+          "width": 1600,
+          "height": 1600,
+          "parent_output_id": null,
+          "root_output_id": "4b261528-7c52-4654-b405-31386ec3b85b"
+        }
+      ]
+    },
+    "edit": {
+      "conversation": "3ca85cf7-1537-4d99-9652-1be4732f9820",
+      "run": "4433f28e-3084-48ee-9bc4-0cde664b10af",
+      "status": "completed",
+      "ticket": "c581845aa1baea9b79501130a439a6a1",
+      "planning_seconds": 35.945352701000054,
+      "main_seconds": 5.977539065000019,
+      "recovery_count": 0,
+      "executor_calls": 1,
+      "sessions": {
+        "main_session": "main-621f81f2d566cd9a53095e24f12c70b058feef3d4b06a4eab73e6cea3983d4bd",
+        "vision_session": null,
+        "executor_session": "executor-7542e5664be2f43fc7410d6959acaf815e27d73d43af7b5d2298536a04c8658e"
+      },
+      "events": [
+        {
+          "type": "main.decision",
+          "tool": null,
+          "id": null,
+          "content_hash": null
+        },
+        {
+          "type": "skill.bound",
+          "tool": null,
+          "id": "image-creation",
+          "content_hash": "358875e8971faa5b9e3988f1aaef495f6f03c838fb10d80d5cb76dbbe8716c15"
+        },
+        {
+          "type": "skill.bound",
+          "tool": null,
+          "id": "amazon-aplus-planner",
+          "content_hash": "8fdddc41538a883593c5fa64d9a00762fa3b7009dd0155076370c39c5e9e8310"
+        },
+        {
+          "type": "engine.assignment",
+          "tool": null,
+          "id": null,
+          "content_hash": null
+        },
+        {
+          "type": "tool.result",
+          "tool": "revise_visual",
+          "id": null,
+          "content_hash": null
+        }
+      ],
+      "jobs": [
+        {
+          "id": "18ad64c9-906e-4c3c-9d06-1fd1383e2e26",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": null,
+          "capability": "text_generation",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "图片",
+          "image_kind": "image",
+          "can_retry": false
+        },
+        {
+          "id": "ebf139b0-0bd4-482e-9df0-7f37a6a51339",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": "a442ffff-8743-49e1-b3ae-c8cff5c91ea4",
+          "capability": "image_edit",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "Front, Back, Details",
+          "image_kind": "aplus",
+          "can_retry": false
+        },
+        {
+          "id": "f85296f6-b599-4383-a6e7-750ec8b1ef70",
+          "status": "succeeded",
+          "progress": 100,
+          "batch_id": null,
+          "capability": "text_generation",
+          "error_code": null,
+          "upstream_unknown": false,
+          "label": "图片",
+          "image_kind": "image",
+          "can_retry": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "b810067e-0c92-4ebd-bc00-33e168211dd5",
+          "asset_id": "dc57ef9b-891a-40d0-ad58-984b7e870ab2",
+          "job_id": "ebf139b0-0bd4-482e-9df0-7f37a6a51339",
+          "number": 9,
+          "version": 2,
+          "width": 600,
+          "height": 600,
+          "parent_output_id": "402931be-e4d9-4308-ac3a-d46a134e05bd",
+          "root_output_id": "402931be-e4d9-4308-ac3a-d46a134e05bd"
+        }
+      ]
+    }
+  },
+  "calls": [
+    {
+      "job": "e8e891ed-1198-481b-b770-d180341a0222",
+      "kind": "text",
+      "role": "main",
+      "model": "kimi-for-coding",
+      "status": "succeeded",
+      "seconds": 6.459,
+      "started": 1793938326.8683763,
+      "finished": 1793938333.3269477,
+      "usage": null,
+      "api_cost": null,
+      "transport": {
+        "http_status": 200,
+        "seconds": 6.422,
+        "server": "cloudflare",
+        "content_type": "text/event-stream;charset=utf-8",
+        "edge_request_id": "a56141d3b91f4311-LAX",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 2.428,
+        "first_event_seconds": 2.428,
+        "first_text_seconds": 6.42,
+        "events": 130
+      }
+    },
+    {
+      "job": "1475e288-4dca-4790-97d5-f816ba2d6155",
+      "kind": "text",
+      "role": "main",
+      "model": "kimi-for-coding",
+      "status": "succeeded",
+      "seconds": 4.22,
+      "started": 1793938327.8417647,
+      "finished": 1793938332.0618384,
+      "usage": null,
+      "api_cost": null,
+      "transport": {
+        "http_status": 200,
+        "seconds": 4.153,
+        "server": "cloudflare",
+        "content_type": "text/event-stream;charset=utf-8",
+        "edge_request_id": "a56141d7b9429bc2-LAX",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 1.672,
+        "first_event_seconds": 1.672,
+        "events": 53
+      }
+    },
+    {
+      "job": "8bd3b85d-5771-4510-8ae8-8a165ac16c6d",
+      "kind": "text",
+      "role": "main",
+      "model": "kimi-for-coding",
+      "status": "succeeded",
+      "seconds": 5.23,
+      "started": 1793938467.4739668,
+      "finished": 1793938472.703532,
+      "usage": null,
+      "api_cost": null,
+      "transport": {
+        "http_status": 200,
+        "seconds": 5.2,
+        "server": "cloudflare",
+        "content_type": "text/event-stream;charset=utf-8",
+        "edge_request_id": "a561453fc99a5e03-LAX",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 1.668,
+        "first_event_seconds": 1.668,
+        "events": 151
+      }
+    },
+    {
+      "job": "8354af9c-b96a-4243-89c2-4a4bbca2208c",
+      "kind": "text",
+      "role": "main",
+      "model": "kimi-for-coding",
+      "status": "succeeded",
+      "seconds": 7.305,
+      "started": 1793938472.6136096,
+      "finished": 1793938479.9186049,
+      "usage": null,
+      "api_cost": null,
+      "transport": {
+        "http_status": 200,
+        "seconds": 7.277,
+        "server": "cloudflare",
+        "content_type": "text/event-stream;charset=utf-8",
+        "edge_request_id": "a561455fec795126-LAX",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 1.644,
+        "first_event_seconds": 1.644,
+        "events": 142
+      }
+    },
+    {
+      "job": "91c1a1a6-0dc4-4d22-8fd3-3b6c101374da",
+      "kind": "text",
+      "role": "vision",
+      "model": "kimi-for-coding",
+      "status": "succeeded",
+      "seconds": 28.76,
+      "started": 1793938475.1271923,
+      "finished": 1793938503.8867924,
+      "usage": null,
+      "api_cost": null,
+      "transport": {
+        "http_status": 200,
+        "seconds": 28.687,
+        "server": "cloudflare",
+        "content_type": "text/event-stream;charset=utf-8",
+        "edge_request_id": "a5614572ce8c23c1-LAX",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 13.57,
+        "first_event_seconds": 13.57,
+        "events": 501
+      }
+    },
+    {
+      "job": "948e2ce9-c652-4853-9c87-f2c5e67b9edc",
+      "kind": "text",
+      "role": "executor",
+      "model": "kimi-for-coding",
+      "status": "succeeded",
+      "seconds": 97.726,
+      "started": 1793938505.119367,
+      "finished": 1793938602.8451521,
+      "usage": null,
+      "api_cost": null,
+      "transport": {
+        "http_status": 200,
+        "seconds": 97.697,
+        "server": "cloudflare",
+        "content_type": "text/event-stream;charset=utf-8",
+        "edge_request_id": "a561462b2c7b08ce-LAX",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 3.211,
+        "first_event_seconds": 3.211,
+        "events": 3698
+      }
+    },
+    {
+      "job": "349bf319-8684-4b5c-9e39-5d5348323048",
+      "kind": "text",
+      "role": "main",
+      "model": "kimi-for-coding",
+      "status": "succeeded",
+      "seconds": 5.939,
+      "started": 1793938542.0287848,
+      "finished": 1793938547.9675896,
+      "usage": null,
+      "api_cost": null,
+      "transport": {
+        "http_status": 200,
+        "seconds": 5.909,
+        "server": "cloudflare",
+        "content_type": "text/event-stream;charset=utf-8",
+        "edge_request_id": "a5614711bd02af1e-LAX",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 2.63,
+        "first_event_seconds": 2.63,
+        "events": 86
+      }
+    },
+    {
+      "job": "9eed99f8-8dc9-4fb4-bc32-0255b2bb55dd",
+      "kind": "text",
+      "role": "executor",
+      "model": "kimi-for-coding",
+      "status": "succeeded",
+      "seconds": 24.908,
+      "started": 1793938549.7311294,
+      "finished": 1793938574.6386697,
+      "usage": null,
+      "api_cost": null,
+      "transport": {
+        "http_status": 200,
+        "seconds": 24.868,
+        "server": "cloudflare",
+        "content_type": "text/event-stream;charset=utf-8",
+        "edge_request_id": "a5614741ff9ac135-LAX",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 3.157,
+        "first_event_seconds": 3.158,
+        "events": 855
+      }
+    },
+    {
+      "job": "adbfa749-56b8-4bad-9ad4-5a8c970144a3",
+      "kind": "text",
+      "role": "executor",
+      "model": "kimi-for-coding",
+      "status": "succeeded",
+      "seconds": 17.826,
+      "started": 1793938575.6744518,
+      "finished": 1793938593.5003302,
+      "usage": null,
+      "api_cost": null,
+      "transport": {
+        "http_status": 200,
+        "seconds": 17.796,
+        "server": "cloudflare",
+        "content_type": "text/event-stream;charset=utf-8",
+        "edge_request_id": "a56147e3fefeef32-LAX",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 2.1,
+        "first_event_seconds": 2.1,
+        "events": 841
+      }
+    },
+    {
+      "job": "11b2c612-653d-4095-9ccb-12fddfed4eee",
+      "kind": "image",
+      "role": null,
+      "model": "gpt-image-2.5-flare",
+      "status": "succeeded",
+      "seconds": 23.207,
+      "started": 1793938595.3298311,
+      "finished": 1793938618.5364766,
+      "usage": null,
+      "api_cost": null,
+      "transport": null
+    },
+    {
+      "job": "dff4ca24-b13a-43c4-a301-75bae7395253",
+      "kind": "image",
+      "role": null,
+      "model": "gpt-image-2.5-flare",
+      "status": "succeeded",
+      "seconds": 30.739,
+      "started": 1793938596.2376366,
+      "finished": 1793938626.9764047,
+      "usage": null,
+      "api_cost": null,
+      "transport": null
+    },
+    {
+      "job": "248e5198-c481-4739-809a-75bac26542ca",
+      "kind": "image",
+      "role": null,
+      "model": "gpt-image-2.5-flare",
+      "status": "succeeded",
+      "seconds": 29.182,
+      "started": 1793938596.2656064,
+      "finished": 1793938625.447892,
+      "usage": null,
+      "api_cost": null,
+      "transport": null
+    },
+    {
+      "job": "18f46295-d326-4eb0-82c1-46d08115c42d",
+      "kind": "image",
+      "role": null,
+      "model": "gpt-image-2.5-flare",
+      "status": "succeeded",
+      "seconds": 31.531,
+      "started": 1793938605.546065,
+      "finished": 1793938637.076848,
+      "usage": null,
+      "api_cost": null,
+      "transport": null
+    },
+    {
+      "job": "86753a30-608d-40ad-88b4-fb166404c16e",
+      "kind": "image",
+      "role": null,
+      "model": "gpt-image-2.5-flare",
+      "status": "succeeded",
+      "seconds": 32.618,
+      "started": 1793938606.561885,
+      "finished": 1793938639.1801288,
+      "usage": null,
+      "api_cost": null,
+      "transport": null
+    },
+    {
+      "job": "b2d2982b-96b0-4a48-9748-f105a2b0c3e1",
+      "kind": "image",
+      "role": null,
+      "model": "gpt-image-2.5-flare",
+      "status": "succeeded",
+      "seconds": 31.585,
+      "started": 1793938606.6633203,
+      "finished": 1793938638.2479568,
+      "usage": null,
+      "api_cost": null,
+      "transport": null
+    },
+    {
+      "job": "94118865-a0fc-4085-b31a-3e07dc839ebe",
+      "kind": "image",
+      "role": null,
+      "model": "gpt-image-2.5-flare",
+      "status": "succeeded",
+      "seconds": 28.696,
+      "started": 1793938625.4665906,
+      "finished": 1793938654.1621306,
+      "usage": null,
+      "api_cost": null,
+      "transport": null
+    },
+    {
+      "job": "b3d98057-6d3b-493a-8fc1-951066f02799",
+      "kind": "image",
+      "role": null,
+      "model": "gpt-image-2.5-flare",
+      "status": "succeeded",
+      "seconds": 30.402,
+      "started": 1793938631.2251577,
+      "finished": 1793938661.6274767,
+      "usage": null,
+      "api_cost": null,
+      "transport": null
+    },
+    {
+      "job": "4db4906c-7207-4d53-901a-3a5d43622bd6",
+      "kind": "image",
+      "role": null,
+      "model": "gpt-image-2.5-flare",
+      "status": "succeeded",
+      "seconds": 26.65,
+      "started": 1793938635.2894378,
+      "finished": 1793938661.939308,
+      "usage": null,
+      "api_cost": null,
+      "transport": null
+    },
+    {
+      "job": "acc8576e-0d59-413c-ade6-9e4cb9f7dd15",
+      "kind": "image",
+      "role": null,
+      "model": "gpt-image-2.5-flare",
+      "status": "succeeded",
+      "seconds": 26.125,
+      "started": 1793938645.3271577,
+      "finished": 1793938671.4521544,
+      "usage": null,
+      "api_cost": null,
+      "transport": null
+    },
+    {
+      "job": "efca0752-0415-46d0-8bcf-f94156ae8a03",
+      "kind": "image",
+      "role": null,
+      "model": "gpt-image-2.5-flare",
+      "status": "succeeded",
+      "seconds": 32.871,
+      "started": 1793938645.3804507,
+      "finished": 1793938678.251723,
+      "usage": null,
+      "api_cost": null,
+      "transport": null
+    },
+    {
+      "job": "18ad64c9-906e-4c3c-9d06-1fd1383e2e26",
+      "kind": "text",
+      "role": "main",
+      "model": "kimi-for-coding",
+      "status": "succeeded",
+      "seconds": 4.956,
+      "started": 1793939334.1391332,
+      "finished": 1793939339.094731,
+      "usage": null,
+      "api_cost": null,
+      "transport": {
+        "http_status": 200,
+        "seconds": 4.926,
+        "server": "cloudflare",
+        "content_type": "text/event-stream;charset=utf-8",
+        "edge_request_id": "a5615a685c26d66d-LAX",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 1.959,
+        "first_event_seconds": 1.959,
+        "events": 154
+      }
+    },
+    {
+      "job": "f85296f6-b599-4383-a6e7-750ec8b1ef70",
+      "kind": "text",
+      "role": "executor",
+      "model": "kimi-for-coding",
+      "status": "succeeded",
+      "seconds": 27.189,
+      "started": 1793939341.4411116,
+      "finished": 1793939368.6303823,
+      "usage": null,
+      "api_cost": null,
+      "transport": {
+        "http_status": 200,
+        "seconds": 27.16,
+        "server": "cloudflare",
+        "content_type": "text/event-stream;charset=utf-8",
+        "edge_request_id": "a5615a95ef802ab4-LAX",
+        "upstream_request_id": "",
+        "stream": true,
+        "response_streamed": true,
+        "headers_seconds": 7.743,
+        "first_event_seconds": 7.744,
+        "events": 634
+      }
+    },
+    {
+      "job": "ebf139b0-0bd4-482e-9df0-7f37a6a51339",
+      "kind": "image",
+      "role": null,
+      "model": "gpt-image-2.5-flare",
+      "status": "succeeded",
+      "seconds": 28.718,
+      "started": 1793939371.9262538,
+      "finished": 1793939400.6444705,
+      "usage": null,
+      "api_cost": null,
+      "transport": null
+    }
+  ],
+  "paid_call_counts": {
+    "text": 11,
+    "image": 12,
+    "mcp": 0
+  },
+  "planning_mean_seconds": 75.50489877233335,
+  "main_model_mean_seconds": 5.684833333333334,
+  "recovery_external_requests": 0,
+  "api_cost_note": "No provider currency amount returned; missing usage is unknown, never zero.",
+  "isolation": [
+    [
+      "chat",
+      "conversations",
+      404
+    ],
+    [
+      "chat",
+      "runs",
+      404
+    ],
+    [
+      "clarify",
+      "conversations",
+      404
+    ],
+    [
+      "clarify",
+      "runs",
+      404
+    ],
+    [
+      "aplus",
+      "conversations",
+      404
+    ],
+    [
+      "aplus",
+      "runs",
+      404
+    ],
+    [
+      "listing",
+      "conversations",
+      404
+    ],
+    [
+      "listing",
+      "runs",
+      404
+    ],
+    [
+      "foreign_asset",
+      404
+    ],
+    [
+      "member_switch_denied",
+      403
+    ]
+  ],
+  "edit-acceptance": {
+    "status": "completed",
+    "new_images": 1,
+    "same_ticket": true,
+    "target_slot": "block2",
+    "version": 2,
+    "original_asset_hashes_unchanged": 8,
+    "other_slot_designs_unchanged": true
+  },
+  "rollback-acceptance": {
+    "controller": "langgraph",
+    "runs": 2,
+    "outputs": 9,
+    "jobs": 9
+  },
+  "image_peak_concurrency": 6
+}

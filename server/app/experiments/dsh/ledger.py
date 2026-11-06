@@ -70,12 +70,12 @@ class Ledger:
                     'cost_note': 'API cost is unknown unless returned by the provider; quota credits are not currency.'}
 
 
-def install_guards(root):
+def install_guards(root,limit=50,native_only=False):
     """Installed in experiment processes only. No model, shell or new image engine."""
     from app.workers.tasks import jobs
     from app.agents.capabilities.mcp_gateway import MCPGateway
     from app.agents import runtime
-    ledger = Ledger(root)
+    ledger = Ledger(root,limit)
     original_execute = jobs._execute_job
     original_adapter = jobs.get_provider_adapter
     original_mcp = MCPGateway.call
@@ -86,7 +86,8 @@ def install_guards(root):
         if proxy:
             from urllib.parse import urlparse
             parsed=urlparse(proxy)
-            if parsed.scheme!='http' or parsed.hostname not in {'127.0.0.1','localhost'} or parsed.username or parsed.password or parsed.path not in {'','/'}:
+            approved={'127.0.0.1','localhost',*os.environ.get('DSH_APPROVED_PROXY_HOSTS','').split(',')}
+            if parsed.scheme!='http' or parsed.hostname not in approved or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in {'','/'}:
                 raise ValueError('Experiment MCP proxy must be an explicit local HTTP proxy')
             import httpx
             result['httpx_client_factory']=lambda **kwargs:httpx.AsyncClient(**kwargs,trust_env=False,follow_redirects=False,proxy=proxy)
@@ -123,6 +124,9 @@ def install_guards(root):
             self.adapter = adapter
 
         async def execute(self, **kwargs):
+            meta=kwargs['payload'].get('metadata') or {}
+            if native_only and not (meta.get('dsh_native') or meta.get('workflow')=='dsh_native_session'):
+                return await self.adapter.execute(**kwargs)
             id = current_job.get()
             if not id:
                 raise ProviderError('experiment.unscoped_call', 'Only an existing Job may invoke a Provider')

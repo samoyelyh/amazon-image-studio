@@ -12,6 +12,7 @@ from app.models.hermes_agent import HermesConversation, HermesMessage
 from app.models.agent_control import AgentRun
 from app.security.principal import Principal, require_permissions
 from app.agents import runtime
+from app.agents import dsh_platform
 from app.agents import production
 from app.agents import creative_modules
 from app.agents import amazon, amazon_research
@@ -49,6 +50,7 @@ def _settings(settings: Settings = Depends(get_settings)):
 @router.get("/status")
 async def status(settings: Settings = Depends(get_settings), db: AsyncSession = Depends(_agent_db),
                  principal: Principal = Depends(require_permissions("jobs.read"))):
+    active=await dsh_platform.controller(db)
     models = {}
     if settings.agent_control_enabled and principal.organization:
         from app.services.resource_pool_service import resolve_operation_model_code
@@ -56,13 +58,13 @@ async def status(settings: Settings = Depends(get_settings), db: AsyncSession = 
                 ("image", "listing.generate", "image_generation"), ("edit", "listing.generate", "image_edit")):
             try:
                 code = await resolve_operation_model_code(db, organization_id=_org(principal), operation_code=operation, capability=capability,
-                    preferred_model_code=settings.agent_control_text_model if name=='text' else None)
+                    preferred_model_code=('kimi-for-coding' if active=='dsh' else settings.agent_control_text_model) if name=='text' else None)
                 models[name] = {"configured": True, "model_code": code}
             except AppError as error:
                 models[name] = {"configured": False, "reason": error.code}
-    return {"enabled": settings.agent_control_enabled, "writes_enabled": settings.agent_control_writes_enabled,
+    return {"controller":active,"enabled": settings.agent_control_enabled, "writes_enabled": settings.agent_control_writes_enabled,
             "model_calls_enabled": settings.agent_control_model_calls_enabled, "planner_mode": settings.agent_control_planner,
-            "checkpoint_configured": bool(settings.agent_checkpoint_url), "models": models,
+            "checkpoint_configured": active=='dsh' or bool(settings.agent_checkpoint_url), "models": models,
             "dynamic_capabilities_enabled": settings.agent_dynamic_capabilities_enabled,
             "creative_assistance_enabled": settings.agent_control_enabled,
             "auto_execution": {"enabled": settings.agent_auto_execute_enabled,
@@ -142,7 +144,7 @@ async def create_conversation(payload: ConversationCreate, db: AsyncSession = De
         project = await batch_tryon.owned_project(db, org, user, payload.project_id)
         if project.project_type != "batch_tryon":
             raise AppError("agent.context_invalid", "当前阶段请选择批量套图项目。", 422)
-    row = HermesConversation(organization_id=org, user_id=user, controller_type="langgraph", title=payload.title,
+    row = HermesConversation(organization_id=org, user_id=user, controller_type=await dsh_platform.controller(db), title=payload.title,
         mode="chat" if chat_mode else "suggest",
         context_project_id=payload.project_id if chat_mode or payload.context_kind == "batch_tryon" else None,
         listing_image_project_id=payload.project_id if not chat_mode and payload.context_kind == "attachment" else None)
@@ -169,7 +171,7 @@ async def create_conversation(payload: ConversationCreate, db: AsyncSession = De
 async def conversations(db: AsyncSession = Depends(_agent_db), settings: Settings = Depends(_settings),
     principal: Principal = Depends(require_permissions("jobs.read"))):
     rows = (await db.scalars(select(HermesConversation).where(HermesConversation.organization_id == _org(principal),
-        HermesConversation.user_id == principal.user.id, HermesConversation.controller_type == "langgraph",HermesConversation.mode!='memory')
+        HermesConversation.user_id == principal.user.id, HermesConversation.controller_type.in_(['langgraph','dsh']),HermesConversation.mode!='memory')
         .order_by(HermesConversation.updated_at.desc()).limit(50))).all()
     return [{"id": r.id, "title": r.title, "project_id": r.context_project_id or r.listing_image_project_id,
              "context_kind": "chat" if r.mode == "chat" else "batch_tryon" if r.context_project_id else "attachment"} for r in rows]
@@ -203,6 +205,8 @@ async def read_conversation(conversation_id: str, db: AsyncSession = Depends(_ag
         r.created_at.replace(tzinfo=timezone.utc)) if r.id not in reply_times else reply_times[r.id],reverse=True)
     from app.agents import batch_manifest
     manifest_row=await batch_manifest.record(db,conv) if conv.mode=='chat' else None
+    for r in runs:
+        if r.graph_version.startswith('dsh-'):await dsh_platform.sync(db,r,principal)
     return {"id": conv.id, "title": conv.title, "project_id": conv.context_project_id or conv.listing_image_project_id,
         'creative_context':await creative_modules.read(db,conv),
         'batch_input_manifest':batch_manifest.snapshot(manifest_row,batch_manifest.BatchInputManifest.model_validate(manifest_row.metadata_json)) if manifest_row else None,
@@ -300,6 +304,15 @@ async def message(conversation_id: str, payload: MessageCreate, db: AsyncSession
     redis=Depends(get_redis_client), settings: Settings = Depends(_settings),
     principal: Principal = Depends(require_permissions("jobs.read", "projects.read", "assets.read"))):
     conv = await runtime.conversation(db, _org(principal), principal.user.id, conversation_id, lock=True)
+    active=await dsh_platform.controller(db)
+    if payload.reply_to_run_id:
+        bound=await runtime.owned_run(db,_org(principal),principal.user.id,payload.reply_to_run_id)
+        if bound.conversation_id!=conv.id:raise AppError('agent.run_missing','原任务不属于本对话。',404)
+        active='dsh' if bound.graph_version.startswith('dsh-') else 'langgraph'
+    if active=='dsh':
+        run=await dsh_platform.send(db,settings,conv,payload,principal)
+        return await runtime.response(db,settings,run)
+    conv.controller_type='langgraph'
     run = await runtime.create_run(db, settings, redis, conv, payload, principal.permissions)
     from app.agents.auto_execution import drive
     await drive(db,settings,redis,run,principal.permissions)
@@ -402,6 +415,9 @@ async def approve_production_sample(conversation_id:str,plan_id:str,payload:Samp
 async def read_run(run_id: str, db: AsyncSession = Depends(_agent_db), redis=Depends(get_redis_client),
     settings: Settings = Depends(_settings), principal: Principal = Depends(require_permissions("jobs.read"))):
     run = await runtime.owned_run(db, _org(principal), principal.user.id, run_id, lock=True)
+    if run.graph_version.startswith('dsh-'):
+        await dsh_platform.sync(db,run,principal)
+        return await runtime.response(db,settings,run)
     await runtime.reconcile(db, settings, redis, run, principal.permissions)
     from app.agents.auto_execution import drive
     await drive(db,settings,redis,run,principal.permissions)
@@ -448,6 +464,9 @@ async def confirm(run_id: str, payload: ConfirmRequest, db: AsyncSession = Depen
 async def resume(run_id: str, db: AsyncSession = Depends(_agent_db), redis=Depends(get_redis_client),
     settings: Settings = Depends(_settings), principal: Principal = Depends(require_permissions("jobs.read"))):
     run = await runtime.owned_run(db, _org(principal), principal.user.id, run_id, lock=True)
+    if run.graph_version.startswith('dsh-'):
+        await dsh_platform.resume(db,run,principal)
+        return await runtime.response(db,settings,run)
     # Resume only observes already-existing jobs. Pending paid actions use /confirm.
     await runtime.reconcile(db, settings, redis, run, principal.permissions)
     from app.agents.auto_execution import drive
@@ -459,5 +478,16 @@ async def resume(run_id: str, db: AsyncSession = Depends(_agent_db), redis=Depen
 async def stop(run_id: str, db: AsyncSession = Depends(_agent_db), settings: Settings = Depends(_settings),
                principal: Principal = Depends(require_permissions("jobs.read"))):
     run = await runtime.owned_run(db, _org(principal), principal.user.id, run_id, lock=True)
+    if run.graph_version.startswith('dsh-'):
+        await dsh_platform.stop(db,run,principal)
+        return await runtime.response(db,settings,run)
     await runtime.cancel(db, run)
     return await runtime.response(db, settings, run)
+
+
+class ControllerChange(StrictModel):
+    controller:str
+
+@router.put('/controller')
+async def change_controller(payload:ControllerChange,db:AsyncSession=Depends(_agent_db),principal:Principal=Depends(require_permissions('platform.admin'))):
+    return await dsh_platform.set_controller(db,payload.controller,principal.user.id)

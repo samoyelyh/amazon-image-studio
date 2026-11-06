@@ -285,7 +285,7 @@ export async function prepareImportFiles(files: File[], maxFiles = MAX_IMAGES): 
   function result(bytes: Uint8Array, path: string, original?: File): ImportFile {
     const name = path.split('/').pop()!
     // No image re-encoding or format sniffing: the server validates image content.
-    return { file: new File([bytes], name, { type: mimeTypes[extension(path)], lastModified: original?.lastModified }), relativePath: path }
+    return { file: new File([Uint8Array.from(bytes)], name, { type: mimeTypes[extension(path)], lastModified: original?.lastModified }), relativePath: path }
   }
   const seenPlain = new Set<string>()
   for (const { file, path } of inputs) {

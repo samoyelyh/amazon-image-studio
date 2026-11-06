@@ -4,6 +4,7 @@ import type {AmazonPlanRecord,AmazonReceipt} from './amazonAgentApi'
 import type {CreativeModule,CreativeContext} from './agentCreativeModules'
 
 export interface AgentStatus {
+  controller?: 'dsh' | 'langgraph'
   enabled: boolean; writes_enabled: boolean; model_calls_enabled: boolean
   planner_mode: 'mock' | 'existing_text'; checkpoint_configured: boolean
   models?: Record<string, { configured: boolean; model_code?: string; reason?: string }>
@@ -29,7 +30,7 @@ export interface MaterialImportInfo {batch_id:string;total_files:number;source:'
 export interface AgentAttachment { id: string; asset_id: string; filename: string; role: AttachmentRole; content_url: string; submitted: boolean;import_info?:MaterialImportInfo|null }
 export interface AgentRun {
   id: string; conversation_id: string; status: string; revision: number; planner_mode: string
-  plan: AgentPlan | null; result: { actions?: Array<{ tool: string; result: Record<string, unknown> }>; job_ids?: string[]
+  plan: AgentPlan | null; result: { native_state?:string; actions?: Array<{ tool: string; result: Record<string, unknown> }>; job_ids?: string[]
     reply_context?:{source_run_id:string;source_revision:number;goal:string;question:string};execution_error?:string;submitted_import_keys?:string[]
     creative_suggestions?:{summary:string;options:Array<{title:string;instruction:string}>};retry_of_job_id?:string }
   error_code: string | null; state_signature: string | null; confirmation_token: string | null
@@ -112,3 +113,7 @@ export function canConfirmAgentRun(run: AgentRun, status: AgentStatus): boolean 
   return !run.plan.blocked_reason && !run.plan.needs_input?.length && run.plan.budget?.sufficient !== false
     && (!writes || status.writes_enabled) && (!run.plan.may_charge || status.model_calls_enabled)
 }
+
+export const setAgentController = (controller: 'dsh'|'langgraph') => authenticatedFetch<{controller:'dsh'|'langgraph'}>(`${root}/controller`, {method:'PUT',body:JSON.stringify({controller})})
+
+export const resumeAgentRun = (id: string) => authenticatedFetch<AgentRun>(`${root}/runs/${encodeURIComponent(id)}/resume`, {method:'POST'})

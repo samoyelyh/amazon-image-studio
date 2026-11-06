@@ -1,0 +1,58 @@
+[
+  {
+    "service": "backend",
+    "image": "amazon-image-studio-backend:dsh-20261106",
+    "image_sha": "sha256:9d0ce69193bb6d8181db36fb9a5614384b327613cd218eda88fa5996e9787a55",
+    "running": true,
+    "health": "healthy"
+  },
+  {
+    "service": "worker",
+    "image": "amazon-image-studio-backend:dsh-20261106",
+    "image_sha": "sha256:9d0ce69193bb6d8181db36fb9a5614384b327613cd218eda88fa5996e9787a55",
+    "running": true,
+    "health": null
+  },
+  {
+    "service": "maintenance-worker",
+    "image": "amazon-image-studio-backend:dsh-20261106",
+    "image_sha": "sha256:9d0ce69193bb6d8181db36fb9a5614384b327613cd218eda88fa5996e9787a55",
+    "running": true,
+    "health": null
+  },
+  {
+    "service": "queue-retention-worker",
+    "image": "amazon-image-studio-backend:dsh-20261106",
+    "image_sha": "sha256:9d0ce69193bb6d8181db36fb9a5614384b327613cd218eda88fa5996e9787a55",
+    "running": true,
+    "health": null
+  },
+  {
+    "service": "celery-beat",
+    "image": "amazon-image-studio-backend:dsh-20261106",
+    "image_sha": "sha256:9d0ce69193bb6d8181db36fb9a5614384b327613cd218eda88fa5996e9787a55",
+    "running": true,
+    "health": null
+  },
+  {
+    "service": "flower",
+    "image": "amazon-image-studio-backend:dsh-20261106",
+    "image_sha": "sha256:9d0ce69193bb6d8181db36fb9a5614384b327613cd218eda88fa5996e9787a55",
+    "running": true,
+    "health": null
+  },
+  {
+    "service": "frontend",
+    "image": "amazon-image-studio-frontend:dsh-20261106",
+    "image_sha": "sha256:6eef34b0e152395ac17c218ef5b694d7c30ebf4b37941fe4d3fb64c6fcd3107f",
+    "running": true,
+    "health": "healthy"
+  },
+  {
+    "service": "dsh-sidecar",
+    "image": "ais-dsh-native:20261106",
+    "image_sha": "sha256:9af9506cbed14e8c2599e1306cdf6975747bc87a127b6734abf45401f63ac65c",
+    "running": true,
+    "health": null
+  }
+]

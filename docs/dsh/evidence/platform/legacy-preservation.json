@@ -1,0 +1,32 @@
+{
+  "original_record_counts": {
+    "hermes_conversations": 31,
+    "agent_runs": 50,
+    "jobs": 1388,
+    "generated_outputs": 623,
+    "assets": 5784
+  },
+  "legacy_history_and_download_checks": [
+    {
+      "graph": "capabilities-v1",
+      "status": "completed",
+      "history_http": 200,
+      "run_preserved": true,
+      "download_bytes": 1153840
+    },
+    {
+      "graph": "capabilities-v1",
+      "status": "completed",
+      "history_http": 200,
+      "run_preserved": true
+    },
+    {
+      "graph": "capabilities-v1",
+      "status": "completed",
+      "history_http": 200,
+      "run_preserved": true,
+      "download_bytes": 2163592
+    }
+  ],
+  "model_requests": 0
+}

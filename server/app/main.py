@@ -15,6 +15,11 @@ from app.core.middleware import RequestIdMiddleware
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging(settings.log_level, json_logs=settings.environment == "production")
+    from app.agents import dsh_settings
+    if dsh_settings.enabled():
+        from app.experiments.dsh.ledger import install_guards
+        import os
+        install_guards(dsh_settings.state()/'worker',limit=int(os.environ.get('DSH_CALL_LIMIT','50')),native_only=True)
     yield
 
 

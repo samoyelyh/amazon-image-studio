@@ -309,8 +309,6 @@ def create_app():
     from app.api import agent_control
     app.dependency_overrides[agent_control.get_storage_service]=lambda:storage
     app.include_router(router)
-    from app.experiments.dsh.native import router as native_router
-    app.include_router(native_router)
 
     @app.get('/experiment',include_in_schema=False)
     async def ui():
