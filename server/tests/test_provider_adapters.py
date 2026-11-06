@@ -17,6 +17,22 @@ def install_transport(monkeypatch, handler):
 
     monkeypatch.setattr("app.providers.openai_compatible.httpx.AsyncClient", factory)
 
+async def test_kimi_stream_preserves_reasoning_across_tool_calls_without_an_extra_request(monkeypatch):
+    seen=[]
+    def handler(request):
+        body=json.loads(request.content);seen.append(body)
+        assert body['model']=='kimi-for-coding' and body['reasoning_effort']=='low'
+        assert body['messages'][0]['reasoning_content']=='prior fixture reasoning'
+        chunks=[{'choices':[{'delta':{'reasoning_content':'fixture '}}]},
+            {'choices':[{'delta':{'reasoning_content':'reasoning','tool_calls':[{'index':0,'id':'call-one','function':{'name':'route_task','arguments':'{}'}}]}}]},
+            {'choices':[{'delta':{},'finish_reason':'tool_calls'}]}]
+        return httpx.Response(200,headers={'content-type':'text/event-stream'},text=''.join('data: '+json.dumps(c)+'\n\n' for c in chunks)+'data: [DONE]\n\n')
+    install_transport(monkeypatch,handler)
+    response=await OpenAICompatibleProvider(Settings(_env_file=None)).execute(base_url='https://api.kimi.com/coding/v1',api_key='unit-fixture-key',upstream_model='kimi-for-coding',capability='text_generation',
+        payload={'stream':True,'reasoning_effort':'low','agent_messages':[{'role':'assistant','content':None,'reasoning_content':'prior fixture reasoning'}]},config={'preserve_reasoning':True})
+    assert len(seen)==1 and response.metadata['reasoning_content']=='fixture reasoning'
+    assert response.metadata['tool_calls'][0]['function']['name']=='route_task'
+
 
 async def test_text_generation_uses_server_key_and_returns_json_text(monkeypatch) -> None:
     observed = {}

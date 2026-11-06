@@ -1,5 +1,7 @@
 # Kimi Code 主控模型调用与真实路由测速
 
+> 后续已按用户要求把实验默认模型切为 K2.8 Preview（`kimi-for-coding`）。本页六次 K3.1 测量保留为历史记录，参见 [当前切换记录](KIMI_K28_SWITCH.md)。
+
 2026-11-06，北京时间。仅在 `experiment/dsh-superagent` 实验目录测试，未改变 18080 或现有 DSH 默认模型。
 
 ## 调用方式

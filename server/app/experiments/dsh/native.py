@@ -229,7 +229,7 @@ def catalog(row):
 @router.post('/model',dependencies=[Depends(internal_auth)])
 async def model(value:dict,db:AsyncSession=Depends(get_db_session)):
     row=get_turn(value['turn']);who=json.loads(row['owner']);o=value['options'];role=value['role']
-    if o['model'] not in {'gpt-6.1-sol','gpt-6.1-terra'}:raise AppError('dsh.model_denied','Model not allowed',403)
+    if o['model'] not in {'gpt-6.1-sol','gpt-6.1-terra','kimi-for-coding'}:raise AppError('dsh.model_denied','Model not allowed',403)
     if value.get('replay_known') and role=='executor':
         with connection() as c:
             recorded=c.execute('SELECT job FROM model_jobs WHERE turn_id=? AND role=? AND model=? ORDER BY created DESC',(row['id'],role,o['model'])).fetchall()
@@ -244,7 +244,8 @@ async def model(value:dict,db:AsyncSession=Depends(get_db_session)):
             messages.append({'role':'tool','tool_call_id':m['toolCallId'],'content':texts})
         elif m['role']=='assistant':
             calls=[{'id':b['id'],'type':'function','function':{'name':b['name'],'arguments':b['arguments']}} for b in content if b['type']=='tool-call']
-            messages.append({'role':'assistant','content':texts or None,**({'tool_calls':calls} if calls else {})})
+            reasoning=''.join(b.get('text','') for b in content if b['type']=='reasoning')
+            messages.append({'role':'assistant','content':texts or None,**({'tool_calls':calls} if calls else {}),**({'reasoning_content':reasoning} if reasoning and o['model']=='kimi-for-coding' else {})})
         else:messages.append({'role':m['role'],'content':texts})
     # One immutable request per session transcript. Restart resumes this Job.
     key='dsh-native-model:'+digest([o['sessionId'],o['model'],messages,o.get('tools')])

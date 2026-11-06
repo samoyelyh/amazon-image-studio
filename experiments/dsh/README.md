@@ -1,8 +1,12 @@
 # 本地 DSH 实验使用
 
+**当前模型（2026-11-06 后续切换）**：Main、业务 Executor、视觉 Session 均为 K2.8 Preview，实际 ID `kimi-for-coding`，固定 `reasoning_effort=low`。详见 [K2.8 切换记录](../../docs/dsh/KIMI_K28_SWITCH.md)。后文 Terra/Sol 与 K3.1 测量属于历史记录，不能当作当前默认配置。
+
+本机已登记 Kimi 隔离资源池。全新环境需先在 `server` 目录运行 `python -m app.experiments.dsh.configure_kimi`，在不回显提示中输入用户授权的 Key；脚本只写加密凭据、不发送网络请求，也不修改已有额度上限。
+
 当前运行真实官方 Harness Sessions，具体架构和验收见 [原生迁移报告](../../docs/dsh/NATIVE_MIGRATION.md)。旧 `verify_live.py` 中的 DSH 结果属于上一版 Ticket 包装实验，不能当作本次原生迁移证据。本次使用 `verify_native*.py`。
 
-依赖安装：`./experiments/dsh/install-native.ps1`；启动：`./experiments/dsh/start.ps1`。默认 Main/业务 Executor 使用已实测的 Terra，视觉 Session 使用 Sol；可用 `-ExecutorModel gpt-6.1-sol` 评估 Sol 策划。依赖锁固定 Harness `0.2.1-rc.3`，不启动 GitHub 编码 Executor。
+依赖安装：`./experiments/dsh/install-native.ps1`；启动：`./experiments/dsh/start.ps1`。默认使用 K2.8；历史模型可通过显式 `-MainModel`、`-ExecutorModel`、`-VisionModel` 参数选择，不自动回退。依赖锁固定 Harness `0.2.1-rc.3`，不启动 GitHub 编码 Executor。
 
 当前累计文本调用 **50/50**，图片 **28/50**；文本额度不会重置。现环境适合查看、恢复已完成任务和下载。新的模型测试需要另行增加已授权额度。MCP 有一次真实请求超时且计费状态未知，禁止重发该查询。
 

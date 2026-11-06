@@ -7,8 +7,10 @@ import {createNativeRuntime} from './native-runtime.mjs';
 
 test('official Agent Loop executes scoped native tool calls and commits durable Session events',async()=>{
   const root=mkdtempSync(join(tmpdir(),'dsh-native-contract-'));let calls=0;let executed=0;
-  const runtime=await createNativeRuntime(root,async()=>{
-    calls++;return calls===1?{tool_calls:[{id:'contract-tool-1',function:{name:'business_probe',arguments:'{"value":"owned"}'}}]}:{text:'done'};
+  const runtime=await createNativeRuntime(root,async(_,options)=>{
+    calls++;
+    if(calls===2)assert.ok(options.messages.some(m=>m.role==='assistant'&&m.content.some(b=>b.type==='reasoning'&&b.text==='synthetic provider reasoning')));
+    return calls===1?{reasoning_content:'synthetic provider reasoning',tool_calls:[{id:'contract-tool-1',function:{name:'business_probe',arguments:'{"value":"owned"}'}}]}:{text:'done'};
   });
   const agent=await runtime.ensure('contract-session','contract-model','Use the scoped business tool.',[{
     name:'business_probe',description:'Contract probe only; no provider request.',

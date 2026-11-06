@@ -178,8 +178,14 @@ class OpenAICompatibleProvider(BaseImageProvider):
         started=perf_counter()
         stream_metrics={}
         body=None
+        proxy=config.get('http_proxy')
+        if proxy:
+            parsed=urlparse(str(proxy))
+            if parsed.scheme!='http' or parsed.hostname not in {'127.0.0.1','localhost'} or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in {'','/'}:
+                raise ProviderError('provider.invalid_config','Only an approved loopback HTTP proxy is supported',http_status=422)
         try:
-            async with httpx.AsyncClient(timeout=_provider_timeout(self.settings), follow_redirects=False) as client:
+            client_options={'proxy':proxy,'trust_env':False} if proxy else {}
+            async with httpx.AsyncClient(timeout=_provider_timeout(self.settings), follow_redirects=False,**client_options) as client:
                 if request_body['stream']:
                     async with client.stream('POST',url,headers={'Authorization':f'Bearer {api_key}'},json=request_body) as response:
                         stream_metrics['headers_seconds']=round(perf_counter()-started,3)
@@ -230,6 +236,7 @@ class OpenAICompatibleProvider(BaseImageProvider):
         return ProviderResult([], response.headers.get("x-request-id"), {
             "text": text, "created": body.get("created"), "usage": usage,
             **({'tool_calls': tool_calls} if tool_calls else {}),
+            **({'reasoning_content':body['choices'][0]['message'].get('reasoning_content','')} if config.get('preserve_reasoning') else {}),
             'finish_reason':body['choices'][0].get('finish_reason'),
             'transport':{**_text_response_diagnostics(response,perf_counter()-started,request_body['stream']),**stream_metrics},
         })
@@ -271,7 +278,7 @@ def _text_response_diagnostics(response,seconds,stream=False):
 async def _collect_text_stream(response,started,metrics):
     """Collect one chat completion, never retry a truncated/unknown stream."""
     import json
-    pieces=[];characters=0;usage=None;created=None;finish=None;done=False;events=0;calls={}
+    pieces=[];reasoning=[];characters=0;usage=None;created=None;finish=None;done=False;events=0;calls={}
     async for line in response.aiter_lines():
         if line and 'first_event_seconds' not in metrics:
             metrics['first_event_seconds']=round(perf_counter()-started,3)
@@ -290,6 +297,8 @@ async def _collect_text_stream(response,started,metrics):
         for choice in item.get('choices') or []:
             if choice.get('index',0)!=0:continue
             if choice.get('finish_reason') is not None:finish=choice['finish_reason']
+            thought=(choice.get('delta') or {}).get('reasoning_content')
+            if isinstance(thought,str):reasoning.append(thought)
             for call in (choice.get('delta') or {}).get('tool_calls') or []:
                 current=calls.setdefault(call.get('index',0),{'id':'','type':'function','function':{'name':'','arguments':''}})
                 if call.get('id'):current['id']+=call['id']
@@ -306,7 +315,7 @@ async def _collect_text_stream(response,started,metrics):
     if not done and finish is None:
         raise ProviderError('provider.network_error','Upstream text stream ended before completion; outcome unknown',retryable=True)
     metrics['events']=events
-    return {'choices':[{'message':{'content':''.join(pieces),'tool_calls':[calls[k] for k in sorted(calls)]},'finish_reason':finish}],
+    return {'choices':[{'message':{'content':''.join(pieces),'reasoning_content':''.join(reasoning),'tool_calls':[calls[k] for k in sorted(calls)]},'finish_reason':finish}],
         'usage':usage,'created':created},metrics
 
 

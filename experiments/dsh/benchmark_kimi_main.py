@@ -112,4 +112,4 @@ async def main(args):
     print('REPORT',output,flush=True)
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--model',choices=['k3.1-pro','k3.1-pro-highspeed'],default='k3.1-pro');p.add_argument('--run-id',required=True);p.add_argument('--ceiling',type=int,default=50);p.add_argument('--key-stdin',action='store_true');asyncio.run(main(p.parse_args()))
+    p=argparse.ArgumentParser();p.add_argument('--model',choices=['kimi-for-coding','k3.1-pro','k3.1-pro-highspeed'],default='kimi-for-coding');p.add_argument('--run-id',required=True);p.add_argument('--ceiling',type=int,default=50);p.add_argument('--key-stdin',action='store_true');asyncio.run(main(p.parse_args()))

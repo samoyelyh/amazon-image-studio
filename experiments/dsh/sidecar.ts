@@ -13,7 +13,7 @@ const server=createServer(async(req,res)=>{
   const supplied=Buffer.from(String(req.headers['x-dsh-token']||'')),expected=Buffer.from(token)
   if(supplied.length!==expected.length || !timingSafeEqual(supplied,expected)) return respond(403,{error:'forbidden'})
   try {
-    if(req.method==='GET' && req.url==='/health') return respond(200,{status:'ok',implementation:'official-dsh-core+native-harness',harness:true,shell_tools:0,upstream:'8c32a9dc5d72c033816c6a8110b37f40cf94fba4'})
+    if(req.method==='GET' && req.url==='/health') return respond(200,{status:'ok',implementation:'official-dsh-core+native-harness',harness:true,shell_tools:0,models:native.models(),upstream:'8c32a9dc5d72c033816c6a8110b37f40cf94fba4'})
     if(req.method!=='POST') return respond(405,{error:'method_not_allowed'})
     let data='';for await(const chunk of req){data+=chunk;if(data.length>128000)throw Object.assign(new Error('Payload too large'),{status:413})}
     const x=JSON.parse(data)
