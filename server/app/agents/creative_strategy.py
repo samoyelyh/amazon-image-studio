@@ -12,6 +12,8 @@ class PurchaseReason(StrictModel):
     need_or_scene:str=Field(min_length=3,max_length=200)
     confidence:Literal['fact_grounded_interpretation','market_hypothesis']
     presentation:Literal['visual','native_copy','visual_and_copy','internal_only']
+    priority_rationale:str|None=Field(default=None,max_length=300)
+    evidence_boundary:str|None=Field(default=None,max_length=300,description='What is observed, what is a creative hypothesis, and what is NOT established by market data.')
 
 class CreativeConcept(StrictModel):
     theme:str=Field(min_length=3,max_length=100)
@@ -27,9 +29,12 @@ class CreativeConcept(StrictModel):
     canvas_color:str=Field(pattern=r'^#[0-9a-fA-F]{6}$')
     ink_color:str=Field(pattern=r'^#[0-9a-fA-F]{6}$')
     accent_color:str=Field(pattern=r'^#[0-9a-fA-F]{6}$')
+    big_idea:str|None=Field(default=None,max_length=300)
+    visual_mechanism:str|None=Field(default=None,max_length=400,description='The concrete visual operation linking product identity to consumer value; not a palette or mood.')
+    product_specificity:str|None=Field(default=None,max_length=250,description='Why this concept belongs to this product rather than any generic product.')
 
 class CreativeStrategy(StrictModel):
-    version:Literal['creative-director-v1']='creative-director-v1'
+    version:Literal['creative-director-v1','creative-director-v2']='creative-director-v1'
     category:str=Field(min_length=2,max_length=100)
     research_basis:Literal['market_hypothesis','provided_context','verified_mcp']
     research_receipt_ids:list[str]=Field(default_factory=list,max_length=10)
@@ -37,11 +42,29 @@ class CreativeStrategy(StrictModel):
     purchase_reasons:list[PurchaseReason]=Field(min_length=5,max_length=5)
     concept:CreativeConcept
     preflight_review:str=Field(min_length=20,max_length=600,description='Explain fact limits, consumer value, shot rhythm, module fit and what was deliberately omitted. No numeric taste score.')
+    priority_method:str|None=Field(default=None,max_length=350)
+    rejected_reasons:list[str]|None=Field(default=None,max_length=6,description='Weak, duplicate or unsupported selling points deliberately merged or omitted, with reasons.')
     @model_validator(mode='after')
     def distinct(self):
         if len({r.id for r in self.purchase_reasons})!=5 or {r.priority for r in self.purchase_reasons}!={1,2,3,4,5}:raise ValueError('five reasons need unique ids and priorities 1..5')
         if self.research_basis=='verified_mcp' and not self.research_receipt_ids:raise ValueError('verified MCP requires real receipt ids')
         return self
+
+class PurchaseReasonV2(PurchaseReason):
+    priority_rationale:str=Field(min_length=5,max_length=300)
+    evidence_boundary:str=Field(min_length=5,max_length=300)
+
+class CreativeConceptV2(CreativeConcept):
+    big_idea:str=Field(min_length=10,max_length=300)
+    visual_mechanism:str=Field(min_length=10,max_length=400)
+    product_specificity:str=Field(min_length=10,max_length=250)
+
+class CreativeStrategyV2(CreativeStrategy):
+    version:Literal['creative-director-v2']
+    priority_method:str=Field(min_length=10,max_length=350)
+    rejected_reasons:list[str]=Field(min_length=1,max_length=6)
+    purchase_reasons:list[PurchaseReasonV2]=Field(min_length=5,max_length=5)
+    concept:CreativeConceptV2
 
 class ModuleNarrative(StrictModel):
     reason_ids:list[str]=Field(min_length=1,max_length=5)

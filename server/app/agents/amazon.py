@@ -86,6 +86,10 @@ def findings(plan):
 
 def module_signature(plan, module):
     data=module.model_dump(mode='json')
+    if not module.rule_applications:data.pop('rule_applications',None)
+    for slot in data.get('image_slots',[]):
+        for key in ('design_execution','source_crop'):
+            if slot.get(key) is None:slot.pop(key,None)
     if not module.narrative:data.pop('narrative',None)
     for key in ('design_direction','requested_width','requested_height'):
         if data[key] is None:data.pop(key)
@@ -95,7 +99,16 @@ def module_signature(plan, module):
         'style':plan.campaign_style_lock,'rules':plan.rules_version,'marketplace':plan.marketplace,
         'evidence':[e.model_dump(mode='json') for e in plan.insight.evidence if e.id in module.evidence_ids]}
     if plan.deliverable!='aplus':value['deliverable']=plan.deliverable
-    if plan.creative_strategy:value['creative_strategy']=plan.creative_strategy.model_dump(mode='json')
+    if plan.creative_strategy:
+        strategy=plan.creative_strategy.model_dump(mode='json')
+        for key in ('priority_method','rejected_reasons'):
+            if strategy.get(key) is None:strategy.pop(key,None)
+        for reason in strategy['purchase_reasons']:
+            for key in ('priority_rationale','evidence_boundary'):
+                if reason.get(key) is None:reason.pop(key,None)
+        for key in ('big_idea','visual_mechanism','product_specificity'):
+            if strategy['concept'].get(key) is None:strategy['concept'].pop(key,None)
+        value['creative_strategy']=strategy
     return digest(value)
 
 
@@ -132,7 +145,7 @@ async def list_plans(db, conv):
 
 async def check_assets(db, conv, plan):
     known={a['asset_id'] for a in await chat.attachments(db,conv)} | {o['asset_id'] for o in await chat.outputs(db,conv)}
-    for aid in {aid for m in plan.modules for aid in [*m.reference_asset_ids,*[a for s in m.image_slots for a in (s.reference_asset_ids or [])]]}:
+    for aid in {aid for m in plan.modules for aid in [*m.reference_asset_ids,*[a for s in m.image_slots for a in (s.reference_asset_ids or [])],*[s.source_crop.asset_id for s in m.image_slots if s.source_crop]]}:
         if aid not in known:raise AppError('agent.context_mismatch','A+只能引用当前会话已授权素材。',403)
         await chat.asset(db,conv.organization_id,conv.user_id,aid)
 
@@ -207,10 +220,11 @@ async def image_quote(db, conv, args, *, require_approval=True):
         if require_approval and row.metadata_json['approvals'].get(m.id,{}).get('signature')!=module_signature(p,m):
             raise AppError('agent.module_unconfirmed','模块尚未由运营确认，不能提交生图。',409)
     await check_assets(db,conv,p)
+    pending,_=await _slot_work(db,p,row.metadata_json,args)
+    if not pending:return {'sufficient':True,'estimated_cost':0,'model_code':None,'quantity':0}
     operation='listing.generate' if p.deliverable=='listing' else 'aplus.generate'
     model=await resolve_operation_model_code(db,organization_id=conv.organization_id,operation_code=operation,
         capability='image_edit',additional_capabilities={'multi_image_reference'})
-    pending,_=await _slot_work(db,p,row.metadata_json,args)
     budget=(await estimate_response(db,organization_id=conv.organization_id,operation_code=operation,
         quantity=max(1,len(pending)),factors={'model':model,'resource_pool':'platform'})).model_dump(mode='json')
     return {**budget,'model_code':model,'quantity':len(pending)}
@@ -250,6 +264,7 @@ async def _slot_work(db,plan,data,args):
         signature=module_signature(plan,module)
         for slot in slots(plan,module):
             if args.slot_ids is not None and slot['id'] not in args.slot_ids.get(module.id,[]):continue
+            if slot['direction'].source_crop:continue
             pair=(module.id,slot['id']);prior=latest.get(pair)
             job=await db.get(Job,prior[0]) if prior else None
             same=prior and prior[1] in ({signature,slot_signature(plan,module,slot)} if data.get('controller')=='dsh-native' else {signature})
@@ -276,11 +291,15 @@ async def generate(db, settings, conv, args, key):
     prior=next((s for s in data['submissions'] if s['request_key']==key),None)
     if prior:return {**prior,'amazon_plan_id':row.id,'project_id':data['project_id']}
     pending,reused=await _slot_work(db,p,data,args)
+    from app.agents.aplus_design import slots
+    source_count=sum(bool(s['direction'].source_crop) for m in p.modules if m.id in args.module_ids for s in slots(p,m)
+        if args.slot_ids is None or s['id'] in args.slot_ids.get(m.id,[]))
     if not pending and reused:
         jobs=list(reused.values())
         return {'amazon_plan_id':row.id,'project_id':data['project_id'],'batch_id':jobs[0].batch_id,
             'job_ids':[j.id for j in jobs],'module_ids':[pair[0] for pair in reused],
-            'slot_ids':[pair[1] for pair in reused],'reused':True}
+            'slot_ids':[pair[1] for pair in reused],'source_crop_count':source_count,'reused':True}
+    if not pending and source_count:return {'amazon_plan_id':row.id,'job_ids':[],'source_crop_count':source_count,'reused':True}
     if not pending:raise AppError('agent.module_missing','没有可生成的模块图片槽位。',422)
     if data['project_id']:
         project=await project_service.get_project(db,conv.organization_id,data['project_id'],owner_user_id=conv.user_id)
@@ -313,6 +332,8 @@ async def generate(db, settings, conv, args, key):
                     'design_trace':{'skills':data.get('skill_trace',[]),'principles':m.design_principles,
                         'creative_strategy_version':p.creative_strategy.version if p.creative_strategy else None,
                         'narrative':m.narrative.model_dump() if m.narrative else None,
+                        'rule_applications':[r.model_dump() for r in professional_prompts.applied_rules(p,m,slot,bool(parent))],
+                        'design_execution':direction.design_execution.model_dump() if direction.design_execution else None,
                         'art_direction':m.art_direction.model_dump() if m.art_direction else None}},
                 'agent_image':{'conversation_id':conv.id,'parent_output_id':parent['id'] if parent else None,
                     'root_output_id':parent['root_output_id'] if parent else None,'version':parent['version']+1 if parent else 1}}))
@@ -325,7 +346,7 @@ async def generate(db, settings, conv, args, key):
         'slot_ids':[s['id'] for m,s in pending],'request_key':key,
         'module_signatures':{m.id+'::'+s['id']:slot_signature(p,m,s) if data.get('controller')=='dsh-native' else module_signature(p,m) for m,s in pending}}
     row.metadata_json={**data,'project_id':project.id,'submissions':[*data['submissions'],result]}
-    await db.flush();return {**result,'amazon_plan_id':row.id,'project_id':project.id}
+    await db.flush();return {**result,'amazon_plan_id':row.id,'project_id':project.id,'source_crop_count':source_count}
 
 def slot_signature(plan,module,slot):
     return 'slot-v1:'+module_signature(plan,module.model_copy(update={'image_slots':[slot['direction']]}))

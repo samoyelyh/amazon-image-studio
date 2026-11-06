@@ -1,0 +1,643 @@
+{
+  "jobs": [
+    {
+      "id": "007a04dc-9a50-47a5-b91b-0210a41002d2",
+      "status": "succeeded",
+      "capability": "image_edit",
+      "model": "gpt-image-2",
+      "native_role": null,
+      "reference_asset_ids": [
+        "2d25d7ad-5183-4411-b238-76dee7abbb29"
+      ],
+      "module_id": "m5_close",
+      "slot_id": "main",
+      "recipe": "professional-art-direction-v6",
+      "skills": [
+        {
+          "id": "amazon-aplus-planner",
+          "version": "2",
+          "content_hash": "9da50c49873411cb269aab2fc7650783f1ad6bc04d9d561677cf22aa5c8f2bb7"
+        },
+        {
+          "id": "image-creation",
+          "version": "1",
+          "content_hash": "e2cf113400bb9a612e70e4857c34ece0589a84d8abd027f079da0cc9ffad1687"
+        }
+      ],
+      "rule_applications": [
+        {
+          "decision": "正面Logo、渐变、口袋位置锁原图",
+          "principle": "product_identity"
+        },
+        {
+          "decision": "收尾静物无道具，信息干净",
+          "principle": "visual_hierarchy"
+        },
+        {
+          "decision": "文案交左侧原生排版",
+          "principle": "copy_separation"
+        }
+      ],
+      "design_execution": {
+        "light": "均匀柔光，低反差",
+        "camera": "50mm微俯平铺",
+        "purpose": "收尾正面全貌",
+        "hierarchy": "Logo与渐变并列第一",
+        "differentiation": "唯一正面平铺视角，与m2挂拍侧角互补",
+        "subject_placement": "商品偏右占60%，左侧留白",
+        "native_copy_layout": "左侧标题加支持文案，右图左文"
+      },
+      "all_slot_decisions_in_prompt": true,
+      "all_rule_actions_in_prompt": true,
+      "narrative": {
+        "treatment": "photography",
+        "reason_ids": [
+          "pr_city_identity",
+          "pr_gradient_visual",
+          "pr_everyday_comfort_form"
+        ],
+        "story_beat": "回到商品本身",
+        "shot_purpose": "收尾提供完整正面认知便于决策"
+      }
+    },
+    {
+      "id": "098fe0a2-d021-4b98-ae2d-3f82f7caf5ea",
+      "status": "succeeded",
+      "capability": "text_generation",
+      "model": "kimi-for-coding",
+      "native_role": "main",
+      "reference_asset_ids": [],
+      "module_id": null,
+      "slot_id": null,
+      "recipe": null,
+      "skills": null,
+      "rule_applications": null,
+      "design_execution": {},
+      "all_slot_decisions_in_prompt": null,
+      "all_rule_actions_in_prompt": null,
+      "narrative": null
+    },
+    {
+      "id": "0f95207d-a020-4e91-889c-cbf96de73909",
+      "status": "succeeded",
+      "capability": "image_edit",
+      "model": "gpt-image-2",
+      "native_role": null,
+      "reference_asset_ids": [
+        "2d25d7ad-5183-4411-b238-76dee7abbb29"
+      ],
+      "module_id": "m1_hero",
+      "slot_id": "main",
+      "recipe": "professional-art-direction-v6",
+      "skills": [
+        {
+          "id": "amazon-aplus-planner",
+          "version": "2",
+          "content_hash": "9da50c49873411cb269aab2fc7650783f1ad6bc04d9d561677cf22aa5c8f2bb7"
+        },
+        {
+          "id": "image-creation",
+          "version": "1",
+          "content_hash": "e2cf113400bb9a612e70e4857c34ece0589a84d8abd027f079da0cc9ffad1687"
+        }
+      ],
+      "rule_applications": [
+        {
+          "decision": "用海岸暮色与城市轮廓唤起归属情绪而非纯摆拍",
+          "principle": "emotional_story"
+        },
+        {
+          "decision": "暮光柔和光与青绿藏青基调锁死全套",
+          "principle": "campaign_consistency"
+        },
+        {
+          "decision": "右半大面积留白交原生标题排版",
+          "principle": "copy_separation"
+        }
+      ],
+      "design_execution": {
+        "light": "暮色侧逆光，海面雾灰反光",
+        "camera": "35mm平视中远景，浅景深",
+        "purpose": "建立主题情绪与归属联想",
+        "hierarchy": "渐变衣身第一，天际线第二，文案区安静",
+        "differentiation": "唯一带环境与人物情绪的中远景，其余模块更近景",
+        "subject_placement": "人物偏左占40%，天际线居后景",
+        "native_copy_layout": "右上大标题，下方一行支持文案"
+      },
+      "all_slot_decisions_in_prompt": true,
+      "all_rule_actions_in_prompt": true,
+      "narrative": {
+        "treatment": "lifestyle",
+        "reason_ids": [
+          "pr_city_identity",
+          "pr_gradient_visual"
+        ],
+        "story_beat": "暮色海岸初遇",
+        "shot_purpose": "用环境情绪建立主题，让人物与环境轮廓对话"
+      }
+    },
+    {
+      "id": "9abe525c-871d-4131-a586-cfa21ccd5b17",
+      "status": "succeeded",
+      "capability": "text_generation",
+      "model": "kimi-for-coding",
+      "native_role": "executor",
+      "reference_asset_ids": [
+        "2d25d7ad-5183-4411-b238-76dee7abbb29"
+      ],
+      "module_id": null,
+      "slot_id": null,
+      "recipe": null,
+      "skills": null,
+      "rule_applications": null,
+      "design_execution": {},
+      "all_slot_decisions_in_prompt": null,
+      "all_rule_actions_in_prompt": null,
+      "narrative": null
+    },
+    {
+      "id": "a1205e4e-21d0-4a18-865a-a365451e2176",
+      "status": "succeeded",
+      "capability": "image_edit",
+      "model": "gpt-image-2",
+      "native_role": null,
+      "reference_asset_ids": [
+        "2d25d7ad-5183-4411-b238-76dee7abbb29"
+      ],
+      "module_id": "m2_gradient",
+      "slot_id": "main",
+      "recipe": "professional-art-direction-v6",
+      "skills": [
+        {
+          "id": "amazon-aplus-planner",
+          "version": "2",
+          "content_hash": "9da50c49873411cb269aab2fc7650783f1ad6bc04d9d561677cf22aa5c8f2bb7"
+        },
+        {
+          "id": "image-creation",
+          "version": "1",
+          "content_hash": "e2cf113400bb9a612e70e4857c34ece0589a84d8abd027f079da0cc9ffad1687"
+        }
+      ],
+      "rule_applications": [
+        {
+          "decision": "渐变方向与配色严格锁原图",
+          "principle": "product_identity"
+        },
+        {
+          "decision": "单主体无道具，让渐变自身成为焦点",
+          "principle": "visual_hierarchy"
+        },
+        {
+          "decision": "文字全部交右侧原生排版",
+          "principle": "copy_separation"
+        }
+      ],
+      "design_execution": {
+        "light": "柔光箱正面主光，低反差",
+        "camera": "50mm平视，轻微俯角",
+        "purpose": "完整展示渐变与衣形",
+        "hierarchy": "渐变色彩第一，结构细节第二",
+        "differentiation": "唯一全衣静物挂拍，无环境无人物",
+        "subject_placement": "商品偏左占55-60%，右侧留白",
+        "native_copy_layout": "右侧标题加两行说明，左图右文"
+      },
+      "all_slot_decisions_in_prompt": true,
+      "all_rule_actions_in_prompt": true,
+      "narrative": {
+        "treatment": "photography",
+        "reason_ids": [
+          "pr_gradient_visual",
+          "pr_everyday_comfort_form"
+        ],
+        "story_beat": "近看渐变全貌",
+        "shot_purpose": "用静物全衣证明配色差异与完整形态"
+      }
+    },
+    {
+      "id": "a6ddf04d-77ef-47fc-a841-0c8190b2308c",
+      "status": "succeeded",
+      "capability": "text_generation",
+      "model": "kimi-for-coding",
+      "native_role": "executor",
+      "reference_asset_ids": [
+        "2d25d7ad-5183-4411-b238-76dee7abbb29"
+      ],
+      "module_id": null,
+      "slot_id": null,
+      "recipe": null,
+      "skills": null,
+      "rule_applications": null,
+      "design_execution": {},
+      "all_slot_decisions_in_prompt": null,
+      "all_rule_actions_in_prompt": null,
+      "narrative": null
+    },
+    {
+      "id": "c4add223-a08b-4774-a259-be6c21842834",
+      "status": "succeeded",
+      "capability": "image_edit",
+      "model": "gpt-image-2",
+      "native_role": null,
+      "reference_asset_ids": [
+        "2d25d7ad-5183-4411-b238-76dee7abbb29"
+      ],
+      "module_id": "m3_story",
+      "slot_id": "block3",
+      "recipe": "professional-art-direction-v6",
+      "skills": [
+        {
+          "id": "amazon-aplus-planner",
+          "version": "2",
+          "content_hash": "9da50c49873411cb269aab2fc7650783f1ad6bc04d9d561677cf22aa5c8f2bb7"
+        },
+        {
+          "id": "image-creation",
+          "version": "1",
+          "content_hash": "e2cf113400bb9a612e70e4857c34ece0589a84d8abd027f079da0cc9ffad1687"
+        }
+      ],
+      "rule_applications": [
+        {
+          "decision": "三槽分别回答穿着、使用、背面三个问题",
+          "principle": "multi_slot_storytelling"
+        },
+        {
+          "decision": "近景/半身/中景三种观察距离形成节奏",
+          "principle": "scale_context"
+        },
+        {
+          "decision": "渐变与背号形态锁原图，不改动",
+          "principle": "product_identity"
+        }
+      ],
+      "design_execution": {
+        "light": "逆光轮廓加正面补光",
+        "camera": "50mm跟随视角中景",
+        "purpose": "展示背面背号与行走动感",
+        "hierarchy": "背号文字第一，渐变第二",
+        "differentiation": "唯一背面视角，动作是行走",
+        "subject_placement": "背面人物居中占65%",
+        "native_copy_layout": "小标题在上，说明在下"
+      },
+      "all_slot_decisions_in_prompt": true,
+      "all_rule_actions_in_prompt": true,
+      "narrative": {
+        "treatment": "lifestyle",
+        "reason_ids": [
+          "pr_everyday_comfort_form",
+          "pr_personal_back",
+          "pr_gradient_visual"
+        ],
+        "story_beat": "从穿着到使用到背号",
+        "shot_purpose": "用三个不同观察距离消除购买疑问"
+      }
+    },
+    {
+      "id": "c94df7ee-66ab-4001-b646-14c99d4acd00",
+      "status": "succeeded",
+      "capability": "text_generation",
+      "model": "kimi-for-coding",
+      "native_role": "quality",
+      "reference_asset_ids": [
+        "2d25d7ad-5183-4411-b238-76dee7abbb29",
+        "d8c16e15-2f10-4261-8b75-848ead9bdff0",
+        "39d79927-f03c-48f7-ac8f-61bf0471c73c",
+        "d355d5a9-17f2-4cf1-b30a-a53c461102b0",
+        "4c77baf6-5878-4699-9ed4-6543c6f7e814",
+        "df1cf6ad-900e-4db8-b15f-d64c956aa871",
+        "94bcef8d-6602-4749-8625-3c97106e4ce9"
+      ],
+      "module_id": null,
+      "slot_id": null,
+      "recipe": null,
+      "skills": null,
+      "rule_applications": null,
+      "design_execution": {},
+      "all_slot_decisions_in_prompt": null,
+      "all_rule_actions_in_prompt": null,
+      "narrative": null
+    },
+    {
+      "id": "e2caeb5c-4271-420e-8982-d8bb0ee43ad8",
+      "status": "succeeded",
+      "capability": "image_edit",
+      "model": "gpt-image-2",
+      "native_role": null,
+      "reference_asset_ids": [
+        "2d25d7ad-5183-4411-b238-76dee7abbb29"
+      ],
+      "module_id": "m3_story",
+      "slot_id": "block2",
+      "recipe": "professional-art-direction-v6",
+      "skills": [
+        {
+          "id": "amazon-aplus-planner",
+          "version": "2",
+          "content_hash": "9da50c49873411cb269aab2fc7650783f1ad6bc04d9d561677cf22aa5c8f2bb7"
+        },
+        {
+          "id": "image-creation",
+          "version": "1",
+          "content_hash": "e2cf113400bb9a612e70e4857c34ece0589a84d8abd027f079da0cc9ffad1687"
+        }
+      ],
+      "rule_applications": [
+        {
+          "decision": "三槽分别回答穿着、使用、背面三个问题",
+          "principle": "multi_slot_storytelling"
+        },
+        {
+          "decision": "近景/半身/中景三种观察距离形成节奏",
+          "principle": "scale_context"
+        },
+        {
+          "decision": "渐变与背号形态锁原图，不改动",
+          "principle": "product_identity"
+        }
+      ],
+      "design_execution": {
+        "light": "晨间散射柔光",
+        "camera": "50mm半身平视，浅景深",
+        "purpose": "展示日常穿着与口袋使用关系",
+        "hierarchy": "坐姿与口袋第一，街景第二",
+        "differentiation": "唯一坐姿生活场景，动作用口袋",
+        "subject_placement": "人物坐姿占画面60%偏右，环境服务于主体",
+        "native_copy_layout": "小标题在上，说明在下"
+      },
+      "all_slot_decisions_in_prompt": true,
+      "all_rule_actions_in_prompt": true,
+      "narrative": {
+        "treatment": "lifestyle",
+        "reason_ids": [
+          "pr_everyday_comfort_form",
+          "pr_personal_back",
+          "pr_gradient_visual"
+        ],
+        "story_beat": "从穿着到使用到背号",
+        "shot_purpose": "用三个不同观察距离消除购买疑问"
+      }
+    },
+    {
+      "id": "fb28ebea-657a-4ccb-8ef6-8d6c9b0313ed",
+      "status": "succeeded",
+      "capability": "image_edit",
+      "model": "gpt-image-2",
+      "native_role": null,
+      "reference_asset_ids": [
+        "2d25d7ad-5183-4411-b238-76dee7abbb29"
+      ],
+      "module_id": "m3_story",
+      "slot_id": "block1",
+      "recipe": "professional-art-direction-v6",
+      "skills": [
+        {
+          "id": "amazon-aplus-planner",
+          "version": "2",
+          "content_hash": "9da50c49873411cb269aab2fc7650783f1ad6bc04d9d561677cf22aa5c8f2bb7"
+        },
+        {
+          "id": "image-creation",
+          "version": "1",
+          "content_hash": "e2cf113400bb9a612e70e4857c34ece0589a84d8abd027f079da0cc9ffad1687"
+        }
+      ],
+      "rule_applications": [
+        {
+          "decision": "三槽分别回答穿着、使用、背面三个问题",
+          "principle": "multi_slot_storytelling"
+        },
+        {
+          "decision": "近景/半身/中景三种观察距离形成节奏",
+          "principle": "scale_context"
+        },
+        {
+          "decision": "渐变与背号形态锁原图，不改动",
+          "principle": "product_identity"
+        }
+      ],
+      "design_execution": {
+        "light": "柔和窗光侧45度",
+        "camera": "85mm近景平拍",
+        "purpose": "展示连帽形态与上身效果",
+        "hierarchy": "帽兜与肩部渐变第一",
+        "differentiation": "最近景，动作是整理帽兜",
+        "subject_placement": "人物胸像居中偏左占70%",
+        "native_copy_layout": "槽内小标题在上，一句说明在下"
+      },
+      "all_slot_decisions_in_prompt": true,
+      "all_rule_actions_in_prompt": true,
+      "narrative": {
+        "treatment": "lifestyle",
+        "reason_ids": [
+          "pr_everyday_comfort_form",
+          "pr_personal_back",
+          "pr_gradient_visual"
+        ],
+        "story_beat": "从穿着到使用到背号",
+        "shot_purpose": "用三个不同观察距离消除购买疑问"
+      }
+    },
+    {
+      "id": "27643735-b11b-41b3-8d28-293bf7fa6231",
+      "status": "succeeded",
+      "capability": "text_generation",
+      "model": "kimi-for-coding",
+      "native_role": "executor",
+      "reference_asset_ids": [
+        "2d25d7ad-5183-4411-b238-76dee7abbb29"
+      ],
+      "module_id": null,
+      "slot_id": null,
+      "recipe": null,
+      "skills": null,
+      "rule_applications": null,
+      "design_execution": {},
+      "all_slot_decisions_in_prompt": null,
+      "all_rule_actions_in_prompt": null,
+      "narrative": null
+    },
+    {
+      "id": "2d28a980-053f-4ae5-976f-cd21eee4763d",
+      "status": "succeeded",
+      "capability": "text_generation",
+      "model": "kimi-for-coding",
+      "native_role": "main",
+      "reference_asset_ids": [],
+      "module_id": null,
+      "slot_id": null,
+      "recipe": null,
+      "skills": null,
+      "rule_applications": null,
+      "design_execution": {},
+      "all_slot_decisions_in_prompt": null,
+      "all_rule_actions_in_prompt": null,
+      "narrative": null
+    },
+    {
+      "id": "5de1e076-5879-41a7-9b06-d4e172be5857",
+      "status": "succeeded",
+      "capability": "image_edit",
+      "model": "gpt-image-2",
+      "native_role": null,
+      "reference_asset_ids": [
+        "d8c16e15-2f10-4261-8b75-848ead9bdff0",
+        "2d25d7ad-5183-4411-b238-76dee7abbb29"
+      ],
+      "module_id": "m1_hero",
+      "slot_id": "main",
+      "recipe": "professional-art-direction-v6",
+      "skills": [
+        {
+          "id": "amazon-aplus-planner",
+          "version": "2",
+          "content_hash": "9da50c49873411cb269aab2fc7650783f1ad6bc04d9d561677cf22aa5c8f2bb7"
+        },
+        {
+          "id": "image-creation",
+          "version": "1",
+          "content_hash": "e2cf113400bb9a612e70e4857c34ece0589a84d8abd027f079da0cc9ffad1687"
+        }
+      ],
+      "rule_applications": [
+        {
+          "decision": "保留原参考商品的可见图案、字形、颜色与结构，不从历史生成图推导新事实。",
+          "principle": "product_identity"
+        },
+        {
+          "decision": "渐变衣身第一，背号弧线第二，右半安静留白",
+          "principle": "visual_hierarchy"
+        },
+        {
+          "decision": "柔和定向光，雾灰纸面，低反差",
+          "principle": "commercial_lighting"
+        },
+        {
+          "decision": "右上大标题，下方一行支持文案，图内零文字",
+          "principle": "copy_separation"
+        }
+      ],
+      "design_execution": {
+        "light": "柔和定向光，雾灰纸面，低反差",
+        "camera": "50mm微俯平拍，全画面清晰景深",
+        "purpose": "用弧线图形关系建立归属主题，替代人物城市场景",
+        "hierarchy": "渐变衣身第一，背号弧线第二，右半安静留白",
+        "differentiation": "唯一无人物图形化静物主视觉，与其余生活摄影槽位拉开",
+        "subject_placement": "正面平铺卫衣偏左占45%，背号局部卡片居右上小比例",
+        "native_copy_layout": "右上大标题，下方一行支持文案，图内零文字"
+      },
+      "all_slot_decisions_in_prompt": true,
+      "all_rule_actions_in_prompt": true,
+      "narrative": {
+        "treatment": "lifestyle",
+        "reason_ids": [
+          "pr_city_identity",
+          "pr_gradient_visual"
+        ],
+        "story_beat": "暮色海岸初遇",
+        "shot_purpose": "用环境情绪建立主题，让人物与环境轮廓对话"
+      }
+    },
+    {
+      "id": "74fdeaac-6abf-49b0-8881-acf53c0b0c05",
+      "status": "succeeded",
+      "capability": "text_generation",
+      "model": "kimi-for-coding",
+      "native_role": "executor",
+      "reference_asset_ids": [
+        "2d25d7ad-5183-4411-b238-76dee7abbb29"
+      ],
+      "module_id": null,
+      "slot_id": null,
+      "recipe": null,
+      "skills": null,
+      "rule_applications": null,
+      "design_execution": {},
+      "all_slot_decisions_in_prompt": null,
+      "all_rule_actions_in_prompt": null,
+      "narrative": null
+    },
+    {
+      "id": "eb6d9df8-0525-45e9-8376-5cf65accd076",
+      "status": "succeeded",
+      "capability": "text_generation",
+      "model": "kimi-for-coding",
+      "native_role": "quality",
+      "reference_asset_ids": [
+        "2d25d7ad-5183-4411-b238-76dee7abbb29",
+        "5bfc3b2f-8603-4e70-baee-8cb625277314",
+        "39d79927-f03c-48f7-ac8f-61bf0471c73c",
+        "d355d5a9-17f2-4cf1-b30a-a53c461102b0",
+        "4c77baf6-5878-4699-9ed4-6543c6f7e814",
+        "df1cf6ad-900e-4db8-b15f-d64c956aa871",
+        "94bcef8d-6602-4749-8625-3c97106e4ce9"
+      ],
+      "module_id": null,
+      "slot_id": null,
+      "recipe": null,
+      "skills": null,
+      "rule_applications": null,
+      "design_execution": {},
+      "all_slot_decisions_in_prompt": null,
+      "all_rule_actions_in_prompt": null,
+      "narrative": null
+    },
+    {
+      "id": "6833acb5-64b9-49c8-b6b2-89538ceb2e97",
+      "status": "succeeded",
+      "capability": "text_generation",
+      "model": "kimi-for-coding",
+      "native_role": "main",
+      "reference_asset_ids": [],
+      "module_id": null,
+      "slot_id": null,
+      "recipe": null,
+      "skills": null,
+      "rule_applications": null,
+      "design_execution": {},
+      "all_slot_decisions_in_prompt": null,
+      "all_rule_actions_in_prompt": null,
+      "narrative": null
+    },
+    {
+      "id": "9cdc160c-1580-4a16-8085-d7d8b5f750b5",
+      "status": "succeeded",
+      "capability": "text_generation",
+      "model": "kimi-for-coding",
+      "native_role": "executor",
+      "reference_asset_ids": [],
+      "module_id": null,
+      "slot_id": null,
+      "recipe": null,
+      "skills": null,
+      "rule_applications": null,
+      "design_execution": {},
+      "all_slot_decisions_in_prompt": null,
+      "all_rule_actions_in_prompt": null,
+      "narrative": null
+    },
+    {
+      "id": "e9260584-eff9-4c90-8ef7-3a977593795a",
+      "status": "succeeded",
+      "capability": "text_generation",
+      "model": "kimi-for-coding",
+      "native_role": "executor",
+      "reference_asset_ids": [],
+      "module_id": null,
+      "slot_id": null,
+      "recipe": null,
+      "skills": null,
+      "rule_applications": null,
+      "design_execution": {},
+      "all_slot_decisions_in_prompt": null,
+      "all_rule_actions_in_prompt": null,
+      "narrative": null
+    }
+  ],
+  "all_generated_designs_reach_prompt": true,
+  "other_account": {
+    "conversation": 404,
+    "source": 404,
+    "archive": 404
+  }
+}

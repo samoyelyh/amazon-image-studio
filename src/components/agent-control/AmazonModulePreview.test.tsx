@@ -20,3 +20,10 @@ it('mobile preview stacks cells and missing slots remain visible',()=>{
  const html=renderToStaticMarkup(<AmazonModulePreview record={record} module={module} outputs={outputs.slice(0,1)} mobile/>)
  expect(html).toContain('grid-template-columns:1fr');expect(html).toContain('等待 block2 图片');expect(html).toContain('等待 block3 图片')
 })
+it('uses the owned original-crop endpoint instead of a generated replacement for a source slot',()=>{
+ const original={...module,image_slots:module.image_slots!.map(s=>s.id==='block1'?{...s,source_crop:{asset_id:'source',box:[0,0,1,1]}}:s)}
+ const html=renderToStaticMarkup(<AmazonModulePreview record={record} module={original} outputs={outputs} conversationId="conversation"/>)
+ expect(html).toContain('/api/v1/agent/conversations/conversation/amazon-plans/plan/source/details/block1')
+ expect(html).toContain('商品原图局部');expect(html).not.toContain('src="/1.png"')
+ expect(html).toContain('/2.png');expect(html).toContain('/3.png')
+})

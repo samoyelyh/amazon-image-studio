@@ -287,6 +287,15 @@ async def export_amazon_archive(conversation_id:str,plan_id:str,db:AsyncSession=
     return StreamingResponse(chunks(),media_type='application/zip',background=BackgroundTask(stream.close),
         headers={'Content-Disposition':f'attachment; filename="aplus-{plan_id}.zip"'})
 
+@router.get('/conversations/{conversation_id}/amazon-plans/{plan_id}/source/{module_id}/{slot_id}')
+async def amazon_source_crop(conversation_id:str,plan_id:str,module_id:str,slot_id:str,db:AsyncSession=Depends(_agent_db),
+    storage:StorageService=Depends(get_storage_service),principal:Principal=Depends(require_permissions('jobs.read','assets.read'))):
+    from fastapi.responses import Response
+    from app.agents.amazon_source import render
+    conv=await runtime.conversation(db,_org(principal),principal.user.id,conversation_id)
+    content,_=await render(db,storage,conv,plan_id,module_id,slot_id)
+    return Response(content,media_type='image/png',headers={'Cache-Control':'private, no-store'})
+
 
 @router.delete("/conversations/{conversation_id}/attachments/{attachment_id}", status_code=204)
 async def remove_attachment(conversation_id: str, attachment_id: str, db: AsyncSession = Depends(_agent_db),

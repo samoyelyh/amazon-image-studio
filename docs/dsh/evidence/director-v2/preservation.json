@@ -1,0 +1,11 @@
+{
+  "original_plan_unchanged": true,
+  "original_output_ids_preserved": true,
+  "original_worktree_hash": "e67059e21fb30bc4ef5737a1299dc91abbe840234e645fc01bc1c3acd5d0b4a6",
+  "controller": "dsh",
+  "ledger_count_after_recovery": 149,
+  "ledger_states": {
+    "not_sent": 3,
+    "succeeded": 146
+  }
+}

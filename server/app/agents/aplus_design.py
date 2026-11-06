@@ -31,6 +31,9 @@ def quality(plan,*,complete=True):
         if len(set(m.design_principles))<3:errors.append(f'{m.id}: 至少明确三项实际应用的设计原则。')
         if not m.art_direction:errors.append(f'{m.id}: 缺少镜头、光线、层级或物理融合设计。')
         actual=slots(plan,m);expected={s['id'] for s in actual};provided=[s.id for s in m.image_slots]
+        if plan.creative_strategy and plan.creative_strategy.version=='creative-director-v2':
+            if set(m.design_principles)-{r.principle for r in m.rule_applications}:errors.append(f'{m.id}: Skill原则缺少对应的具体设计动作。')
+            if any(not s['direction'].design_execution for s in actual):errors.append(f'{m.id}: 每个槽位必须明确位置、镜头、光线、层级、原生排版和差异。')
         if (len(expected)>1 or provided) and (set(provided)!=expected or len(provided)!=len(set(provided))):
             errors.append(f'{m.id}: 图片槽位应完整对应 {", ".join(sorted(expected))}，不能以一张拼图代替。')
         if len(expected)>1 and len({s.composition.strip() for s in m.image_slots})!=len(expected):errors.append(f'{m.id}: 每个图片槽位需独立构图。')
@@ -46,6 +49,6 @@ def quality(plan,*,complete=True):
         errors.append('镜头景别和主体安排重复，需至少三种服务不同营销目的的画面组织。')
     for i,m in enumerate(plan.modules):
         for n in plan.modules[i+1:]:
-            if not plan.creative_strategy and SequenceMatcher(None,m.composition.strip(),n.composition.strip()).ratio()>.92:
+            if (not plan.creative_strategy or plan.creative_strategy.version=='creative-director-v2') and SequenceMatcher(None,m.composition.strip(),n.composition.strip()).ratio()>.92:
                 errors.append(f'{m.id}/{n.id}: 构图近乎重复，应改变景别、主体位置或叙事方式。')
     return {'version':VERSION,'errors':list(dict.fromkeys(errors)),'modules':report,'automated_check':'deterministic_not_visual_acceptance'}

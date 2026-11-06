@@ -60,6 +60,32 @@ def test_five_modules_seven_independent_slots_and_design_checks():
     bad=p.model_copy(deep=True);bad.modules[1].image_slots.pop()
     assert any('槽位' in e for e in quality(bad)['errors'])
 
+async def test_original_source_slot_avoids_paid_job_and_is_in_owned_preview_and_zip(pro):
+    ctx=pro;b=professional_brief(ctx['product']['id'])
+    b['modules'][0]['image_slots']=[{'id':'main','composition':'使用本会话原图局部，保持真实印花。','source_crop':{'asset_id':ctx['product']['id'],'box':[0,0,1,1]}}]
+    ctx['mock_decision']=model_step('business.save_aplus_plan',{'brief':b})
+    running=await finish(ctx,await send(ctx,'本款支持定制姓名与号码，直接生成整套A+',[ctx['product_attachment']['id']],creative_module='amazon_aplus'))
+    assert len([j for j in running['jobs'] if j['capability']!='text_generation'])==6
+    done=await finish(ctx,running);assert done['status']=='completed'
+    history=(await ctx['client'].get('/api/v1/agent/conversations/'+ctx['chat']['id'],headers=ctx['headers'])).json();plan=history['amazon_plans'][0]
+    base=f"/api/v1/agent/conversations/{ctx['chat']['id']}/amazon-plans/{plan['id']}"
+    from app.agents import amazon
+    from app.agents.amazon_contracts import GenerateAPlus
+    from app.models.hermes_agent import HermesConversation
+    async with ctx['session_factory']() as db:
+        conv=await db.get(HermesConversation,ctx['chat']['id'])
+        quote=await amazon.image_quote(db,conv,GenerateAPlus(plan_id=plan['id'],expected_revision=plan['revision'],module_ids=['m1']))
+        assert quote['quantity']==0 and quote['estimated_cost']==0
+    crop=await ctx['client'].get(base+'/source/m1/main',headers=ctx['headers']);assert crop.status_code==200
+    packed=await ctx['client'].get(base+'/archive',headers=ctx['headers']);assert packed.status_code==200,packed.text
+    with ZipFile(io.BytesIO(packed.content)) as z:
+        manifest=json.loads(z.read('manifest.json'));assert not manifest['module_slots_without_output']
+        assert len(manifest['outputs'])==6 and len(manifest['source_crops'])==1
+        assert z.read('images/m1-main-source.png')==crop.content
+        assert 'm1-main-source.png' in z.read('preview.html').decode()
+    other=(await ctx['client'].post('/api/v1/agent/conversations',headers=ctx['headers'],json={'context_kind':'chat'})).json()['id']
+    assert (await ctx['client'].get(base.replace(ctx['chat']['id'],other)+'/source/m1/main',headers=ctx['headers'])).status_code==404
+
 
 def test_slot_camera_overrides_module_sequence_and_native_copy_is_external():
     from app.agents.professional_prompts import aplus

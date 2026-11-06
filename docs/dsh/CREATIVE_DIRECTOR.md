@@ -1,5 +1,7 @@
 # DSH 全品类营销与创意总监交付
 
+> 后续 Seattle 的设计转化增量优化与真实新旧整套验收见 [CREATIVE_DESIGN_V2.md](CREATIVE_DESIGN_V2.md)。以下为前一版交付记录。
+
 2026-11-06；工作分支 `experiment/dsh-superagent`。本次在现有 18080 React / FastAPI / MySQL 平台部署，默认仍为原生 DSH + K2.8；没有调用 LangGraph 的需求、Skill 或图片规划入口。最终镜像为 `amazon-image-studio-backend:dsh-creative-final`、`ais-dsh-native:creative-final`，前端 `amazon-image-studio-frontend:creative-v2`。
 
 ## 已实现的业务链路

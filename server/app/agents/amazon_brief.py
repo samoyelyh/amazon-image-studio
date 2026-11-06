@@ -8,8 +8,8 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 from app.agents.contracts import StrictModel
-from app.agents.creative_strategy import CreativeStrategy,ModuleNarrative,validate_mapping
-from app.agents.amazon_contracts import APlusPlan, APlusModule, Evidence, MarketInsight,ArtDirection,ImageSlot,DesignPrinciple
+from app.agents.creative_strategy import CreativeStrategy,CreativeStrategyV2,ModuleNarrative,validate_mapping
+from app.agents.amazon_contracts import APlusPlan, APlusModule, Evidence, MarketInsight,ArtDirection,ImageSlot,DesignPrinciple,RuleApplication,VisualExecution
 
 VERSION='amazon-design-decisions-v1'
 
@@ -41,6 +41,7 @@ class ModuleDecision(StrictModel):
     art_direction:ArtDirection|None=None
     image_slots:list[ImageSlot]=Field(default_factory=list,max_length=4)
     narrative:ModuleNarrative|None=None
+    rule_applications:list[RuleApplication]=Field(default_factory=list,max_length=9)
 
 
 class DesignBrief(StrictModel):
@@ -104,6 +105,38 @@ class SaveDirectorAPlus(StrictModel):
 class SaveDirectorListing(StrictModel):
     brief:DirectorListingBrief
 
+class DirectorSlotV2(ImageSlot):
+    design_execution:VisualExecution
+
+class DirectorModuleV2(DirectorModuleDecision):
+    design_principles:list[DesignPrinciple]=Field(default_factory=list,max_length=9,description='Derived from rule_applications by the compiler; omit this duplicate list.')
+    image_slots:list[DirectorSlotV2]=Field(min_length=1,max_length=4)
+    rule_applications:list[RuleApplication]=Field(min_length=2,max_length=9)
+    @model_validator(mode='after')
+    def applied_rules(self):
+        if all(s.source_crop for s in self.image_slots) and len({r.principle for r in self.rule_applications})==2:
+            # This is existing native rendering behavior, not an invented model
+            # aesthetic decision or a reason to buy another model correction.
+            if 'copy_separation' not in {r.principle for r in self.rule_applications}:
+                self.rule_applications.append(RuleApplication(principle='copy_separation',decision='原生模块独立排版英文文案，复用原图像素不新增营销文字。'))
+        self.design_principles=list(dict.fromkeys(r.principle for r in self.rule_applications))
+        if len(self.design_principles)<3:raise ValueError('rule_applications must contain at least three distinct Skill principles with concrete design decisions')
+        return self
+
+class DirectorAPlusBriefV2(DirectorAPlusBrief):
+    creative_strategy:CreativeStrategyV2
+    modules:list[DirectorModuleV2]=Field(min_length=1,max_length=7)
+
+class DirectorListingBriefV2(DirectorListingBrief):
+    creative_strategy:CreativeStrategyV2
+    modules:list[DirectorModuleV2]=Field(min_length=1,max_length=7)
+
+class SaveDirectorAPlusV2(StrictModel):
+    brief:DirectorAPlusBriefV2
+
+class SaveDirectorListingV2(StrictModel):
+    brief:DirectorListingBriefV2
+
 
 class BriefPatch(StrictModel):
     modules:list[ProfessionalModuleDecision]=Field(min_length=1,max_length=5)
@@ -163,7 +196,7 @@ def expand(brief:DesignBrief, *, collected_at=None):
             mobile_layout='保留商品、Logo和主要图案完整可见；文字单独排版，移动端按主体安全区审核。',
             acceptance=amazon.rules()['manual_checks'],design_direction=m.design_direction,
             requested_width=m.requested_width,requested_height=m.requested_height,
-            design_principles=m.design_principles,art_direction=m.art_direction,image_slots=m.image_slots,narrative=m.narrative)
+            design_principles=m.design_principles,art_direction=m.art_direction,image_slots=m.image_slots,narrative=m.narrative,rule_applications=m.rule_applications)
         modules.append(module)
     return APlusPlan(deliverable=brief.deliverable,marketplace=brief.marketplace,aplus_type=brief.aplus_type,
         rules_version=amazon.rules()['version'],product_identity_lock=brief.product_identity_lock,
@@ -179,3 +212,23 @@ def normalize_arguments(arguments):
     model=SaveProfessionalBrief if (arguments.get('brief') or {}).get('design_version')=='professional-aplus-v2' else SaveDesignBrief
     request=model.model_validate(arguments)
     return {'plan':expand(request.brief).model_dump(mode='json')}
+
+def revise_visual_module(plan,module,visual):
+    """Change the requested slot's authoritative camera, not only its old prose."""
+    from app.agents.aplus_design import slots
+    from app.core.errors import AppError
+    if visual.slot_id and visual.slot_id not in {s['id'] for s in slots(plan,module)}:raise AppError('agent.slot_missing','图片槽位不存在。',404)
+    v2=bool(plan.creative_strategy and plan.creative_strategy.version=='creative-director-v2')
+    def changed(s):
+        if visual.slot_id and s.id!=visual.slot_id:return s
+        patch={'composition':visual.composition}
+        if v2:
+            patch['design_execution']=getattr(visual,'design_execution',None) or VisualExecution(
+                purpose=visual.composition[:200],
+                subject_placement=visual.composition[:250],camera=visual.art_direction.framing[:200],light=visual.art_direction.lighting[:200],
+                hierarchy=visual.art_direction.hierarchy[:250],native_copy_layout=s.design_execution.native_copy_layout if s.design_execution else module.desktop_layout[:250],
+                differentiation=visual.composition[:250])
+        return s.model_copy(update=patch)
+    patch={'image_slots':[changed(s) for s in module.image_slots]}
+    if not visual.slot_id or len(module.image_slots)<=1:patch.update(composition=visual.composition,image_prompt=visual.image_prompt,art_direction=visual.art_direction)
+    return module.model_copy(update=patch)

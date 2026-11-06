@@ -46,6 +46,11 @@ async def manifest(db, conv, plan_id):
             **pixel_checks(output['width'],output['height'],spec),
             'format_valid':output['mime_type'] in amazon.rules()['formats']})
     from app.agents.aplus_design import slots
+    source_crops=[{'module_id':m.id,'slot_id':s['id'],'asset_id':s['direction'].source_crop.asset_id,
+        'source_crop':s['direction'].source_crop.model_dump(),'width':s['spec']['width'],'height':s['spec']['height'],
+        'spec_snapshot':s['spec'],'processing':'original_source_crop_and_contain_no_generative_redraw'}
+        for m in plan.modules for s in slots(plan,m) if s['direction'].source_crop]
+    source_pairs={(o['module_id'],o['slot_id']) for o in source_crops}
     expected={(m.id,s['id']) for m in plan.modules for s in slots(plan,m)}
     latest_jobs={}
     for submission in row.metadata_json.get('submissions',[]):
@@ -63,11 +68,11 @@ async def manifest(db, conv, plan_id):
         for slot in slots(plan,module):
             versions=[o for o in selected if o['module_id']==module.id and o['slot_id']==slot['id']]
             latest=max(versions,key=lambda o:o['version']) if versions else None
-            if latest and latest.get('module_snapshot') and APlusModule.model_validate(latest['module_snapshot'])!=module:
+            if not slot['direction'].source_crop and latest and latest.get('module_snapshot') and APlusModule.model_validate(latest['module_snapshot'])!=module:
                 stale.append(module.id);break
-    return {'brief':amazon.response(row), 'outputs':selected, 'publish_ready':False,
-        'modules_without_output':sorted({mid for mid,sid in expected-{(o['module_id'],o['slot_id']) for o in selected}}),
-        'module_slots_without_output':[{'module_id':mid,'slot_id':sid} for mid,sid in sorted(expected-{(o['module_id'],o['slot_id']) for o in selected})],
+    return {'brief':amazon.response(row), 'outputs':selected,'source_crops':source_crops, 'publish_ready':False,
+        'modules_without_output':sorted({mid for mid,sid in expected-source_pairs-{(o['module_id'],o['slot_id']) for o in selected}}),
+        'module_slots_without_output':[{'module_id':mid,'slot_id':sid} for mid,sid in sorted(expected-source_pairs-{(o['module_id'],o['slot_id']) for o in selected})],
         'latest_module_jobs':states,'modules_pending_or_failed':[s['module_id'] for s in states if s['status']!='succeeded'],
         'modules_with_stale_output':stale,
         'note':'原图和原生文案分离。HTML仅为离线双端审核预览，不可作为Amazon HTML上传；像素/移动端/英文/权利仍需审核。'}
@@ -79,6 +84,7 @@ def preview_html(data):
     for output in data['outputs']:
         pair=(output['module_id'],output.get('slot_id','main'));prior=latest.get(pair)
         if not prior or output['version']>prior['version']:latest[pair]=output
+    for source in data.get('source_crops',[]):latest[(source['module_id'],source['slot_id'])]=source
     esc=lambda value:html.escape(str(value or ''),quote=True)
     sections=[]
     specs=data['brief'].get('module_specs') or {}
@@ -141,6 +147,14 @@ async def archive(db, storage, conv, plan_id):
                 ext = {'JPEG':'jpg','PNG':'png','WEBP':'webp'}.get(fmt,'bin')
                 output['archive_path'] = f"images/{output['module_id']}-{output.get('slot_id','main')}-v{output['version']}-{output['id']}.{ext}"
                 z.writestr(output['archive_path'],raw)
+            from app.agents.amazon_source import render
+            for source in data.get('source_crops',[]):
+                raw,trace=await render(db,storage,conv,plan_id,source['module_id'],source['slot_id'])
+                source.update(trace)
+                source['archive_path']=f"images/{source['module_id']}-{source['slot_id']}-source.png"
+                total+=len(raw)
+                if total>256*1024*1024:raise AppError('agent.export_limit','导出超过256MB，请分组下载原图。',422)
+                z.writestr(source['archive_path'],raw)
             z.writestr('manifest.json',json.dumps(data,ensure_ascii=False,indent=2))
             z.writestr('preview.html',preview_html(data))
             z.writestr('copy.json',json.dumps([{'module_id':m['id'],'headline':m['headline'],'body':m['body'],
@@ -151,7 +165,7 @@ async def archive(db, storage, conv, plan_id):
                 'submission_ready':False} for m in data['brief']['plan']['modules']],ensure_ascii=False,indent=2))
         stream.seek(0)
         with ZipFile(_SeekableArchiveReader(stream)) as check:
-            if check.testzip() or len(check.namelist()) != len(data['outputs'])+3:
+            if check.testzip() or len(check.namelist()) != len(data['outputs'])+len(data.get('source_crops',[]))+3:
                 raise AppError('agent.export_integrity','ZIP完整性验证失败。',500)
         stream.seek(0)
         return stream

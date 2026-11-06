@@ -10,10 +10,10 @@ export function moduleSlotOutputs(record:AmazonPlanRecord,module:AmazonModule,ou
   .sort((a,b)=>b.version-a.version)[0]}))
 }
 
-export default function AmazonModulePreview({record,module,outputs,mobile=false}:{record:AmazonPlanRecord;module:AmazonModule;outputs:AgentOutput[];mobile?:boolean}){
+export default function AmazonModulePreview({record,module,outputs,mobile=false,conversationId}:{record:AmazonPlanRecord;module:AmazonModule;outputs:AgentOutput[];mobile?:boolean;conversationId?:string}){
  const spec=record.module_specs?.[module.id],layout=spec?.layout||'header',pictures=moduleSlotOutputs(record,module,outputs)
  const text=<div className="min-w-0 whitespace-pre-wrap break-words p-5"><h3 className="text-xl font-semibold leading-tight">{module.headline}</h3><p className="mt-3 text-sm leading-6">{module.body}</p></div>
- function picture(p:typeof pictures[number]){return p.output?<AuthenticatedImage src={p.output.content_url} alt={`${module.title} · ${p.slot.id}`} className="block h-auto w-full"/>:<div className="flex items-center justify-center bg-stone-100 p-6 text-center text-sm text-stone-600" style={{aspectRatio:`${p.slot.width}/${p.slot.height}`}}>等待 {p.slot.id} 图片</div>}
+ function picture(p:typeof pictures[number]){return p.copy?.source_crop&&conversationId?<figure><AuthenticatedImage src={`/api/v1/agent/conversations/${encodeURIComponent(conversationId)}/amazon-plans/${encodeURIComponent(record.id)}/source/${encodeURIComponent(module.id)}/${encodeURIComponent(p.slot.id)}`} alt={`${module.title} · ${p.slot.id} · 商品原图局部`} className="block h-auto w-full"/><figcaption className="px-2 py-1 text-[10px] opacity-60">商品原图局部</figcaption></figure>:p.output?<AuthenticatedImage src={p.output.content_url} alt={`${module.title} · ${p.slot.id}`} className="block h-auto w-full"/>:<div className="flex items-center justify-center bg-stone-100 p-6 text-center text-sm text-stone-600" style={{aspectRatio:`${p.slot.width}/${p.slot.height}`}}>等待 {p.slot.id} 图片</div>}
  const side=['image_left','image_right'].includes(layout)
  const concept=record.plan?.creative_strategy?.concept
  const fonts={editorial_serif:'Georgia, serif',clean_sans:'Arial, sans-serif',technical_mono:'Consolas, monospace'}

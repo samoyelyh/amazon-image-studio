@@ -29,7 +29,7 @@ from app.agents.adapters import chat
 from app.services.task_service import submit_job, dispatch_jobs
 from app.schemas.tasks import JobSubmitRequest
 from app.agents.contracts import StrictModel
-from app.agents.amazon_contracts import ArtDirection
+from app.agents.amazon_contracts import ArtDirection,VisualExecution
 from pydantic import Field,ValidationError
 
 class VisualRevision(StrictModel):
@@ -40,6 +40,7 @@ class VisualRevision(StrictModel):
     composition:str=Field(min_length=5,max_length=3000)
     image_prompt:str=Field(min_length=5,max_length=10000)
     art_direction:ArtDirection
+    design_execution:VisualExecution|None=None
 
 router=APIRouter(prefix='/experiment/native')
 
@@ -196,14 +197,15 @@ async def quality_context(value:dict,db:AsyncSession=Depends(get_db_session)):
     ordered=list(latest.values())
     if len(ordered)>9:return {'state':'unavailable','reason':'本套超过9个独立画面，超出一次受控视觉检查的图片上限；保留全部输出供人工审阅。'}
     from app.agents.aplus_design import slots
-    expected={(m.id,s['id']) for m in plan.modules for s in slots(plan,m)}
+    expected={(m.id,s['id']) for m in plan.modules for s in slots(plan,m) if not s['direction'].source_crop}
     if set(latest)!=expected:return {'state':'unavailable','reason':'整套输出尚不完整，不能声称已完成视觉审阅。'}
     source=plan.modules[0].reference_asset_ids[0]
     return {'state':'ready','plan_id':record.id,'expected_revision':revision,'plan':plan.model_dump(mode='json'),
         'authenticated_request':json.loads(row['payload'])['text'],
         'outputs':[{'id':o['id'],'asset_id':o['asset_id'],'module':o['amazon_module']['module_id'],'slot':o['amazon_module'].get('slot_id','main'),'version':o['version']} for o in ordered],
         'reference_asset_ids':[source,*[o['asset_id'] for o in ordered]],
-        'reference_order':'第一张是商品原图，其余图片依次对应outputs。只评估实际可见画面；精确Logo/小字需人工核对。',
+        'source_crop_slots':[{'module':m.id,'slot':s['id'],**s['direction'].source_crop.model_dump()} for m in plan.modules for s in slots(plan,m) if s['direction'].source_crop],
+        'reference_order':'原图复用槽位使用源图局部，不由生成图冒充；本Session未看到最终原生排版，不能假称整页视觉已审核。第一张是商品原图，其余图片依次对应outputs。只评估实际可见画面；精确Logo/小字需人工核对。',
         'tool_schema':VisualQualityReview.model_json_schema()}
 
 def registry(row):
@@ -249,7 +251,7 @@ async def prepare(value:dict,db:AsyncSession=Depends(get_db_session)):
     return {'conversation':conv_id,'run':run.id,'catalog':catalog(row),'skills':skills,'context':context}
 
 def catalog(row):
-    from app.agents.amazon_brief import SaveDirectorAPlus as SaveProfessionalBrief, SaveDirectorListing as SaveDesignBrief
+    from app.agents.amazon_brief import SaveDirectorAPlusV2 as SaveProfessionalBrief, SaveDirectorListingV2 as SaveDesignBrief
     from app.agents.amazon_contracts import ModuleRevisions,GenerateAPlus
     from app.agents.contracts import ChatImageAction
     reg=registry(row)
@@ -319,6 +321,12 @@ async def model(value:dict,db:AsyncSession=Depends(get_db_session)):
     if role=='vision' and row['conversation']:
         conv=await owned_conversation(db,row)
         refs=[a['asset_id'] for a in await chat.attachments(db,conv)][:6]
+    elif role=='executor' and row['conversation']:
+        # Art direction and normalized source crops must inspect the real product
+        # in the SAME planning call, not guess geometry from a text summary.
+        conv=await owned_conversation(db,row)
+        owned={a['asset_id'] for a in await chat.attachments(db,conv)}
+        refs=[aid for aid in json.loads(row['payload']).get('asset_ids',[]) if aid in owned][:1]
     elif role=='quality':
         qc=await quality_context({'turn':row['id']},db)
         if qc['state']!='ready':raise AppError('dsh.quality_unavailable','整套视觉检查条件已变化，请读取原回执。',409)
@@ -413,9 +421,14 @@ async def tool(value:dict,db:AsyncSession=Depends(get_db_session)):
         from app.agents import tool_registry,amazon,amazon_brief
         from app.agents.contracts import ToolAction
         if name in {'save_design','save_listing','produce_aplus','produce_listing'}:
-            from app.agents.amazon_brief import SaveDirectorAPlus,SaveDirectorListing
-            try:director=(SaveDirectorListing if name in {'save_listing','produce_listing'} else SaveDirectorAPlus).model_validate(args).brief
+            from app.agents.amazon_brief import SaveDirectorAPlusV2,SaveDirectorListingV2,SaveDirectorAPlus,SaveDirectorListing
+            v2=(args.get('brief',{}).get('creative_strategy') or {}).get('version')=='creative-director-v2'
+            contract=(SaveDirectorListingV2 if v2 else SaveDirectorListing) if name in {'save_listing','produce_listing'} else (SaveDirectorAPlusV2 if v2 else SaveDirectorAPlus)
+            try:director=contract.model_validate(args).brief
             except ValidationError as error:raise AppError('dsh.design_invalid','策划字段不完整：'+'; '.join('.'.join(map(str,e['loc']))+': '+e['msg'] for e in error.errors(include_input=False)),422) from None
+            # Compile the chosen rules once; do not make a paid model correction
+            # repeat the same principle IDs in a second list.
+            args={'brief':director.model_dump(mode='json')}
             if director.creative_strategy.research_basis=='verified_mcp':
                 from app.agents.amazon_research import receipts
                 known={r['id'] for r in await receipts(db,conv) if r.get('data_available')}
@@ -452,13 +465,8 @@ async def tool(value:dict,db:AsyncSession=Depends(get_db_session)):
                 raise AppError('dsh.image_scope_mismatch','仅可修改用户选中的图片槽位，请使用指定 plan_id、module_id 和 slot_id。',409)
             module=next((m for m in plan.modules if m.id==visual.module_id),None)
             if module is None:raise AppError('agent.module_missing','Module not found',404)
-            if visual.slot_id:
-                from app.agents.aplus_design import slots
-                if visual.slot_id not in {s['id'] for s in slots(plan,module)}:raise AppError('agent.slot_missing','图片槽位不存在。',404)
-                updated=module.model_copy(update={'image_slots':[s.model_copy(update={'composition':visual.composition}) if s.id==visual.slot_id else s for s in module.image_slots]}) if module.image_slots else module.model_copy(update={'composition':visual.composition,'image_prompt':visual.image_prompt,'art_direction':visual.art_direction})
-            else:
-                updated=module.model_copy(update={'composition':visual.composition,'image_prompt':visual.image_prompt,'art_direction':visual.art_direction,
-                    'image_slots':[s.model_copy(update={'composition':visual.composition}) for s in module.image_slots]})
+            from app.agents.amazon_brief import revise_visual_module
+            updated=revise_visual_module(plan,module,visual)
             action=ToolAction(tool='revise_amazon_modules',arguments={'plan_id':visual.plan_id,'expected_revision':visual.expected_revision,'modules':[updated.model_dump(mode='json')]})
         elif name in {'revise_modules','revise_and_generate'}:action=ToolAction(tool='revise_amazon_modules',arguments=args)
         elif name=='create_images':action=ToolAction(tool='generate_chat_images',arguments=args)

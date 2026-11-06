@@ -44,8 +44,9 @@ def delivery_prompt_contract(payload: dict[str, object]) -> str:
     if not width or not height:
         return ""
 
-    director=(payload.get('metadata') or {}).get('amazon_module',{}).get('design_trace',{}).get('creative_strategy_version')=='creative-director-v1'
-    framing=("follow the approved slot's exact camera framing. For an intentional close-up, show ONLY the requested product region; the rest of the product may remain outside the frame. Preserve the target region's critical features. Do not add inset bubbles, collages, duplicate views or a full-product overview to satisfy a detail shot. "
+    version=(payload.get('metadata') or {}).get('amazon_module',{}).get('design_trace',{}).get('creative_strategy_version')
+    director=version in {'creative-director-v1','creative-director-v2'}
+    framing=("follow the approved slot's exact camera framing. For an intentional close-up, show ONLY the requested product region; the rest of the product may remain outside the frame. Preserve the target region's critical features. "+("Do not add unrequested inset bubbles, duplicate views or full-product overviews; explicitly authored subordinate graphic elements are allowed. " if version=='creative-director-v2' else "Do not add inset bubbles, collages, duplicate views or a full-product overview to satisfy a detail shot. ")
         if director else "keep the entire product, face, garment, text-free focal details, and all critical edges visible. Nothing may be cropped out. Leave sufficient natural background around the subject. ")
 
     return (

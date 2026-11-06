@@ -1,7 +1,7 @@
 """Deterministic execution envelope for model-authored art direction, not a second planner."""
 import re
 
-VERSION='professional-art-direction-v5'
+VERSION='professional-art-direction-v7'
 PRINCIPLES={
  'product_identity':'Preserve reference-grounded product contour, exact color placement and printed identity.',
  'campaign_consistency':'Keep the campaign palette and lighting language consistent without repeating layouts.',
@@ -24,6 +24,15 @@ def module_decision(module):
         'Use the supplied original product references. Integrate the product with coherent perspective, scale, lighting, surface geometry and contact shadows.',
     ])
 
+def applied_rules(plan,module,slot,editing=False):
+    from app.agents.amazon_contracts import RuleApplication
+    execution=slot['direction'].design_execution if slot else None
+    if editing and execution and plan.creative_strategy and plan.creative_strategy.version=='creative-director-v2':
+        return [RuleApplication(principle=p,decision=d) for p,d in [
+            ('product_identity','保留原参考商品的可见图案、字形、颜色与结构，不从历史生成图推导新事实。'),
+            ('visual_hierarchy',execution.hierarchy),('commercial_lighting',execution.light),('copy_separation',execution.native_copy_layout)]]
+    return module.rule_applications
+
 
 def aplus(plan,module,*,editing=False,slot=None):
     from app.agents.amazon import module_spec, visual_rules
@@ -32,16 +41,18 @@ def aplus(plan,module,*,editing=False,slot=None):
     professional=plan.design_version=='professional-aplus-v2' and plan.deliverable=='aplus'
     multi=professional and len(spec.get('slots') or [])>1
     external_copy=professional and spec.get('layout') in {'header','image_left','image_right','three_columns','sidebar'}
+    v2=bool(plan.creative_strategy and plan.creative_strategy.version=='creative-director-v2')
     image_prompt=module.image_prompt
-    if multi:
+    if multi or v2:
         # Remove only our generated envelope, never arbitrary user-authored text.
         # The module describes a sequence; its current slot supplies the camera.
         if image_prompt.startswith('Produce one photographic image for this module; never a grid of outputs.\n'):
             image_prompt='\n'.join(line for line in image_prompt.splitlines()
                 if line!='Model-authored scene and camera direction: '+module.composition
+                and (not v2 or line!='Produce one photographic image for this module; never a grid of outputs.')
                 and not line.startswith('Visual objective: ')
                 and not re.fullmatch(r"Copy zone: (left|right|top|bottom|none)\. Typeset new marketing copy separately; preserve the product's original print\.",line))
-    geometry=slot['direction'].composition if multi and slot else module.composition
+    geometry=slot['direction'].composition if slot and (multi or v2) else module.composition
     copy_layout=('Native headline/body are OUTSIDE this photographic image, in the Amazon module text fields. '
         'Use the entire image for its subject and environment; do not reserve an internal blank half, text panel or copy zone.'
         if external_copy else 'Reserve the specified quiet copy area for separate platform text; preserve inherent product print.')
@@ -55,13 +66,19 @@ def aplus(plan,module,*,editing=False,slot=None):
             'PALETTE ROLES: '+c.palette,'PHOTOGRAPHIC LANGUAGE: '+c.photographic_language,
             'EMOTIONAL TONE: '+c.emotional_tone,
             'NATIVE TYPE / LAYOUT DIRECTION (typeset outside artwork): '+c.typography_and_layout]
+        if v2:creative+=['COMMERCIAL BIG IDEA: '+c.big_idea,'EXECUTABLE VISUAL MECHANISM: '+c.visual_mechanism,
+            'WHY THIS PRODUCT: '+c.product_specificity]
         if module.narrative:
             creative+=['THIS STORY BEAT: '+module.narrative.story_beat,
                 'SHOT PURPOSE / TREATMENT: '+module.narrative.shot_purpose+' / '+module.narrative.treatment]
             creative+=['MAPPED PURCHASE REASON '+r.id+f' (priority {r.priority}, {r.confidence}): '+r.reason+'; consumer value: '+r.consumer_benefit+'; scene: '+r.need_or_scene
                 for r in strategy.purchase_reasons if r.id in module.narrative.reason_ids]
+            if v2:creative+=['EVIDENCE BOUNDARY '+r.id+': '+r.evidence_boundary for r in strategy.purchase_reasons if r.id in module.narrative.reason_ids]
+        creative+=['SKILL RULE IN ACTION '+r.principle+': '+r.decision for r in applied_rules(plan,module,slot,editing)]
+    execution=slot['direction'].design_execution if slot else None
+    if execution:creative+=['AUTHORITATIVE SLOT DESIGN '+key.upper()+': '+value for key,value in execution.model_dump().items()]
     return '\n'.join([
-        'Create ONE independent Amazon Listing product image, not a collage of outputs.' if plan.deliverable=='listing' else 'Create the photographic artwork for ONE Amazon A+ module, not a complete page or a collage of modules.',
+        ('Create ONE designed visual asset for this Amazon module. Follow its authored treatment: commercial photography, editorial still life or graphic art direction as specified; never replace a designed concept with a generic product photograph. This is not a complete page or a collage of outputs.' if v2 else 'Create ONE independent Amazon Listing product image, not a collage of outputs.' if plan.deliverable=='listing' else 'Create the photographic artwork for ONE Amazon A+ module, not a complete page or a collage of modules.'),
         ('COMPANY DESIGN DIRECTION: '+visual_rules()['directions'][module.design_direction]['composition']) if module.design_direction and not strategy else '',
         ('REFERENCE AND CUSTOM VALUES: '+visual_rules()['reference_contract']+' '+visual_rules()['customization']) if not strategy else 'REFERENCE CONTRACT: Preserve the actual product geometry, material appearance, color, inherent lettering and logo. Source photos define product identity; scene references do not supply product features.',
         'PRODUCT IDENTITY LOCK: '+plan.product_identity_lock,
@@ -75,18 +92,18 @@ def aplus(plan,module,*,editing=False,slot=None):
         'CUSTOMER NEED: '+module.user_need,
         'CONFIRMED PRODUCT EVIDENCE: '+'; '.join(facts),
         'MODULE ART DIRECTION: '+geometry,
-        'CAMERA AND FRAMING: '+(geometry if multi else module.art_direction.framing) if module.art_direction else '',
-        'COMMERCIAL LIGHTING: '+module.art_direction.lighting if module.art_direction else '',
-        'FOCAL / INFORMATION HIERARCHY: '+module.art_direction.hierarchy if module.art_direction else '',
+        'CAMERA AND FRAMING: '+(execution.camera if execution else geometry if multi else module.art_direction.framing) if module.art_direction else '',
+        'COMMERCIAL LIGHTING: '+(execution.light if execution else module.art_direction.lighting) if module.art_direction else '',
+        'FOCAL / INFORMATION HIERARCHY: '+(execution.hierarchy if execution else module.art_direction.hierarchy) if module.art_direction else '',
         'PHYSICAL SCENE INTEGRATION: '+module.art_direction.integration if module.art_direction else '',
         'APPLIED DESIGN PRINCIPLES: '+', '.join(module.design_principles) if module.design_principles else '',
         'IMPLEMENTED DESIGN RULES: '+' '.join(PRINCIPLES[p] for p in module.design_principles) if module.design_principles else '',
         'THIS INDEPENDENT IMAGE SLOT: '+slot['id']+'; '+slot['direction'].composition if slot else '',
         'INDEPENDENT IMAGE PROMPT: '+image_prompt,
-        f'OUTPUT FRAME: {spec["width"]}:{spec["height"]}. Compose for this frame without stretching or cutting off the product.',
+        f'OUTPUT FRAME: {spec["width"]}:{spec["height"]}. '+('Follow the authored framing and placement; deliberate close-up crops are allowed. Do not turn a detail or contextual shot into a centered full-product portrait.' if v2 else 'Compose for this frame without stretching or cutting off the product.'),
         'DESKTOP COMPOSITION / COPY SPACE: '+(copy_layout if external_copy else module.desktop_layout),
         'MOBILE SAFE CONTENT: '+module.mobile_layout,
-        'Establish one clear focal hierarchy: product first, supporting scene second. Use deliberate depth separation, believable key/fill light and clean edge contrast, without generic glow or fake effects.',
+        ('The slot-specific purpose, hierarchy, placement and differentiation above govern this image. Do not default to centered product, standing model with hands in pockets or interchangeable skyline backgrounds. The visible product detail may be the focal point without showing the entire item.' if v2 else 'Establish one clear focal hierarchy: product first, supporting scene second. Use deliberate depth separation, believable key/fill light and clean edge contrast, without generic glow or fake effects.'),
         'Integrate the product physically: coherent scale and perspective, contact shadows, matching light direction, faithful surface shape and correct foreground occlusion. No floating cutout or pasted flat decal.',
         copy_layout,
         'Do not render NEW headlines, body copy, labels, captions or watermarks. These are typeset separately. This does NOT remove or rewrite the product\'s inherent printed words, numbers or logos.',
@@ -94,7 +111,7 @@ def aplus(plan,module,*,editing=False,slot=None):
         'Forbidden: '+'; '.join(module.prohibited),
         'ACCEPTANCE: '+'; '.join(module.acceptance),
         ('FINAL IMAGE SLOT CONTRACT: '+geometry+'. This request creates ONLY this independent slot, not its neighbouring views or the whole multi-image module. '
-         'Do not substitute a multi-view product pair or full-product overview for a requested close-up. '
+         +('Include secondary graphic elements only when explicitly authored above; do not invent additional module views. ' if v2 else 'Do not substitute a multi-view product pair or full-product overview for a requested close-up. ')+
          'For a detail view, tightly frame the actual visible region without inventing unseen microstructure. '+copy_layout) if professional and slot else '',
     ])
 

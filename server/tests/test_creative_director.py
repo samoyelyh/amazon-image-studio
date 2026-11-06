@@ -41,7 +41,7 @@ def test_marketing_decisions_reach_real_composer_and_native_copy_stays_separate(
 
 def test_new_optional_fields_do_not_change_historical_slot_signatures():
     p=APlusPlan.model_validate(normalize_arguments({'brief':professional_brief('asset')})['plan']);m=p.modules[0]
-    raw=m.model_dump(mode='json');raw.pop('narrative')
+    raw=m.model_dump(mode='json');raw.pop('narrative');raw.pop('rule_applications')
     for key in ('design_direction','requested_width','requested_height'):
         if raw[key] is None:raw.pop(key)
     expected=amazon.digest({'module':raw,'identity':p.product_identity_lock,'style':p.campaign_style_lock,'rules':p.rules_version,'marketplace':p.marketplace,'evidence':[e.model_dump(mode='json') for e in p.insight.evidence if e.id in m.evidence_ids]})
