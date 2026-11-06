@@ -11,6 +11,7 @@ import { AgentPlanCard, AgentResultGallery, chatButton } from './AgentChatCards'
 import AgentCapabilityPanel from './AgentCapabilityPanel'
 import AgentAmazonCard, { AmazonResearchStatus } from './AgentAmazonCard'
 import type { AmazonPlanRecord, AmazonReceipt } from '../../lib/amazonAgentApi'
+import {amazonCardRunId,isSavedAmazonDraft} from '../../lib/agentAmazonTimeline'
 import AgentProductionCard, { productionCardRunId } from './AgentProductionCard'
 import {AgentClarificationCard,AgentSuggestionsCard} from './AgentClarificationCard'
 import AgentPromptPanel from './AgentPromptPanel'
@@ -98,6 +99,8 @@ function ChatPanel() {
   const fileInput = useRef<HTMLInputElement>(null)
   const composer = useRef<HTMLTextAreaElement>(null)
   const end = useRef<HTMLDivElement>(null)
+  const followingLatest=useRef(true)
+  const [showLatest,setShowLatest]=useState(false)
 
   useEffect(() => {
     mounted.current = true
@@ -119,7 +122,9 @@ function ChatPanel() {
     }).catch((reason) => { if (!controller.signal.aborted) setError(reason.message) })
     return () => { mounted.current = false; epoch.current++; controller.abort() }
   }, [])
-  useEffect(() => { end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [messages.length])
+  const outputCount=runs.reduce((n,r)=>n+(r.outputs?.length||0),0)
+  const latestReply=messages[messages.length-1]?.content
+  useEffect(() => { if(followingLatest.current)end.current?.scrollIntoView({ behavior: 'auto', block: 'end' }) }, [conversation?.id,messages.length,latestReply,outputCount])
   const waiting = runs.filter((run) => ['waiting_jobs','ready_to_submit','submitted','planning'].includes(run.status)
     ||run.jobs.some(j=>j.capability!=='text_generation'&&activeImageStatuses.has(j.status))).map((run) => run.id).join(',')
   useEffect(() => {
@@ -199,6 +204,7 @@ function ChatPanel() {
     setText('')
     setStartNewTask(false)
     setHistoryOpen(false)
+    followingLatest.current=true;setShowLatest(false)
     sendKey.current = null
     try { await refresh(id, current, true) } catch (reason) { fail(reason) } finally { if (mounted.current) setBusy(false) }
   }
@@ -206,6 +212,7 @@ function ChatPanel() {
     if (busy || uploads.length) return
     epoch.current++
     activeConversation.current = null
+    followingLatest.current=true;setShowLatest(false)
     setConversation(null)
     setCreative(automaticContext)
     setMessages([])
@@ -319,6 +326,7 @@ function ChatPanel() {
   async function send(mode:'create'|'suggest'='create',followup?:{run:AgentRun;content:string}) {
     const content=(followup?.content??text).trim()
     if (busy || preparingImport||!content || uploads.some((upload) => upload.status === 'uploading')) return
+    followingLatest.current=true;setShowLatest(false)
     setBusy(true)
     setError('')
     const current = epoch.current
@@ -454,6 +462,9 @@ function ChatPanel() {
     }
   }
   const lastMessage = new Map(messages.filter((message) => message.metadata?.run_id).map((message) => [message.metadata!.run_id, message.id]))
+  const replyRuns=new Set(messages.filter(m=>m.role!=='user'&&m.metadata?.run_id).map(m=>m.metadata!.run_id!))
+  const amazonOwners=new Map(amazonPlans.map(p=>[p.id,amazonCardRunId(runs,p)]))
+  const orphanPlans=amazonPlans.filter(p=>!replyRuns.has(amazonOwners.get(p.id)||''))
   if (status && !status.enabled) return <div className="mx-auto max-w-3xl p-8"><h1 className="text-2xl font-semibold">AI 总控</h1><p className="my-4 text-gray-500">当前服务尚未启用总控。原批量套图和附图工作台不受影响。</p><Link className={chatButton} to="/workspaces/batch-tryon">进入批量套图</Link></div>
 
   return <main className="relative flex h-full min-h-0 overflow-hidden bg-[#f8f8f6] text-[#292927] dark:bg-gray-950 dark:text-gray-100">
@@ -527,12 +538,13 @@ function ChatPanel() {
           </section>
         </div>
       </div> : <>
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6 sm:py-8">
+        <div role="region" aria-label="对话记录" tabIndex={0} className="min-h-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6 sm:py-8" onScroll={event=>{const el=event.currentTarget;const near=el.scrollHeight-el.scrollTop-el.clientHeight<80;followingLatest.current=near;setShowLatest(!near)}}>
           <div className="mx-auto w-full max-w-[880px] space-y-7">
             {conversation && attachments.length>0 && (creative.module==='batch_tryon'||productionPlans.length>0||runs.some(r=>r.plan?.actions.some(a=>['analyze_chat_assets','guide_batch_inputs','generate_chat_tryon'].includes(a.tool)))||attachments.some(a=>a.role==='template')) && <AgentBatchInputCard conversationId={conversation.id} refreshKey={attachments.map(a=>a.asset_id+':'+a.role).join(',')+':'+runs.map(r=>r.id+':'+r.revision+':'+r.status).join(',')} runs={runs} paused={busy||preparingImport||uploads.length>0} onPartialAccepted={()=>setUploads(old=>old.filter(u=>u.status!=='failed'))} onContinue={creative.module==='batch_tryon'?continueImport:undefined} onRefresh={()=>refresh(conversation.id)} onError={setError}/>}
             {messages.map((message) => {
               const run = message.metadata?.run_id ? runById.get(message.metadata.run_id) : null
               const latest = !run || lastMessage.get(run.id) === message.id
+              const savedDraft = !!run && isSavedAmazonDraft(run,amazonPlans)
               const showText = message.role === 'user' || !run || !latest || run.planner_mode==='dsh-native'
               if (message.role === 'user') return <article key={message.id} className="flex justify-end pl-8 sm:pl-20">
                 <div className="max-w-[760px] rounded-[20px_20px_6px_20px] bg-[#e9e9e4] px-4 py-3 text-sm leading-7 dark:bg-white/10">
@@ -540,22 +552,23 @@ function ChatPanel() {
                   {message.metadata?.attachments && <div className="mt-3 flex flex-wrap gap-2">{message.metadata.attachments.map((attachment, index) => <AuthenticatedImage key={attachment.id || attachment.asset_id || index} src={attachment.content_url} alt={attachment.filename} className="h-20 w-20 rounded-xl border border-black/[0.06] bg-white object-contain dark:border-white/10" />)}</div>}
                 </div>
               </article>
-              return <article key={message.id} className="flex gap-3">
+              return <article key={message.id} data-agent-run={run?.id} className="flex gap-3">
                 <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] bg-[#eae5da] text-[#806c47] dark:bg-white/10 dark:text-gray-300"><SparklesIcon className="h-4 w-4" /></div>
                 <div className="min-w-0 flex-1">
                   {showText && <div className="py-1 text-sm leading-7 text-gray-700 dark:text-gray-200"><p className="whitespace-pre-wrap">{message.content}</p></div>}
-                  {run && latest && status && <div className={showText ? 'mt-3' : ''}><AgentPlanCard run={run} status={status} busy={busy} onConfirm={() => void runAction(run)} onStop={() => void runAction(run, true)} onResume={() => void runAction(run,false,true)} onRetry={id=>void retryImage(id)} retriedIds={runs.flatMap(r=>r.result.retry_of_job_id?[r.result.retry_of_job_id]:[])}/><AgentPromptPanel run={run} busy={busy} onSave={(source,content)=>savePrompt(run,source,content)} onGenerate={version=>void generateSavedPrompt(run,version)} onError={setError}/><AgentResultGallery outputs={run.outputs || []} onEdit={edit} onError={setError} />{run.result.actions?.filter((action) => action.tool === 'read_shared_queue').map((action, index) => <SharedQueueView key={index} board={action.result as unknown as SharedQueueBoard} onOpen={(entry) => { if (entry.can_open && entry.navigation?.project_id) navigate(`/workspaces/batch-tryon?project_id=${entry.navigation.project_id}`) }} />)}</div>}
-                  {run&&latest&&<><AgentClarificationCard run={run} busy={busy} enabled={status?.creative_assistance_enabled===true} answered={answeredRuns.has(run.id)} onReply={content=>void send('create',{run,content})} onSuggest={()=>void send('suggest',{run,content:'请结合原始需求、追问和参考图，给我几个可编辑的创作建议。'})}/><AgentSuggestionsCard run={run} busy={busy} onAdopt={content=>void send('create',{run,content})}/></>}
+                  {run && latest && status && <div className={showText ? 'mt-3' : ''}><AgentPlanCard run={run} statusLabel={savedDraft?'方案已保存':undefined} status={status} busy={busy} onConfirm={() => void runAction(run)} onStop={() => void runAction(run, true)} onResume={() => void runAction(run,false,true)} onRetry={id=>void retryImage(id)} retriedIds={runs.flatMap(r=>r.result.retry_of_job_id?[r.result.retry_of_job_id]:[])}/><AgentPromptPanel run={run} busy={busy} onSave={(source,content)=>savePrompt(run,source,content)} onGenerate={version=>void generateSavedPrompt(run,version)} onError={setError}/>{run.result.actions?.filter((action) => action.tool === 'read_shared_queue').map((action, index) => <SharedQueueView key={index} board={action.result as unknown as SharedQueueBoard} onOpen={(entry) => { if (entry.can_open && entry.navigation?.project_id) navigate(`/workspaces/batch-tryon?project_id=${entry.navigation.project_id}`) }} />)}</div>}
+                  {run&&latest&&<>{!savedDraft&&<AgentClarificationCard run={run} busy={busy} enabled={status?.creative_assistance_enabled===true} answered={answeredRuns.has(run.id)} onReply={content=>void send('create',{run,content})} onSuggest={()=>void send('suggest',{run,content:'请结合原始需求、追问和参考图，给我几个可编辑的创作建议。'})}/>}<AgentSuggestionsCard run={run} busy={busy} onAdopt={content=>void send('create',{run,content})}/></>}
                   {run&&latest&&<AgentBusinessCards run={run} disabled={!status?.enabled||busy||preparingImport||uploads.length>0} onImport={(files,source)=>void uploadFiles(files,source)}/>}
+                  {run&&latest&&conversation&&amazonPlans.filter(plan=>amazonOwners.get(plan.id)===run.id).map(plan=><AgentAmazonCard key={`${conversation.id}:${plan.id}`} record={plan} conversationId={conversation.id} outputs={runs.flatMap(item=>item.outputs||[])} pendingRun={runs.find(r=>r.status==='awaiting_review'&&r.plan?.actions.some(a=>a.tool==='generate_aplus'&&a.arguments.plan_id===plan.id))} onRefresh={()=>refresh(conversation.id)} onError={setError}/>)}
+                  {run&&latest&&status&&<AgentResultGallery outputs={run.outputs || []} onEdit={edit} onError={setError} />}
                   {run && latest && conversation && productionPlans.filter((plan) => productionCardRunId(runs, plan.id) === run.id).map((plan) => <AgentProductionCard key={plan.id} plan={plan} conversationId={conversation.id} attachments={attachments} outputs={runs.flatMap((item) => item.outputs || [])} onRefresh={() => refresh(conversation.id)} onError={setError} />)}
                 </div>
               </article>
             })}
-            {conversation && <><AmazonResearchStatus receipts={amazonResearch} />{amazonPlans.map((plan) => <AgentAmazonCard key={`${conversation.id}:${plan.id}`} record={plan} conversationId={conversation.id} outputs={runs.flatMap((run) => run.outputs || [])} pendingRun={runs.find(r=>r.status==='awaiting_review'&&r.plan?.actions.some(a=>a.tool==='generate_aplus'&&a.arguments.plan_id===plan.id))} onRefresh={() => refresh(conversation.id)} onError={setError} />)}</>}
             <div ref={end} />
           </div>
         </div>
-        <div className="shrink-0 bg-gradient-to-t from-[#f8f8f6] via-[#f8f8f6] to-transparent px-3 pb-4 pt-3 sm:px-6 dark:from-gray-950 dark:via-gray-950"><div className="mx-auto w-full max-w-[880px]">{renderComposer()}</div></div>
+        <div className="relative shrink-0 bg-gradient-to-t from-[#f8f8f6] via-[#f8f8f6] to-transparent px-3 pb-4 pt-3 sm:px-6 dark:from-gray-950 dark:via-gray-950">{showLatest&&<button className={`${chatButton} absolute -top-9 left-1/2 z-10 -translate-x-1/2 bg-white shadow-sm dark:bg-gray-900`} onClick={()=>{followingLatest.current=true;setShowLatest(false);end.current?.scrollIntoView({behavior:'smooth',block:'end'})}}>回到最新对话 ↓</button>}<div className="mx-auto w-full max-w-[880px]">{renderComposer()}</div></div>
       </>}
     </section>
 
@@ -567,6 +580,8 @@ function ChatPanel() {
       {status?.auto_execution?.mode==='autonomous'&&<p className="my-6 text-sm font-medium">自主执行 · {status.auto_execution.enabled?'已开启':'当前环境未启用'}</p>}
       {status?.auto_execution && status.auto_execution.mode!=='autonomous' && <section aria-label="自动生成阈值" className="my-6 rounded-2xl bg-[#f7f7f4] p-4 text-sm dark:bg-white/[0.04]"><h3 className="mb-3 text-xs font-semibold">自动生成阈值{!status.auto_execution.enabled && ' · 未开启'}</h3><dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs text-gray-500 dark:text-gray-400"><div><dt>图片数量</dt><dd className="mt-1 font-medium text-gray-800 dark:text-gray-200">最多 {status.auto_execution.max_images} 张</dd></div><div><dt>预计耗时</dt><dd className="mt-1 font-medium text-gray-800 dark:text-gray-200">{Math.ceil(status.auto_execution.max_seconds / 60)} 分钟内</dd></div><div><dt>单次累计额度</dt><dd className="mt-1 font-medium text-gray-800 dark:text-gray-200">{status.auto_execution.max_credits}</dd></div><div><dt>并行流程</dt><dd className="mt-1 font-medium text-gray-800 dark:text-gray-200">{status.auto_execution.max_active_runs} 个</dd></div><div><dt>自动提交</dt><dd className="mt-1 font-medium text-gray-800 dark:text-gray-200">每分钟 {status.auto_execution.submissions_per_minute} 次</dd></div></dl></section>}
       <AgentCapabilityPanel />
+      {!!amazonPlans.length&&conversation&&<section aria-label="对话方案" className="my-5"><h3 className="text-sm font-medium">对话方案 · {amazonPlans.length}</h3>{amazonPlans.filter(p=>!orphanPlans.includes(p)).map(p=><button key={p.id} className="mt-2 block w-full rounded-xl border p-3 text-left text-sm dark:border-white/10" onClick={()=>{setDrawer(false);followingLatest.current=false;setShowLatest(true);requestAnimationFrame(()=>document.getElementById('amazon-plan-'+p.id)?.scrollIntoView({block:'center',behavior:'smooth'}))}}>{p.plan.deliverable==='listing'?'Listing 图片方案':'A+ 图片方案'} · {p.plan.modules.length} 个模块 · v{p.revision}<span className="mt-1 block text-xs text-gray-500">跳转到方案所在对话</span></button>)}{orphanPlans.map(p=><AgentAmazonCard key={p.id} record={p} conversationId={conversation.id} outputs={runs.flatMap(r=>r.outputs||[])} onRefresh={()=>refresh(conversation.id)} onError={setError}/>)}</section>}
+      <AmazonResearchStatus receipts={amazonResearch}/>
       <details className="group mt-5 rounded-xl border border-black/[0.06] p-3 text-xs dark:border-white/10"><summary className="flex cursor-pointer list-none items-center justify-between text-gray-500">模型配置状态<ChevronDownIcon className="h-3.5 w-3.5 transition group-open:rotate-180" /></summary><pre className="mt-3 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-[#f7f7f4] p-3 text-[10px] leading-5 text-gray-500 dark:bg-white/[0.04] dark:text-gray-400">{JSON.stringify(status, null, 2)}</pre></details>
       <details className="group mt-3 rounded-xl border border-black/[0.06] p-3 text-xs dark:border-white/10"><summary className="flex cursor-pointer list-none items-center justify-between text-gray-500">任务日志 / 参数快照<ChevronDownIcon className="h-3.5 w-3.5 transition group-open:rotate-180" /></summary>{runs.map((run) => <div key={run.id} className="mt-3"><p className="break-all text-[10px] text-gray-400">{run.id}</p><pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-[#f7f7f4] p-3 text-[10px] leading-5 text-gray-500 dark:bg-white/[0.04] dark:text-gray-400">{JSON.stringify({ plan: run.plan, jobs: run.jobs, events: run.events, execution: run.execution_notice, verification: run.verification }, null, 2)}</pre></div>)}</details>
     </aside></div>}

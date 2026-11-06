@@ -10,7 +10,9 @@ export default function AgentPromptPanel({run,busy,onSave,onGenerate,onError}:{r
   if(!prompts.length)return null
   const current=prompts.find(p=>p.id===selected)||prompts[prompts.length-1]
   const canGenerate=current.source==='user'&&current.replayable===true
-  return <section aria-label="执行提示词" className="studio-card mt-3 p-4">
+  return <details aria-label="执行提示词" className="mt-3 rounded-xl border border-black/[0.06] p-3 dark:border-white/10">
+    <summary className="cursor-pointer text-xs text-gray-500">提示词与调用详情</summary>
+    <div className="mt-3">
     <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-medium">执行提示词</h3>
       <select aria-label="提示词历史版本" className="studio-input max-w-full text-xs sm:w-auto" value={current.id} onChange={e=>{setSelected(e.target.value);setEditing(false);setCopied(false)}}>
         {prompts.map(p=><option key={p.id} value={p.id}>{labels[p.source]}{p.version?` · V${p.version}`:''}{p.job_id?` · ${p.job_id.slice(0,8)}`:''}</option>)}
@@ -27,5 +29,6 @@ export default function AgentPromptPanel({run,busy,onSave,onGenerate,onError}:{r
       {canGenerate&&!editing&&<StudioButton variant="primary" disabled={busy} onClick={()=>onGenerate(current)}>用此版本生成</StudioButton>}
     </div>
     {editing&&<p className="mt-2 text-sm text-stone-600">保存新版本不会覆盖已提交任务；需要采用时点击“用此版本生成”。</p>}
-  </section>
+    </div>
+  </details>
 }

@@ -54,7 +54,7 @@ function ToolSchedule({ run, planning }: { run: AgentRun; planning: boolean }) {
   </div>
 }
 
-export function AgentPlanCard({ run, status, busy, onConfirm, onStop,onResume,onRetry,retriedIds }: { run: AgentRun; status: AgentStatus; busy: boolean; onConfirm: () => void; onStop: () => void;onResume?:()=>void;onRetry?:(id:string)=>void;retriedIds?:string[] }) {
+export function AgentPlanCard({ run, status, busy, onConfirm, onStop,onResume,onRetry,retriedIds,statusLabel }: { run: AgentRun; status: AgentStatus; busy: boolean; onConfirm: () => void; onStop: () => void;onResume?:()=>void;onRetry?:(id:string)=>void;retriedIds?:string[];statusLabel?:string }) {
   const imageJobs = run.jobs.filter((job) => job.capability !== 'text_generation')
   const waiting = run.status === 'awaiting_confirmation'
   const notice = run.execution_notice
@@ -113,7 +113,7 @@ export function AgentPlanCard({ run, status, busy, onConfirm, onStop,onResume,on
       <div className="flex items-center gap-2 text-sm font-medium"><SparklesIcon className="h-4 w-4 text-[#8b6f47]" />{title}{previewBadge}</div>
       <span className={`inline-flex items-center gap-1.5 text-xs ${run.status === 'failed' ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
         {['planning', 'waiting_jobs'].includes(run.status) && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#a88a58]" />}
-          {isPlanning ? run.plan?.workflow==='suggestions'?'正在生成建议':'正在理解需求' : statusLabels[run.status] || run.status}
+          {statusLabel || (isPlanning ? run.plan?.workflow==='suggestions'?'正在生成建议':'正在理解需求' : statusLabels[run.status] || run.status)}
       </span>
     </div>
     {run.plan?.summary && <p className="mt-2.5 text-sm leading-6 text-gray-600 dark:text-gray-300">{run.plan.summary}</p>}

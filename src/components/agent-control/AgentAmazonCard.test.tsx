@@ -9,8 +9,19 @@ const record:AmazonPlanRecord={id:'plan',revision:2,plan:{marketplace:'US',aplus
 it('shows editable native copy and separate facts/rights/fee boundaries',()=>{
  const html=renderToStaticMarkup(<AgentAmazonCard record={record} conversationId="chat" onRefresh={vi.fn()} onError={vi.fn()}/> )
  expect(html).toContain('英文标题（原生文字）');expect(html).toContain('第三模块');expect(html).toContain('评论样本2')
- expect(html).toContain('确认所选模块与事实');expect(html).toContain('双端排版预览');expect(html).toContain('ZIP')
+ expect(html).toContain('确认所选模块与事实');expect(html).toContain('预览整套');expect(html).toContain('ZIP')
  expect(html).toMatch(/disabled=""[^>]*\/>/)
+})
+
+it('keeps submitted plans compact and leaves advanced details folded by default',()=>{
+ const native={...record,controller:'dsh-native',submissions:[{batch_id:'batch',job_ids:['image'],module_ids:['m3']}]}
+ const html=renderToStaticMarkup(<AgentAmazonCard record={native} conversationId="chat" onRefresh={vi.fn()} onError={vi.fn()}/> )
+ expect(html).toContain('aria-label="方案详情"')
+ expect(html).toContain('查看方案与卖点')
+ expect(html).not.toMatch(/<details[^>]*\bopen(?:=|\s|>)/)
+ expect(html).not.toContain('DSH 已自动提交，修改请选中对应图片')
+ expect(html).not.toMatch(/<button[^>]*>生成所选/)
+ expect(html).toContain('预览整套');expect(html).toContain('下载整套 ZIP')
 })
 it('uses module-scoped revision and explicit human facts confirmation',async()=>{
  await reviseAmazonModule('chat',record,module)
